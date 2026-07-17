@@ -1,23 +1,22 @@
-import { db } from "../lib/firebase";
-import {
-  collection,
-  getDocs,
-  doc,
-  updateDoc,
-  query,
-  orderBy,
-  serverTimestamp
-} from "firebase/firestore";
+import { database } from "../lib/firebase";
+import { ref, get, update, serverTimestamp } from "firebase/database";
 
 export const notificationService = {
   async getAll() {
     try {
-      const q = query(collection(db, "notifications"), orderBy("createdAt", "desc"));
-      const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      const notificationsRef = ref(database, "notifications");
+      const snapshot = await get(notificationsRef);
+      if (snapshot.exists()) {
+        const val = snapshot.val();
+        const list = Object.keys(val).map(key => ({
+          id: key,
+          ...val[key]
+        }));
+        // Sort descending by createdAt
+        list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        return list;
+      }
+      return [];
     } catch (error) {
       console.error("Failed to fetch notifications:", error);
       return [];
@@ -26,8 +25,8 @@ export const notificationService = {
 
   async markRead(id) {
     try {
-      const docRef = doc(db, "notifications", id);
-      await updateDoc(docRef, {
+      const notifRef = ref(database, `notifications/${id}`);
+      await update(notifRef, {
         read: true,
         updatedAt: serverTimestamp()
       });

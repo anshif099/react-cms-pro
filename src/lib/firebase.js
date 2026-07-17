@@ -1,7 +1,7 @@
 import { initializeApp } from "firebase/app";
 import { getAnalytics, isSupported } from "firebase/analytics";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { getDatabase } from "firebase/database";
 import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
@@ -11,7 +11,8 @@ const firebaseConfig = {
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
+  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL
 };
 
 // Fallback configuration check to prevent app crashes if Vite environment variables are not loaded (e.g., if server needs restart)
@@ -24,6 +25,7 @@ if (!firebaseConfig.apiKey) {
   firebaseConfig.messagingSenderId = "688990713402";
   firebaseConfig.appId = "1:688990713402:web:c878e47dcda581b35e2703";
   firebaseConfig.measurementId = "G-TCF06KE1SK";
+  firebaseConfig.databaseURL = "https://react-cms-pro-default-rtdb.firebaseio.com";
 }
 
 const app = initializeApp(firebaseConfig);
@@ -33,7 +35,7 @@ export const analyticsPromise = isSupported().then((supported) =>
 );
 
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+export const database = getDatabase(app);
 export const storage = getStorage(app);
 
 export default app;

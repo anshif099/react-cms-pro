@@ -1,16 +1,5 @@
-import { db } from "../lib/firebase";
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  serverTimestamp,
-  query,
-  orderBy
-} from "firebase/firestore";
+import { database } from "../lib/firebase";
+import { ref, get, set, push, update, remove, serverTimestamp } from "firebase/database";
 import { 
   generateWebsiteId, 
   generateApiKey, 
@@ -30,17 +19,21 @@ async function hashSecretKey(key) {
 export const websiteService = {
   async getAll() {
     try {
-      const q = query(collection(db, "websites"), orderBy("createdAt", "desc"));
-      const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          ...data,
+      const websitesRef = ref(database, "websites");
+      const snapshot = await get(websitesRef);
+      if (snapshot.exists()) {
+        const val = snapshot.val();
+        const list = Object.keys(val).map(key => ({
+          id: key,
+          ...val[key],
           // Since secretKey is not stored in DB, we provide a masked version for UI display/SecretField
-          secretKey: data.secretKey || "rcms_sk_••••••••••••••••••••"
-        };
-      });
+          secretKey: val[key].secretKey || "rcms_sk_••••••••••••••••••••"
+        }));
+        // Sort descending by createdAt
+        list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        return list;
+      }
+      return [];
     } catch (error) {
       console.error("Failed to fetch websites:", error);
       throw error;
@@ -49,12 +42,12 @@ export const websiteService = {
 
   async getById(id) {
     try {
-      const docRef = doc(db, "websites", id);
-      const snapshot = await getDoc(docRef);
+      const docRef = ref(database, `websites/${id}`);
+      const snapshot = await get(docRef);
       if (snapshot.exists()) {
-        const data = snapshot.data();
+        const data = snapshot.val();
         return {
-          id: snapshot.id,
+          id,
           ...data,
           secretKey: data.secretKey || "rcms_sk_••••••••••••••••••••"
         };
@@ -68,6 +61,10 @@ export const websiteService = {
 
   async create(data) {
     try {
+      const websitesRef = ref(database, "websites");
+      const newWebsiteRef = push(websitesRef);
+      const newId = newWebsiteRef.key;
+
       const websiteId = generateWebsiteId();
       const apiKey = generateApiKey();
       const rawSecretKey = generateSecretKey();
@@ -95,20 +92,19 @@ export const websiteService = {
         updatedAt: serverTimestamp()
       };
 
-      // Create in Firestore
-      const docRef = await addDoc(collection(db, "websites"), websiteData);
+      await set(newWebsiteRef, websiteData);
       
       // Log activity
       await activityLogService.logActivity(
         "website_added",
         "Website connected",
         `Connected new website: ${data.name} (${data.domain})`,
-        docRef.id
+        newId
       );
 
       // Return the created website *including* the raw secret key so the UI can show it initially
       return {
-        id: docRef.id,
+        id: newId,
         ...websiteData,
         secretKey: rawSecretKey
       };
@@ -120,16 +116,16 @@ export const websiteService = {
 
   async update(id, data) {
     try {
-      const docRef = doc(db, "websites", id);
+      const docRef = ref(database, `websites/${id}`);
       const updateData = {
         ...data,
         updatedAt: serverTimestamp()
       };
-      await updateDoc(docRef, updateData);
+      await update(docRef, updateData);
 
-      // Fetch the updated doc to return
-      const updatedSnap = await getDoc(docRef);
-      const updatedData = updatedSnap.data();
+      // Fetch the updated data
+      const updatedSnap = await get(docRef);
+      const updatedData = updatedSnap.val();
 
       // Log activity
       await activityLogService.logActivity(
@@ -153,8 +149,8 @@ export const websiteService = {
   async delete(id) {
     try {
       const website = await this.getById(id);
-      const docRef = doc(db, "websites", id);
-      await deleteDoc(docRef);
+      const docRef = ref(database, `websites/${id}`);
+      await remove(docRef);
 
       if (website) {
         await activityLogService.logActivity(
@@ -188,14 +184,14 @@ export const websiteService = {
     const rawSecretKey = generateSecretKey();
     const secretKeyHash = await hashSecretKey(rawSecretKey);
     
-    const docRef = doc(db, "websites", id);
-    await updateDoc(docRef, {
+    const docRef = ref(database, `websites/${id}`);
+    await update(docRef, {
       secretKeyHash,
       updatedAt: serverTimestamp()
     });
 
-    const updatedSnap = await getDoc(docRef);
-    const updatedData = updatedSnap.data();
+    const updatedSnap = await get(docRef);
+    const updatedData = updatedSnap.val();
 
     await activityLogService.logActivity(
       "secret_key_regenerated",

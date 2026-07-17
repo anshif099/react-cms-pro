@@ -1,4 +1,4 @@
-import { auth, db } from "../lib/firebase";
+import { auth, database } from "../lib/firebase";
 import {
   signInWithEmailAndPassword,
   signOut,
@@ -7,7 +7,7 @@ import {
   reauthenticateWithCredential,
   EmailAuthProvider
 } from "firebase/auth";
-import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { ref, get, set, update, serverTimestamp } from "firebase/database";
 
 export const authService = {
   async login(email, password) {
@@ -35,16 +35,16 @@ export const authService = {
   },
 
   async getUserProfile(uid) {
-    const userDocRef = doc(db, "users", uid);
-    const userDoc = await getDoc(userDocRef);
-    if (userDoc.exists()) {
-      return userDoc.data();
+    const userRef = ref(database, `users/${uid}`);
+    const snapshot = await get(userRef);
+    if (snapshot.exists()) {
+      return snapshot.val();
     }
     return null;
   },
 
   async createUserProfile(uid, data) {
-    const userDocRef = doc(db, "users", uid);
+    const userRef = ref(database, `users/${uid}`);
     const profileData = {
       uid,
       email: data.email,
@@ -56,13 +56,13 @@ export const authService = {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     };
-    await setDoc(userDocRef, profileData);
+    await set(userRef, profileData);
 
     // Bootstrap company document if not exists
-    const companyDocRef = doc(db, "companies", profileData.companyId);
-    const companyDoc = await getDoc(companyDocRef);
-    if (!companyDoc.exists()) {
-      await setDoc(companyDocRef, {
+    const companyRef = ref(database, `companies/${profileData.companyId}`);
+    const companySnapshot = await get(companyRef);
+    if (!companySnapshot.exists()) {
+      await set(companyRef, {
         id: profileData.companyId,
         name: profileData.company || "ReactCMS Ltd.",
         ownerUid: uid,
@@ -75,21 +75,21 @@ export const authService = {
   },
 
   async updateUserProfile(uid, data) {
-    const userDocRef = doc(db, "users", uid);
+    const userRef = ref(database, `users/${uid}`);
     const updateData = {
       ...data,
       updatedAt: serverTimestamp()
     };
-    await updateDoc(userDocRef, updateData);
+    await update(userRef, updateData);
 
     // If company name was updated, update company doc as well if using default_company
     if (data.company) {
       const companyId = data.companyId || "default_company";
-      const companyDocRef = doc(db, "companies", companyId);
-      await setDoc(companyDocRef, {
+      const companyRef = ref(database, `companies/${companyId}`);
+      await update(companyRef, {
         name: data.company,
         updatedAt: serverTimestamp()
-      }, { merge: true });
+      });
     }
 
     return updateData;

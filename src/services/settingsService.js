@@ -1,21 +1,20 @@
-import { db } from "../lib/firebase";
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { database } from "../lib/firebase";
+import { ref, get, update, serverTimestamp } from "firebase/database";
 import activityLogService from "./activityLogService";
 
 export const settingsService = {
   async getSettings(uid) {
     try {
-      const docRef = doc(db, "settings", uid);
-      const snapshot = await getDoc(docRef);
+      const settingsRef = ref(database, `settings/${uid}`);
+      const snapshot = await get(settingsRef);
       if (snapshot.exists()) {
-        const data = snapshot.data();
+        const data = snapshot.val();
         return {
           timezone: data.timezone || "IST",
           language: data.language || "en",
           tokens: data.tokens || []
         };
       }
-      // Return defaults if none exist
       return {
         timezone: "IST",
         language: "en",
@@ -29,12 +28,12 @@ export const settingsService = {
 
   async updateSettings(uid, data) {
     try {
-      const docRef = doc(db, "settings", uid);
+      const settingsRef = ref(database, `settings/${uid}`);
       const updateData = {
         ...data,
         updatedAt: serverTimestamp()
       };
-      await setDoc(docRef, updateData, { merge: true });
+      await update(settingsRef, updateData);
 
       await activityLogService.logActivity(
         "settings_updated",
