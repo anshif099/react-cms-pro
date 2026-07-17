@@ -77,7 +77,14 @@ export function ConnectWebsitePage() {
       // Redirect straight to verification page of the newly created website
       navigate(`/websites/${created.id}/verify`);
     } catch (e) {
-      toast.error("Failed to connect website.");
+      console.error("Connect website failure", e);
+      let errorMsg = "Failed to connect website.";
+      if (e.message && (e.message.includes("API has not been used") || e.message.includes("disabled") || e.message.includes("permission-denied"))) {
+        errorMsg = "Failed to connect: Cloud Firestore API is disabled or permissions are not set. Enable it in your Firebase Console.";
+      } else if (e.message) {
+        errorMsg = `Failed to connect website: ${e.message}`;
+      }
+      toast.error(errorMsg);
     }
   };
 
