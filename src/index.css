@@ -1,0 +1,58 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  
+  --color-primary: #2271B1;
+  --color-primary-hover: #135E96;
+  --color-sidebar: #1D2327;
+  --color-admin-bg: #F6F7F7;
+  --color-admin-card: #FFFFFF;
+  --color-admin-border: #DCDCDE;
+  --color-admin-text: #1E1E1E;
+  --color-admin-secondary: #50575E;
+  --color-admin-success: #00A32A;
+  --color-admin-warning: #DBA617;
+  --color-admin-danger: #D63638;
+}
+
+@layer base {
+  body {
+    @apply font-sans bg-admin-bg text-admin-text antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #C4C4C6;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #A0A0A2;
+}
+
+/* Dark mode custom overrides */
+.dark {
+  --color-admin-bg: #0F172A;
+  --color-admin-card: #1E293B;
+  --color-admin-border: #334155;
+  --color-admin-text: #F8FAFC;
+  --color-admin-secondary: #94A3B8;
+  --color-sidebar: #0F172A;
+  
+  ::-webkit-scrollbar-thumb {
+    background: #475569;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #64748B;
+  }
+}
