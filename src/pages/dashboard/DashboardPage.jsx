@@ -58,8 +58,6 @@ export function DashboardPage() {
         setTotalActivityCount(count);
       } catch (error) {
         console.error("Error fetching dashboard activity data:", error);
-      } finally {
-        setLoadingActivity(false);
       }
     }
     fetchActivityData();
