@@ -64,6 +64,7 @@ export function ConnectWebsitePage() {
   }, [user, reset]);
 
   const onSubmit = async (data) => {
+    console.log("Form submit started. Data:", data);
     try {
       // Create website using local storage service
       const created = await createWebsite({
@@ -72,6 +73,7 @@ export function ConnectWebsitePage() {
         apiKey: mockApiKey,
         secretKey: mockSecretKey
       });
+      console.log("Website created successfully:", created);
       
       toast.success(`Website "${created.name}" connected!`);
       // Redirect straight to verification page of the newly created website
@@ -86,6 +88,10 @@ export function ConnectWebsitePage() {
       }
       toast.error(errorMsg);
     }
+  };
+
+  const onInvalid = (formErrors) => {
+    console.warn("Form validation failed. Errors:", formErrors);
   };
 
   const handleRegenerateKeys = () => {
@@ -113,7 +119,7 @@ export function ConnectWebsitePage() {
         <p className="text-sm text-admin-secondary">Register a new domain and generate SDK access credentials</p>
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Core details card */}
         <div className="lg:col-span-2 space-y-6">
           <Card title="Website Details" subtitle="Provide information about the website deployment">
