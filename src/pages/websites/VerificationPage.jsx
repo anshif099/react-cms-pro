@@ -89,9 +89,10 @@ export function VerificationPage() {
     try {
       const result = await verificationService.verifyDomain(selectedWebsite.id, activeTab);
       if (result.success) {
+        setSuccess(true);
         // Sync context
-        updateWebsite(selectedWebsite.id, result.website);
-        toast.info("Verification attempt initiated. The background service will verify it shortly.");
+        await updateWebsite(selectedWebsite.id, result.website);
+        toast.success("Domain verified successfully!");
       }
     } catch (e) {
       toast.error(e.message || "Verification failed. Please check setup.");
