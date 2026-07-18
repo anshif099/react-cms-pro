@@ -2,7 +2,7 @@ import { websiteService } from "./websiteService";
 
 export const sdkService = {
   getInstallCommand() {
-    return "npm install @anshif.rainhopes/reactcms-sdk";
+    return 'npm install "@anshif.rainhopes/reactcms-sdk"';
   },
 
   getProviderSnippet(website) {
