@@ -29,7 +29,7 @@ function App() {
       throw new Error("Website not found.");
     }
     
-    // TODO: A real backend API/endpoint will handle pings from the reactcms-sdk,
+    // TODO: A real backend API/endpoint will handle pings from the @anshif.rainhopes/reactcms-sdk,
     // verify the API key, and set sdkInstalled = true in the Firestore document.
     // For now, we only query the status from Firestore.
     if (website.sdkInstalled) {
