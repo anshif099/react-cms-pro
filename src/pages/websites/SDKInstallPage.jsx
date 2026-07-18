@@ -105,7 +105,7 @@ export function SDKInstallPage() {
                 <p className="text-xs text-admin-secondary">
                   Open your terminal inside the root directory of your React website project and run:
                 </p>
-                <CodeBlock code="npm install reactcms-sdk" language="bash" />
+                <CodeBlock code={sdkService.getInstallCommand()} language="bash" />
               </div>
 
               {/* Step 2 */}
