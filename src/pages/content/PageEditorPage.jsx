@@ -344,6 +344,7 @@ export function PageEditorPage() {
           <SEOPanel
             seoData={seo}
             onChange={setSeo}
+            blocks={blocks}
           />
 
           <RevisionPanel

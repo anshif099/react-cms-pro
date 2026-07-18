@@ -1,5 +1,5 @@
 import React from "react";
-import { ArrowLeft, Save, Globe, RefreshCw, Undo2, Redo2, ExternalLink } from "lucide-react";
+import { ArrowLeft, Save, Globe, RefreshCw, Undo2, Redo2, ExternalLink, MousePointerClick } from "lucide-react";
 import DeviceSwitcher from "./DeviceSwitcher";
 import Button from "../ui/Button";
 
@@ -19,7 +19,9 @@ export function PreviewToolbar({
   onPublish,
   saving,
   publishing,
-  previewUrl
+  previewUrl,
+  editModeActive,
+  onEditModeToggle
 }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-slate-850 bg-slate-950/60 flex-shrink-0 text-left">
@@ -63,6 +65,21 @@ export function PreviewToolbar({
 
       {/* Right: History, Save, Publish & External Redirect */}
       <div className="flex items-center gap-2">
+        {/* Visual Edit Mode Toggle */}
+        <button
+          type="button"
+          onClick={onEditModeToggle}
+          className={`p-1.5 rounded-lg border flex items-center gap-1.5 text-[10px] font-bold transition-all cursor-pointer ${
+            editModeActive 
+              ? "bg-primary border-primary text-white" 
+              : "border-slate-800 text-slate-400 hover:text-white hover:bg-slate-850"
+          }`}
+          title={editModeActive ? "Exit Visual Edit Mode" : "Enter Visual Edit Mode"}
+        >
+          <MousePointerClick className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Visual Edit</span>
+        </button>
+
         {/* Undo/Redo */}
         <div className="flex bg-slate-950/80 border border-slate-800 rounded-lg p-0.5">
           <button

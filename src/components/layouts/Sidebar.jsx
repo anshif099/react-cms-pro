@@ -16,7 +16,8 @@ import {
   Image,
   Database,
   Search,
-  Sliders
+  Sliders,
+  Palette
 } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
 import { useWebsites } from "../../hooks/useWebsites";
@@ -194,6 +195,18 @@ export function Sidebar({ mobileOpen, setMobileOpen }) {
                   <NavLink to={`/content/${activeWebsiteId}/global`} onClick={() => setMobileOpen(false)} className={subNavItemClass}>
                     <Globe className="w-3.5 h-3.5 flex-shrink-0" />
                     <span>Global Content</span>
+                  </NavLink>
+
+                  {/* SEO Suite */}
+                  <NavLink to={`/content/${activeWebsiteId}/seo`} onClick={() => setMobileOpen(false)} className={subNavItemClass}>
+                    <Search className="w-3.5 h-3.5 flex-shrink-0" />
+                    <span>SEO Dashboard</span>
+                  </NavLink>
+
+                  {/* Theme Manager */}
+                  <NavLink to={`/content/${activeWebsiteId}/theme`} onClick={() => setMobileOpen(false)} className={subNavItemClass}>
+                    <Palette className="w-3.5 h-3.5 flex-shrink-0" />
+                    <span>Theme Manager</span>
                   </NavLink>
 
                   <div className="my-1 border-t border-slate-800/60 mx-4" />

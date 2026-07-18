@@ -8,6 +8,9 @@ import { useAuth } from "../../hooks/useAuth";
 import BlockEditor from "../../components/blocks/BlockEditor";
 import Button from "../../components/ui/Button";
 import PreviewToolbar from "../../components/content/PreviewToolbar";
+import InspectorPanel from "../../components/content/InspectorPanel";
+import visualEditService from "../../services/visualEditService";
+import BLOCK_SCHEMAS from "../../components/blocks/blockSchemas";
 
 export function LivePreviewPage() {
   const { websiteId, pageId } = useParams();
@@ -26,6 +29,10 @@ export function LivePreviewPage() {
 
   // Responsive device modes
   const [activeDevice, setActiveDevice] = useState("full");
+
+  // Visual edit mode states
+  const [editModeActive, setEditModeActive] = useState(false);
+  const [selectedElement, setSelectedElement] = useState(null);
 
   // History stack for Undo/Redo
   const [history, setHistory] = useState([]);
@@ -201,6 +208,72 @@ export function LivePreviewPage() {
     setIframeError(false);
     // Sync initial state
     setTimeout(syncBlocksToIframe, 500);
+    // Reactivate edit overlays if active
+    if (editModeActive) {
+      setTimeout(() => {
+        visualEditService.enableEditMode(iframeRef.current, selectedWebsite?.domain);
+      }, 800);
+    }
+  };
+
+  // Listen for visual element selection messages from iframe
+  useEffect(() => {
+    const handleMessage = (event) => {
+      if (!selectedWebsite?.domain) return;
+      try {
+        const targetOrigin = new URL(selectedWebsite.domain).origin;
+        if (event.origin !== targetOrigin) return;
+
+        const data = event.data;
+        if (data && data.type === "RCMS_ELEMENT_SELECTED") {
+          setSelectedElement({
+            blockId: data.blockId,
+            fieldKey: data.fieldKey,
+            blockType: data.blockType,
+            value: data.value
+          });
+        }
+      } catch (err) {
+        console.warn("Error parsing iframe event message:", err);
+      }
+    };
+
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, [selectedWebsite]);
+
+  // Sync CMS Edit Mode activation state to client iframe
+  useEffect(() => {
+    if (editModeActive) {
+      visualEditService.enableEditMode(iframeRef.current, selectedWebsite?.domain);
+    } else {
+      visualEditService.disableEditMode(iframeRef.current, selectedWebsite?.domain);
+      setSelectedElement(null);
+    }
+  }, [editModeActive, selectedWebsite]);
+
+  const handleInspectorBlockChange = (blockId, updatedBlock) => {
+    // Update CMS blocks layout list
+    setBlocks(prev => prev.map(b => b.id === blockId ? updatedBlock : b));
+
+    // Send visual update payload back to client iframe
+    if (selectedElement && selectedElement.blockId === blockId) {
+      const fieldKey = selectedElement.fieldKey;
+      const schema = BLOCK_SCHEMAS.find(s => s.type === updatedBlock.type);
+      const fieldSchema = schema?.fields.find(f => f.key === fieldKey);
+      const isLoc = fieldSchema?.localized;
+      const value = isLoc 
+        ? updatedBlock.locales?.[activeLocale]?.[fieldKey] 
+        : updatedBlock[fieldKey];
+
+      visualEditService.sendFieldUpdate(
+        iframeRef.current,
+        selectedWebsite?.domain,
+        blockId,
+        fieldKey,
+        value
+      );
+    }
   };
 
   // Set timeout fallback for X-Frame-Options blockers
@@ -226,114 +299,134 @@ export function LivePreviewPage() {
     <div className="flex h-screen w-screen overflow-hidden bg-slate-950 text-slate-100 font-sans">
       
       {/* Left Pane: Editor */}
-      <div 
-        className="flex flex-col border-r border-slate-850 bg-slate-900/50 flex-shrink-0"
-        style={{ width: `${leftWidth}%` }}
-      >
-        {/* Header Bar - Hides elements as toolbar handles save/locale sync */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-850 bg-slate-950/60 flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <span className="text-xs font-bold text-slate-200 truncate">
-              Layout Structure Editor
-            </span>
+      {!editModeActive && (
+        <div 
+          className="flex flex-col border-r border-slate-850 bg-slate-900/50 flex-shrink-0"
+          style={{ width: `${leftWidth}%` }}
+        >
+          {/* Header Bar - Hides elements as toolbar handles save/locale sync */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-850 bg-slate-950/60 flex-shrink-0">
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-bold text-slate-200 truncate">
+                Layout Structure Editor
+              </span>
+            </div>
+          </div>
+
+          {/* Scrollable Editor */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <BlockEditor
+              blocks={blocks}
+              onChange={handleBlocksChange}
+              activeLocale={activeLocale}
+            />
           </div>
         </div>
-
-        {/* Scrollable Editor */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          <BlockEditor
-            blocks={blocks}
-            onChange={handleBlocksChange}
-            activeLocale={activeLocale}
-          />
-        </div>
-      </div>
+      )}
 
       {/* Resize handle bar */}
-      <div
-        onMouseDown={handleMouseDown}
-        className="w-1.5 hover:w-2 bg-slate-900 border-x border-slate-850 hover:bg-primary transition-colors cursor-col-resize flex-shrink-0 z-30"
-      />
-
-      {/* Right Pane: Live Iframe Preview */}
-      <div className="flex-1 flex flex-col bg-slate-950 relative h-full">
-        {/* Render consolidated toolbar workstation */}
-        <PreviewToolbar
-          title={title}
-          onBack={() => navigate(`/content/${websiteId}/pages/${pageId}`)}
-          activeLocale={activeLocale}
-          activeLocales={activeLocales}
-          onLocaleSelect={setLocale}
-          activeDevice={activeDevice}
-          onDeviceSelect={setActiveDevice}
-          onUndo={handleUndo}
-          onRedo={handleRedo}
-          canUndo={historyIndex > 0}
-          canRedo={historyIndex < history.length - 1}
-          onSave={handleSaveDraft}
-          onPublish={handlePublishPage}
-          saving={saving}
-          publishing={publishing}
-          previewUrl={previewUrl}
+      {!editModeActive && (
+        <div
+          onMouseDown={handleMouseDown}
+          className="w-1.5 hover:w-2 bg-slate-900 border-x border-slate-850 hover:bg-primary transition-colors cursor-col-resize flex-shrink-0 z-30"
         />
+      )}
 
-        {/* Warn Banner if Frame Load Blocked */}
-        {iframeError && (
-          <div className="m-4 p-3 rounded-xl border border-amber-500/20 bg-amber-500/10 text-amber-300 text-xs flex items-center justify-between gap-4 z-10 shadow-lg text-left">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0" />
-              <p>
-                <strong>Preview Frame Blocked:</strong> Your browser or site security settings (e.g. <code>X-Frame-Options</code>) are blocking iframe embeddings. 
-              </p>
+      {/* Right Container */}
+      <div className="flex-1 flex flex-row h-full overflow-hidden">
+        {/* Live Preview Iframe View */}
+        <div className="flex-1 flex flex-col h-full overflow-hidden border-r border-slate-850 bg-slate-950">
+          {/* Render consolidated toolbar workstation */}
+          <PreviewToolbar
+            title={title}
+            onBack={() => navigate(`/content/${websiteId}/pages/${pageId}`)}
+            activeLocale={activeLocale}
+            activeLocales={activeLocales}
+            onLocaleSelect={setLocale}
+            activeDevice={activeDevice}
+            onDeviceSelect={setActiveDevice}
+            onUndo={handleUndo}
+            onRedo={handleRedo}
+            canUndo={historyIndex > 0}
+            canRedo={historyIndex < history.length - 1}
+            onSave={handleSaveDraft}
+            onPublish={handlePublishPage}
+            saving={saving}
+            publishing={publishing}
+            previewUrl={previewUrl}
+            editModeActive={editModeActive}
+            onEditModeToggle={() => setEditModeActive(prev => !prev)}
+          />
+
+          {/* Warn Banner if Frame Load Blocked */}
+          {iframeError && (
+            <div className="m-4 p-3 rounded-xl border border-amber-500/20 bg-amber-500/10 text-amber-300 text-xs flex items-center justify-between gap-4 z-10 shadow-lg text-left">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0" />
+                <p>
+                  <strong>Preview Frame Blocked:</strong> Your browser or site security settings (e.g. <code>X-Frame-Options</code>) are blocking iframe embeddings. 
+                </p>
+              </div>
+              <a
+                href={previewUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/30 rounded-lg font-bold flex items-center gap-1 flex-shrink-0 transition-colors"
+              >
+                Open New Tab <ExternalLink className="w-3 h-3" />
+              </a>
             </div>
-            <a
-              href={previewUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-3 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/30 rounded-lg font-bold flex items-center gap-1 flex-shrink-0 transition-colors"
-            >
-              Open New Tab <ExternalLink className="w-3 h-3" />
-            </a>
-          </div>
-        )}
+          )}
 
-        {/* Iframe View - Centered and Responsive Mock Frame */}
-        <div className="flex-1 w-full h-full relative bg-slate-900 flex flex-col items-center justify-center p-4 overflow-auto">
-          <div 
-            style={{ 
-              width: getDeviceWidth(), 
-              height: "100%",
-              maxWidth: "100%",
-              transition: "width 0.3s cubic-bezier(0.4, 0, 0.2, 1)" 
-            }}
-            className="relative bg-slate-950 rounded-xl overflow-hidden border border-slate-800 shadow-2xl flex flex-col"
-          >
-            <iframe
-              ref={iframeRef}
-              src={previewUrl}
-              onLoad={handleIframeLoad}
-              title="Site Live Preview Frame"
-              className="w-full flex-1 border-none bg-slate-950"
-              sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
-            />
-            {activeDevice !== "full" && (
-              <div className="bg-slate-900 px-3 py-1.5 border-t border-slate-800 text-[10px] text-slate-500 font-bold uppercase tracking-wider text-center select-none">
-                Viewport: {getDeviceWidth()} ({activeDevice})
+          {/* Iframe View - Centered and Responsive Mock Frame */}
+          <div className="flex-1 w-full h-full relative bg-slate-900 flex flex-col items-center justify-center p-4 overflow-auto">
+            <div 
+              style={{ 
+                width: getDeviceWidth(), 
+                height: "100%",
+                maxWidth: "100%",
+                transition: "width 0.3s cubic-bezier(0.4, 0, 0.2, 1)" 
+              }}
+              className="relative bg-slate-950 rounded-xl overflow-hidden border border-slate-800 shadow-2xl flex flex-col"
+            >
+              <iframe
+                ref={iframeRef}
+                src={previewUrl}
+                onLoad={handleIframeLoad}
+                title="Site Live Preview Frame"
+                className="w-full flex-1 border-none bg-slate-950"
+                sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
+              />
+              {activeDevice !== "full" && (
+                <div className="bg-slate-900 px-3 py-1.5 border-t border-slate-800 text-[10px] text-slate-500 font-bold uppercase tracking-wider text-center select-none">
+                  Viewport: {getDeviceWidth()} ({activeDevice})
+                </div>
+              )}
+            </div>
+            
+            {iframeLoading && (
+              <div className="absolute inset-0 flex items-center justify-center bg-slate-950/80 z-20">
+                <div className="flex flex-col items-center gap-3">
+                  <RefreshCw className="w-7 h-7 text-primary animate-spin" />
+                  <span className="text-xs text-slate-400 font-semibold">Connecting to website preview...</span>
+                </div>
               </div>
             )}
           </div>
-          
-          {iframeLoading && (
-            <div className="absolute inset-0 flex items-center justify-center bg-slate-950/80 z-20">
-              <div className="flex flex-col items-center gap-3">
-                <RefreshCw className="w-7 h-7 text-primary animate-spin" />
-                <span className="text-xs text-slate-400 font-semibold">Connecting to website preview...</span>
-              </div>
-            </div>
-          )}
         </div>
+
+        {/* Visual Inspector Drawer */}
+        {editModeActive && (
+          <div className="w-80 flex flex-col flex-shrink-0 bg-slate-900 border-l border-slate-850 h-full">
+            <InspectorPanel
+              selectedElement={selectedElement}
+              blocks={blocks}
+              onChangeBlock={handleInspectorBlockChange}
+              activeLocale={activeLocale}
+            />
+          </div>
+        )}
       </div>
-      
     </div>
   );
 }

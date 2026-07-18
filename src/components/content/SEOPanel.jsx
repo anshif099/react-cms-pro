@@ -4,8 +4,58 @@ import Input from "../ui/Input";
 import ImagePicker from "../ui/ImagePicker";
 import { cn } from "../../utils/cn";
 
-export function SEOPanel({ seoData = {}, onChange }) {
+export function SEOPanel({ seoData = {}, onChange, blocks = [] }) {
   const [openSection, setOpenSection] = useState("meta");
+
+  // Concatenates all textual blocks content
+  const extractTextFromBlocks = (blockData) => {
+    let text = "";
+    const scan = (obj) => {
+      if (!obj) return;
+      if (typeof obj === "string") {
+        text += " " + obj;
+      } else if (Array.isArray(obj)) {
+        obj.forEach(scan);
+      } else if (typeof obj === "object") {
+        Object.entries(obj).forEach(([key, val]) => {
+          if (key === "id" || key === "type" || key === "style" || key === "config") return;
+          scan(val);
+        });
+      }
+    };
+    scan(blockData);
+    return text.trim();
+  };
+
+  const focusKeyword = seoData.focusKeyword || "";
+  const allText = extractTextFromBlocks(blocks);
+  
+  let density = 0;
+  let wordCount = 0;
+  let occurrences = 0;
+
+  if (focusKeyword.trim() && allText.trim()) {
+    const words = allText.toLowerCase().match(/\b\w+\b/g) || [];
+    wordCount = words.length;
+
+    const cleanKeyword = focusKeyword.trim().toLowerCase();
+    const escapedKeyword = cleanKeyword.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const regex = new RegExp(`\\b${escapedKeyword}\\b`, "gi");
+    const matches = allText.match(regex) || [];
+    occurrences = matches.length;
+
+    if (wordCount > 0) {
+      density = parseFloat(((occurrences / wordCount) * 100).toFixed(2));
+    }
+  }
+
+  const getDensityBadgeColor = () => {
+    if (!focusKeyword) return "bg-slate-800/80 text-slate-400 border-slate-700";
+    if (occurrences === 0) return "bg-rose-500/10 border-rose-500/20 text-rose-400";
+    if (density >= 0.5 && density <= 2.5) return "bg-emerald-500/10 border-emerald-500/20 text-emerald-400";
+    if (density < 0.5) return "bg-amber-500/10 border-amber-500/20 text-amber-400";
+    return "bg-rose-500/10 border-rose-500/20 text-rose-400"; // Stuffed
+  };
 
   const updateField = (key, value) => {
     if (onChange) {
@@ -70,6 +120,38 @@ export function SEOPanel({ seoData = {}, onChange }) {
               value={seoData.keywords || ""}
               onChange={(e) => updateField("keywords", e.target.value)}
             />
+
+            <div className="space-y-3 pt-2 border-t border-slate-800/60 text-left">
+              <Input
+                label="Focus Keyword"
+                placeholder="e.g. headless cms"
+                value={seoData.focusKeyword || ""}
+                onChange={(e) => updateField("focusKeyword", e.target.value)}
+                helperText="Target search keyword or phrase for this page."
+              />
+
+              {focusKeyword && (
+                <div className={`p-3 rounded-lg border text-xs flex flex-col gap-1.5 transition-colors ${getDensityBadgeColor()}`}>
+                   <div className="flex items-center justify-between font-bold">
+                     <span>Keyword Density Status</span>
+                     <span className="uppercase text-[9px] tracking-wider bg-slate-950/40 px-2 py-0.5 rounded border border-white/5 font-mono">
+                       {occurrences === 0 ? "Missing" : density >= 0.5 && density <= 2.5 ? "Optimal" : density < 0.5 ? "Low" : "High (Stuffed)"}
+                     </span>
+                   </div>
+                   <p className="text-[11px] leading-relaxed">
+                     {occurrences === 0 
+                       ? `The phrase "${focusKeyword}" does not appear anywhere in your page's block content.`
+                       : `Occurrences: ${occurrences} times in ${wordCount} words (Density: ${density}%). ${
+                           density >= 0.5 && density <= 2.5 
+                             ? "Perfect! The keyword is nicely balanced in your content."
+                             : density < 0.5 
+                               ? "Consider using the keyword in a few more headings or body paragraphs."
+                               : "Warning: Density exceeds recommended 2.5%. Reduce occurrences to avoid search engine penalties."
+                         }`}
+                   </p>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

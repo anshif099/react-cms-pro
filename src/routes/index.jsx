@@ -26,6 +26,8 @@ const GlobalContentPage = lazy(() => import("../pages/content/GlobalContentPage"
 const SearchPage = lazy(() => import("../pages/content/SearchPage"));
 const LivePreviewPage = lazy(() => import("../pages/content/LivePreviewPage"));
 const CMSSettingsPage = lazy(() => import("../pages/content/CMSSettingsPage"));
+const SEODashboardPage = lazy(() => import("../pages/content/SEODashboardPage"));
+const ThemeManagerPage = lazy(() => import("../pages/content/ThemeManagerPage"));
 
 const lazyLoad = (Component) => (
   <Suspense fallback={<div className="p-6"><LoadingSkeleton variant="card" /></div>}>
@@ -148,6 +150,14 @@ export const routesConfig = [
           {
             path: "settings",
             element: lazyLoad(CMSSettingsPage)
+          },
+          {
+            path: "seo",
+            element: lazyLoad(SEODashboardPage)
+          },
+          {
+            path: "theme",
+            element: lazyLoad(ThemeManagerPage)
           }
         ]
       },
