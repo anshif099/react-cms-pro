@@ -19,19 +19,19 @@ createRoot(document.getElementById('root')).render(
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <AuthProvider>
-          <WebsiteProvider>
-            <PageProvider>
-              <MediaProvider>
-                <GlobalProvider>
-                  <SearchProvider>
-                    <ToastProvider>
+          <ToastProvider>
+            <WebsiteProvider>
+              <PageProvider>
+                <MediaProvider>
+                  <GlobalProvider>
+                    <SearchProvider>
                       <App />
-                    </ToastProvider>
-                  </SearchProvider>
-                </GlobalProvider>
-              </MediaProvider>
-            </PageProvider>
-          </WebsiteProvider>
+                    </SearchProvider>
+                  </GlobalProvider>
+                </MediaProvider>
+              </PageProvider>
+            </WebsiteProvider>
+          </ToastProvider>
         </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>
