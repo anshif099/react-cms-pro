@@ -13,6 +13,7 @@ import Input from "../../components/ui/Input";
 import EmptyState from "../../components/ui/EmptyState";
 import Badge from "../../components/ui/Badge";
 import PageTemplateSelector from "../../components/content/PageTemplateSelector";
+import ManualRouteImportModal from "../../components/websites/ManualRouteImportModal";
 
 export function PagesListPage() {
   const { websiteId } = useParams();
@@ -30,7 +31,15 @@ export function PagesListPage() {
   const [newPageSlug, setNewPageSlug] = useState("");
   const [creating, setCreating] = useState(false);
 
-  const { sync, syncLoading } = useWebsiteSync(websiteId);
+  const { sync, importManual, syncLoading } = useWebsiteSync(websiteId);
+  const [showManualSync, setShowManualSync] = useState(false);
+
+  const handleSync = async () => {
+    const result = await sync();
+    if (!result || result.success === false) {
+      setShowManualSync(true);
+    }
+  };
 
   useEffect(() => {
     if (websiteId) {
@@ -157,13 +166,7 @@ export function PagesListPage() {
         </div>
         <div className="flex gap-3">
           <Button
-            onClick={async () => {
-              try {
-                await sync();
-              } catch (e) {
-                // Error is caught and toast notification is handled inside useWebsiteSync hook
-              }
-            }}
+            onClick={handleSync}
             variant="outline"
             className="gap-2 font-bold py-2.5 cursor-pointer border-slate-805 text-xs"
             loading={syncLoading}
@@ -479,6 +482,13 @@ export function PagesListPage() {
           </div>
         )}
       </Modal>
+
+      <ManualRouteImportModal
+        isOpen={showManualSync}
+        onClose={() => setShowManualSync(false)}
+        onImport={importManual}
+        loading={syncLoading}
+      />
     </div>
   );
 }
