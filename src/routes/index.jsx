@@ -28,6 +28,7 @@ const LivePreviewPage = lazy(() => import("../pages/content/LivePreviewPage"));
 const CMSSettingsPage = lazy(() => import("../pages/content/CMSSettingsPage"));
 const SEODashboardPage = lazy(() => import("../pages/content/SEODashboardPage"));
 const ThemeManagerPage = lazy(() => import("../pages/content/ThemeManagerPage"));
+const PluginsPage = lazy(() => import("../pages/content/PluginsPage"));
 
 const lazyLoad = (Component) => (
   <Suspense fallback={<div className="p-6"><LoadingSkeleton variant="card" /></div>}>
@@ -158,6 +159,10 @@ export const routesConfig = [
           {
             path: "theme",
             element: lazyLoad(ThemeManagerPage)
+          },
+          {
+            path: "plugins",
+            element: lazyLoad(PluginsPage)
           }
         ]
       },

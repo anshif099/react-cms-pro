@@ -9,7 +9,11 @@ import {
   Activity, 
   Settings,
   ArrowRight,
-  User
+  User,
+  RefreshCw,
+  Search,
+  Palette,
+  Puzzle
 } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
 import { useWebsites } from "../../hooks/useWebsites";
@@ -36,6 +40,18 @@ const getActivityIcon = (type) => {
       return { icon: User, color: "text-purple-500 bg-purple-50 dark:bg-purple-950/20" };
     case "website_deleted":
       return { icon: Clock, color: "text-red-500 bg-red-50 dark:bg-red-950/20" };
+    case "website_sync_success":
+      return { icon: RefreshCw, color: "text-indigo-400 bg-indigo-500/10 dark:bg-indigo-950/20" };
+    case "seo_robots_update":
+    case "seo_redirects_update":
+    case "seo_sitemap_generate":
+      return { icon: Search, color: "text-teal-400 bg-teal-500/10 dark:bg-teal-950/20" };
+    case "theme_update":
+      return { icon: Palette, color: "text-pink-400 bg-pink-500/10 dark:bg-pink-950/20" };
+    case "plugin_installed":
+    case "plugin_uninstalled":
+    case "plugin_settings_updated":
+      return { icon: Puzzle, color: "text-purple-400 bg-purple-500/10 dark:bg-purple-950/20" };
     default:
       return { icon: Activity, color: "text-slate-500 bg-slate-50 dark:bg-slate-950/20" };
   }

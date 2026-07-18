@@ -17,7 +17,8 @@ import {
   Database,
   Search,
   Sliders,
-  Palette
+  Palette,
+  Puzzle
 } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
 import { useWebsites } from "../../hooks/useWebsites";
@@ -207,6 +208,12 @@ export function Sidebar({ mobileOpen, setMobileOpen }) {
                   <NavLink to={`/content/${activeWebsiteId}/theme`} onClick={() => setMobileOpen(false)} className={subNavItemClass}>
                     <Palette className="w-3.5 h-3.5 flex-shrink-0" />
                     <span>Theme Manager</span>
+                  </NavLink>
+
+                  {/* Plugins Marketplace */}
+                  <NavLink to={`/content/${activeWebsiteId}/plugins`} onClick={() => setMobileOpen(false)} className={subNavItemClass}>
+                    <Puzzle className="w-3.5 h-3.5 flex-shrink-0" />
+                    <span>Plugin Marketplace</span>
                   </NavLink>
 
                   <div className="my-1 border-t border-slate-800/60 mx-4" />

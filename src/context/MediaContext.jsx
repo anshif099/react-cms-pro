@@ -116,6 +116,22 @@ export function MediaProvider({ children }) {
     }
   }, [toast]);
 
+  const updateAltText = useCallback(async (websiteId, fileId, altText) => {
+    setMediaLoading(true);
+    try {
+      const updated = await mediaService.updateAltText(websiteId, fileId, altText);
+      setFiles(prev => prev.map(f => (f.id === fileId ? updated : f)));
+      toast.success("SEO Alt text updated successfully.");
+      return updated;
+    } catch (error) {
+      toast.error("Failed to update Alt text.");
+      console.error(error);
+      throw error;
+    } finally {
+      setMediaLoading(false);
+    }
+  }, [toast]);
+
   const value = useMemo(() => ({
     files,
     folders,
@@ -125,7 +141,8 @@ export function MediaProvider({ children }) {
     addFolder,
     uploadFile,
     deleteFile,
-    renameFile
+    renameFile,
+    updateAltText
   }), [
     files,
     folders,
@@ -135,7 +152,8 @@ export function MediaProvider({ children }) {
     addFolder,
     uploadFile,
     deleteFile,
-    renameFile
+    renameFile,
+    updateAltText
   ]);
 
   return (

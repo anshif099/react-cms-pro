@@ -15,7 +15,7 @@ export function MediaLibraryPage() {
   const { websiteId } = useParams();
   const navigate = useNavigate();
 
-  const { files, folders, mediaLoading, fetchMedia, addFolder, deleteFile, renameFile } = useMedia();
+  const { files, folders, mediaLoading, fetchMedia, addFolder, deleteFile, renameFile, updateAltText } = useMedia();
   const { selectedWebsite, selectWebsite } = useWebsites();
 
   const [activeFolder, setActiveFolder] = useState("root");
@@ -80,6 +80,15 @@ export function MediaLibraryPage() {
       if (selectedFile?.id === fileId) {
         setSelectedFile(updated);
       }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleSaveAltText = async (fileId, text) => {
+    try {
+      setSelectedFile(prev => prev && prev.id === fileId ? { ...prev, alt: text } : prev);
+      await updateAltText(websiteId, fileId, text);
     } catch (err) {
       console.error(err);
     }
@@ -397,6 +406,17 @@ export function MediaLibraryPage() {
                   <div>
                     <span className="font-bold text-[10px] uppercase tracking-wider block text-admin-secondary">Type</span>
                     <span className="font-semibold text-admin-text truncate block">{selectedFile.type}</span>
+                  </div>
+
+                  <div>
+                    <span className="font-bold text-[10px] uppercase tracking-wider block text-admin-secondary mb-1">SEO Alternative Text (Alt)</span>
+                    <textarea
+                      value={selectedFile.alt || ""}
+                      onChange={(e) => handleSaveAltText(selectedFile.id, e.target.value)}
+                      placeholder="Describe this image for screen readers and search spiders..."
+                      rows={2}
+                      className="w-full text-xs py-1.5 px-2.5 rounded-lg border border-slate-800 bg-slate-850 text-slate-300 outline-none hover:border-slate-650 focus:border-primary resize-none"
+                    />
                   </div>
 
                   <div>

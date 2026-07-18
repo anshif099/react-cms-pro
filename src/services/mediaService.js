@@ -200,6 +200,54 @@ export const mediaService = {
     }
   },
 
+  async updateAltText(websiteId, fileId, altText) {
+    try {
+      const docRef = dbRef(database, `media/${websiteId}/${fileId}`);
+      const snapshot = await get(docRef);
+      if (!snapshot.exists()) {
+        throw new Error("File not found.");
+      }
+
+      const fileData = snapshot.val();
+      const updatedData = {
+        ...fileData,
+        alt: altText,
+        updatedAt: Date.now()
+      };
+
+      await set(docRef, updatedData);
+
+      // Update search index
+      await searchService.index(websiteId, fileId, {
+        type: "media",
+        title: fileData.name,
+        slug: fileData.folder,
+        excerpt: fileData.type,
+        locales: {
+          en: {
+            title: fileData.name,
+            description: altText
+          }
+        }
+      });
+
+      await activityLogService.logActivity(
+        "media_alt_updated",
+        "Media alt text updated",
+        `Updated Alt text description for file "${fileData.name}"`,
+        websiteId
+      );
+
+      return {
+        id: fileId,
+        ...updatedData
+      };
+    } catch (error) {
+      console.error(`Failed to update alt text for file ${fileId}:`, error);
+      throw error;
+    }
+  },
+
   async search(websiteId, query) {
     try {
       const allMedia = await this.getAll(websiteId);
