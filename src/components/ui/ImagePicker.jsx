@@ -1,21 +1,42 @@
-import React from "react";
-import { Image, X } from "lucide-react";
+import React, { useState } from "react";
+import { Image as ImageIcon, X, FolderOpen } from "lucide-react";
 import Input from "./Input";
+import MediaLibraryModal from "../content/MediaLibraryModal";
 
-export function ImagePicker({ label, value, onChange, placeholder = "Enter image URL or select..." }) {
+export function ImagePicker({ label, value, onChange, placeholder = "Enter image URL or browse..." }) {
+  const [isOpen, setIsOpen] = useState(false);
+
   const handleClear = () => {
     if (onChange) onChange("");
   };
 
+  const handleSelect = (url) => {
+    if (onChange) onChange(url);
+  };
+
   return (
     <div className="flex flex-col gap-1 w-full text-left">
-      <Input
-        label={label}
-        value={value || ""}
-        onChange={(e) => onChange && onChange(e.target.value)}
-        placeholder={placeholder}
-        icon={Image}
-      />
+      <div className="flex gap-2 items-end">
+        <div className="flex-1">
+          <Input
+            label={label}
+            value={value || ""}
+            onChange={(e) => onChange && onChange(e.target.value)}
+            placeholder={placeholder}
+            icon={ImageIcon}
+          />
+        </div>
+        <button
+          type="button"
+          onClick={() => setIsOpen(true)}
+          className="py-2.5 px-3 border border-slate-700 hover:border-slate-650 bg-slate-900/40 hover:bg-slate-800/40 text-slate-300 hover:text-white rounded-lg text-sm transition-colors flex items-center gap-1.5 h-[38px] mb-[1px] cursor-pointer"
+          title="Browse Media Library"
+        >
+          <FolderOpen className="w-4 h-4" />
+          <span>Browse</span>
+        </button>
+      </div>
+      
       {value && (
         <div className="mt-2 relative inline-block group w-32">
           <img
@@ -35,6 +56,12 @@ export function ImagePicker({ label, value, onChange, placeholder = "Enter image
           </button>
         </div>
       )}
+
+      <MediaLibraryModal
+        isOpen={isOpen}
+        onClose={() => setIsOpen(false)}
+        onSelect={handleSelect}
+      />
     </div>
   );
 }
