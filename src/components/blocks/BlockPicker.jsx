@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import * as Icons from "lucide-react";
 import { Search, ChevronRight, Layout, HelpCircle } from "lucide-react";
 import Modal from "../ui/Modal";
+import Button from "../ui/Button";
 import BLOCK_SCHEMAS from "./blockSchemas";
 import { cn } from "../../utils/cn";
 
