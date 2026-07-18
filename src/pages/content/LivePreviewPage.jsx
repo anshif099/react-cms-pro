@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Save, Globe, Eye, AlertTriangle, ExternalLink, RefreshCw, Layers } from "lucide-react";
 import { usePages } from "../../hooks/usePages";
@@ -7,20 +7,30 @@ import { useWebsites } from "../../hooks/useWebsites";
 import { useAuth } from "../../hooks/useAuth";
 import BlockEditor from "../../components/blocks/BlockEditor";
 import Button from "../../components/ui/Button";
+import PreviewToolbar from "../../components/content/PreviewToolbar";
 
 export function LivePreviewPage() {
   const { websiteId, pageId } = useParams();
   const navigate = useNavigate();
 
-  const { selectedPage, fetchPageById, updatePage } = usePages();
+  const { selectedPage, fetchPageById, updatePage, publishPage } = usePages();
   const { selectedWebsite, selectWebsite } = useWebsites();
   const { activeLocales, activeLocale, setLocale } = useLocale(websiteId);
   const { user } = useAuth();
 
   const [saving, setSaving] = useState(false);
+  const [publishing, setPublishing] = useState(false);
   const [blocks, setBlocks] = useState([]);
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
+
+  // Responsive device modes
+  const [activeDevice, setActiveDevice] = useState("full");
+
+  // History stack for Undo/Redo
+  const [history, setHistory] = useState([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const [isUndoingOrRedoing, setIsUndoingOrRedoing] = useState(false);
 
   // Iframe error tracking states
   const [iframeError, setIframeError] = useState(false);
@@ -40,15 +50,57 @@ export function LivePreviewPage() {
     }
   }, [websiteId, pageId, selectWebsite, fetchPageById]);
 
-  // Sync state from database
+  // Sync state from database and initialize history
   useEffect(() => {
     if (selectedPage) {
       const localeData = selectedPage.locales?.[activeLocale] || {};
-      setBlocks(localeData.blocks || []);
+      const pageBlocks = localeData.blocks || [];
+      setBlocks(pageBlocks);
       setTitle(localeData.title || selectedPage.title || "");
       setSlug(localeData.slug || selectedPage.slug || "");
+
+      // Set initial history snapshot
+      setHistory([JSON.parse(JSON.stringify(pageBlocks))]);
+      setHistoryIndex(0);
     }
   }, [selectedPage, activeLocale]);
+
+  // Record blocks snapshot to history
+  const recordHistory = useCallback((newBlocks) => {
+    if (isUndoingOrRedoing) {
+      setIsUndoingOrRedoing(false);
+      return;
+    }
+    const blocksCopy = JSON.parse(JSON.stringify(newBlocks));
+    setHistory(prev => {
+      const trimmed = prev.slice(0, historyIndex + 1);
+      return [...trimmed, blocksCopy];
+    });
+    setHistoryIndex(prev => prev + 1);
+  }, [historyIndex, isUndoingOrRedoing]);
+
+  const handleBlocksChange = (newBlocks) => {
+    setBlocks(newBlocks);
+    recordHistory(newBlocks);
+  };
+
+  const handleUndo = () => {
+    if (historyIndex > 0) {
+      setIsUndoingOrRedoing(true);
+      const prevIndex = historyIndex - 1;
+      setHistoryIndex(prevIndex);
+      setBlocks(JSON.parse(JSON.stringify(history[prevIndex])));
+    }
+  };
+
+  const handleRedo = () => {
+    if (historyIndex < history.length - 1) {
+      setIsUndoingOrRedoing(true);
+      const nextIndex = historyIndex + 1;
+      setHistoryIndex(nextIndex);
+      setBlocks(JSON.parse(JSON.stringify(history[nextIndex])));
+    }
+  };
 
   // Trigger postMessage sync to iframe on block changes (debounced)
   useEffect(() => {
@@ -93,6 +145,30 @@ export function LivePreviewPage() {
       console.error(err);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handlePublishPage = async () => {
+    setPublishing(true);
+    try {
+      await publishPage(websiteId, pageId, user?.uid || "system");
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  const getDeviceWidth = () => {
+    switch (activeDevice) {
+      case "desktop": return "1440px";
+      case "laptop": return "1280px";
+      case "tablet": return "768px";
+      case "mobile": return "375px";
+      case "landscape": return "926px";
+      case "full":
+      default:
+        return "100%";
     }
   };
 
@@ -154,45 +230,12 @@ export function LivePreviewPage() {
         className="flex flex-col border-r border-slate-850 bg-slate-900/50 flex-shrink-0"
         style={{ width: `${leftWidth}%` }}
       >
-        {/* Header Bar */}
+        {/* Header Bar - Hides elements as toolbar handles save/locale sync */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-850 bg-slate-950/60 flex-shrink-0">
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => navigate(`/content/${websiteId}/pages/${pageId}`)}
-              className="p-1.5 rounded-lg border border-slate-850 hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
-              title="Return to Page Editor"
-            >
-              <ArrowLeft className="w-4 h-4" />
-            </button>
-            <span className="text-xs font-bold text-slate-200 truncate max-w-[120px] sm:max-w-[200px]">
-              Preview: {title}
+            <span className="text-xs font-bold text-slate-200 truncate">
+              Layout Structure Editor
             </span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {/* Language toggle */}
-            <div className="flex bg-slate-950/80 p-0.5 border border-slate-800 rounded-lg">
-              {activeLocales.map((code) => (
-                <button
-                  key={code}
-                  onClick={() => setLocale(code)}
-                  className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase transition-all cursor-pointer ${
-                    activeLocale === code ? "bg-primary text-white" : "text-slate-400 hover:text-white"
-                  }`}
-                >
-                  {code}
-                </button>
-              ))}
-            </div>
-
-            <Button
-              onClick={handleSaveDraft}
-              variant="primary"
-              className="py-1 px-3 text-[10px] gap-1 font-bold"
-              loading={saving}
-            >
-              <Save className="w-3 h-3" /> Save
-            </Button>
           </div>
         </div>
 
@@ -200,7 +243,7 @@ export function LivePreviewPage() {
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           <BlockEditor
             blocks={blocks}
-            onChange={setBlocks}
+            onChange={handleBlocksChange}
             activeLocale={activeLocale}
           />
         </div>
@@ -214,34 +257,25 @@ export function LivePreviewPage() {
 
       {/* Right Pane: Live Iframe Preview */}
       <div className="flex-1 flex flex-col bg-slate-950 relative h-full">
-        {/* Navigation control header for preview */}
-        <div className="flex items-center justify-between px-4 py-2 border-b border-slate-850 bg-slate-900/60 flex-shrink-0 text-xs">
-          <span className="font-mono text-slate-400 truncate max-w-lg select-all">
-            {previewUrl}
-          </span>
-          
-          <div className="flex gap-2">
-            <button
-              onClick={() => {
-                setIframeLoading(true);
-                if (iframeRef.current) iframeRef.current.src = previewUrl;
-              }}
-              className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white cursor-pointer"
-              title="Refresh Frame"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-            </button>
-            <a
-              href={previewUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white flex items-center gap-1 cursor-pointer font-bold"
-            >
-              <ExternalLink className="w-3.5 h-3.5" />
-              Open Tab
-            </a>
-          </div>
-        </div>
+        {/* Render consolidated toolbar workstation */}
+        <PreviewToolbar
+          title={title}
+          onBack={() => navigate(`/content/${websiteId}/pages/${pageId}`)}
+          activeLocale={activeLocale}
+          activeLocales={activeLocales}
+          onLocaleSelect={setLocale}
+          activeDevice={activeDevice}
+          onDeviceSelect={setActiveDevice}
+          onUndo={handleUndo}
+          onRedo={handleRedo}
+          canUndo={historyIndex > 0}
+          canRedo={historyIndex < history.length - 1}
+          onSave={handleSaveDraft}
+          onPublish={handlePublishPage}
+          saving={saving}
+          publishing={publishing}
+          previewUrl={previewUrl}
+        />
 
         {/* Warn Banner if Frame Load Blocked */}
         {iframeError && (
@@ -263,19 +297,34 @@ export function LivePreviewPage() {
           </div>
         )}
 
-        {/* Iframe View */}
-        <div className="flex-1 w-full h-full relative bg-slate-900">
-          <iframe
-            ref={iframeRef}
-            src={previewUrl}
-            onLoad={handleIframeLoad}
-            title="Site Live Preview Frame"
-            className="w-full h-full border-none bg-slate-950"
-            sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
-          />
+        {/* Iframe View - Centered and Responsive Mock Frame */}
+        <div className="flex-1 w-full h-full relative bg-slate-900 flex flex-col items-center justify-center p-4 overflow-auto">
+          <div 
+            style={{ 
+              width: getDeviceWidth(), 
+              height: "100%",
+              maxWidth: "100%",
+              transition: "width 0.3s cubic-bezier(0.4, 0, 0.2, 1)" 
+            }}
+            className="relative bg-slate-950 rounded-xl overflow-hidden border border-slate-800 shadow-2xl flex flex-col"
+          >
+            <iframe
+              ref={iframeRef}
+              src={previewUrl}
+              onLoad={handleIframeLoad}
+              title="Site Live Preview Frame"
+              className="w-full flex-1 border-none bg-slate-950"
+              sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
+            />
+            {activeDevice !== "full" && (
+              <div className="bg-slate-900 px-3 py-1.5 border-t border-slate-800 text-[10px] text-slate-500 font-bold uppercase tracking-wider text-center select-none">
+                Viewport: {getDeviceWidth()} ({activeDevice})
+              </div>
+            )}
+          </div>
           
           {iframeLoading && (
-            <div className="absolute inset-0 flex items-center justify-center bg-slate-950/80">
+            <div className="absolute inset-0 flex items-center justify-center bg-slate-950/80 z-20">
               <div className="flex flex-col items-center gap-3">
                 <RefreshCw className="w-7 h-7 text-primary animate-spin" />
                 <span className="text-xs text-slate-400 font-semibold">Connecting to website preview...</span>

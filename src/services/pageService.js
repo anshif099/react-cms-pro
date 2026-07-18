@@ -4,6 +4,7 @@ import contentSyncService from "./contentSyncService";
 import revisionService from "./revisionService";
 import searchService from "./searchService";
 import activityLogService from "./activityLogService";
+import { pageConversionService } from "./pageConversionService";
 
 export const pageService = {
   async getAll(websiteId) {
@@ -47,10 +48,16 @@ export const pageService = {
       const newPageRef = push(pagesRef);
       const pageId = newPageRef.key;
 
+      const templateBlocks = data.template 
+        ? pageConversionService.getTemplateBlocks(data.template)
+        : [];
+
       const pageData = {
         title: data.title,
         slug: data.slug || "",
         status: "draft",
+        source: data.source || (data.template ? "generated" : "cms"),
+        isImported: data.isImported || false,
         locales: data.locales || {
           en: {
             title: data.title,
@@ -59,7 +66,7 @@ export const pageService = {
               metaTitle: data.title,
               metaDescription: ""
             },
-            blocks: []
+            blocks: templateBlocks
           }
         },
         contentTypeRefs: data.contentTypeRefs || [],

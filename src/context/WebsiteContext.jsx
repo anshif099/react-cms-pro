@@ -7,6 +7,7 @@ export function WebsiteProvider({ children }) {
   const [websites, setWebsites] = useState([]);
   const [selectedWebsite, setSelectedWebsite] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [syncLoading, setSyncLoading] = useState(false);
 
   // Sync state from service
   const refreshWebsites = useCallback(async () => {
@@ -134,6 +135,30 @@ export function WebsiteProvider({ children }) {
     }
   }, [refreshWebsites]);
 
+  const syncWebsite = useCallback(async (id) => {
+    setSyncLoading(true);
+    try {
+      const result = await websiteService.syncWebsite(id);
+      await selectWebsite(id);
+      await refreshWebsites();
+      return result;
+    } finally {
+      setSyncLoading(false);
+    }
+  }, [selectWebsite, refreshWebsites]);
+
+  const importRoutes = useCallback(async (id, routes, userId) => {
+    setSyncLoading(true);
+    try {
+      const result = await websiteService.importRoutes(id, routes, userId);
+      await selectWebsite(id);
+      await refreshWebsites();
+      return result;
+    } finally {
+      setSyncLoading(false);
+    }
+  }, [selectWebsite, refreshWebsites]);
+
   return (
     <WebsiteContext.Provider value={{
       websites,
@@ -146,7 +171,10 @@ export function WebsiteProvider({ children }) {
       deleteWebsite,
       regenerateApiKey,
       regenerateSecretKey,
-      updateStatus
+      updateStatus,
+      syncWebsite,
+      importRoutes,
+      syncLoading
     }}>
       {children}
     </WebsiteContext.Provider>

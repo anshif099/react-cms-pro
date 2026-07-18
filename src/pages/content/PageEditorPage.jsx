@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Save, Globe, Eye, Terminal } from "lucide-react";
+import { ArrowLeft, Save, Globe, Eye, Terminal, Info } from "lucide-react";
 import { usePages } from "../../hooks/usePages";
 import { useLocale } from "../../hooks/useLocale";
 import { useWebsites } from "../../hooks/useWebsites";
 import { useRevisions } from "../../hooks/useRevisions";
 import { useContentTypes } from "../../hooks/useContentTypes";
 import { useAuth } from "../../hooks/useAuth";
+import { pageConversionService } from "../../services/pageConversionService";
 import SEOPanel from "../../components/content/SEOPanel";
 import PublishPanel from "../../components/content/PublishPanel";
 import RevisionPanel from "../../components/content/RevisionPanel";
@@ -168,6 +169,14 @@ export function PageEditorPage() {
       console.error(err);
     }
   };
+  
+  const handleConvertRouteBlocks = () => {
+    if (window.confirm("Are you sure you want to pre-populate default blocks for this route? This will replace your current editor layout list.")) {
+      const routePath = selectedPage.route || `/${selectedPage.slug || ""}`;
+      const defaultBlocks = pageConversionService.getRouteBlocks(routePath);
+      setBlocks(defaultBlocks);
+    }
+  };
 
   if (!selectedPage || !selectedWebsite) {
     return <div className="text-left text-slate-400 py-6">Loading Page Editor...</div>;
@@ -177,6 +186,27 @@ export function PageEditorPage() {
 
   return (
     <div className="space-y-6 text-left max-w-7xl mx-auto">
+      {selectedPage.isImported && (
+        <div className="p-4 rounded-xl border border-blue-500/20 bg-blue-500/10 text-blue-300 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-left shadow-lg">
+          <div className="flex items-center gap-3">
+            <Info className="w-5 h-5 text-blue-400 flex-shrink-0 animate-pulse" />
+            <div>
+              <p className="font-bold text-white">Imported Page Content Section</p>
+              <p className="text-slate-350 mt-0.5 leading-relaxed">
+                This page was discovered from website route <code className="text-purple-300 font-mono">"{selectedPage.route || `/${selectedPage.slug}`}"</code>. 
+                Pre-populate structure overrides below to publish CMS-controlled sections over original templates.
+              </p>
+            </div>
+          </div>
+          <Button
+            onClick={handleConvertRouteBlocks}
+            variant="outline"
+            className="py-1 px-3 text-[10px] font-bold flex-shrink-0 border-blue-500 hover:bg-blue-600/20 text-blue-300 bg-blue-500/10"
+          >
+            Convert to CMS Blocks
+          </Button>
+        </div>
+      )}
       {/* Top sticky action header bar */}
       <div className="sticky top-0 z-20 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 py-3 px-4 rounded-xl border border-admin-border dark:border-slate-800 bg-slate-900/80 backdrop-blur-md shadow-lg">
         <div className="flex items-center gap-3 w-full md:w-auto">
@@ -265,7 +295,25 @@ export function PageEditorPage() {
                 onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, "-"))}
                 placeholder="e.g. home"
                 required
+                disabled={selectedPage.isImported}
               />
+              
+              {selectedPage.isImported && (
+                <div className="grid grid-cols-2 gap-4 pt-3 border-t border-slate-800/60 text-xs text-admin-secondary">
+                  <div>
+                    <span className="font-bold uppercase tracking-wider block mb-1">Route Path</span>
+                    <code className="text-purple-400 font-mono select-all bg-slate-950/20 border border-slate-800/40 py-1 px-2 rounded block">
+                      {selectedPage.route || `/${selectedPage.slug}`}
+                    </code>
+                  </div>
+                  <div>
+                    <span className="font-bold uppercase tracking-wider block mb-1">Last Synced</span>
+                    <span className="font-semibold text-slate-350 bg-slate-950/20 border border-slate-800/40 py-1 px-2 rounded block">
+                      {selectedPage.lastSynced ? new Date(selectedPage.lastSynced).toLocaleString() : "N/A"}
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           </Card>
 

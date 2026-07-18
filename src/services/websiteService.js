@@ -7,6 +7,7 @@ import {
   generateVerificationCode 
 } from "../utils/generators";
 import activityLogService from "./activityLogService";
+import { websiteSyncService } from "./websiteSyncService";
 
 async function hashSecretKey(key) {
   const encoder = new TextEncoder();
@@ -211,6 +212,16 @@ export const websiteService = {
   async updateStatus(id, status) {
     const updated = await this.update(id, { status });
     return updated;
+  },
+
+  async syncWebsite(id) {
+    const website = await this.getById(id);
+    if (!website) throw new Error("Website not found");
+    return await websiteSyncService.runSync(website);
+  },
+
+  async importRoutes(id, routes, userId) {
+    return await websiteSyncService.importRouteList(id, routes, userId);
   }
 };
 

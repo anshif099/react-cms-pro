@@ -12,15 +12,19 @@ import {
   Key, 
   Clock, 
   HeartHandshake,
-  LayoutDashboard
+  LayoutDashboard,
+  RefreshCw
 } from "lucide-react";
 import { useWebsites } from "../../hooks/useWebsites";
 import { useToast } from "../../hooks/useToast";
+import { useWebsiteSync } from "../../hooks/useWebsiteSync";
 import { Card } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
 import { Badge } from "../../components/ui/Badge";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { SecretField } from "../../components/ui/SecretField";
+import { SyncStatusCard } from "../../components/websites/SyncStatusCard";
+import { ManualRouteImportModal } from "../../components/websites/ManualRouteImportModal";
 import { motion } from "framer-motion";
 
 export function WebsiteDetailsPage() {
@@ -44,6 +48,25 @@ export function WebsiteDetailsPage() {
   const [showDisconnect, setShowDisconnect] = useState(false);
   const [showRegenApiKey, setShowRegenApiKey] = useState(false);
   const [showRegenSecretKey, setShowRegenSecretKey] = useState(false);
+  const [showManualSync, setShowManualSync] = useState(false);
+
+  const { 
+    sync, 
+    importManual, 
+    syncLoading, 
+    syncMode, 
+    syncStatus, 
+    syncStats, 
+    lastSync 
+  } = useWebsiteSync(id);
+
+  const handleSync = async () => {
+    try {
+      await sync();
+    } catch (err) {
+      setShowManualSync(true);
+    }
+  };
 
   // Sync selected website
   useEffect(() => {
@@ -158,6 +181,16 @@ export function WebsiteDetailsPage() {
               Verify Domain
             </Button>
           )}
+          <Button
+            onClick={handleSync}
+            variant="outline"
+            size="sm"
+            className="gap-1.5 font-bold cursor-pointer"
+            loading={syncLoading}
+          >
+            <RefreshCw className={`w-4 h-4 ${syncLoading ? "animate-spin" : ""}`} />
+            Sync Website
+          </Button>
           <Button 
             onClick={() => navigate(`/websites/${selectedWebsite.id}/sdk`)}
             variant="primary" 
@@ -276,6 +309,13 @@ export function WebsiteDetailsPage() {
               </div>
             </div>
           </Card>
+
+          <SyncStatusCard
+            syncStats={syncStats}
+            lastSync={lastSync}
+            syncMode={syncMode}
+            syncStatus={syncStatus}
+          />
         </div>
 
         {/* Right side stats/status & Danger Zone */}
@@ -367,6 +407,13 @@ export function WebsiteDetailsPage() {
         onConfirm={handleRegenSecret}
         title="Regenerate Secret Key?"
         message="Are you sure? Any server-side webhook processes or SDK calls requiring the secret key will start failing immediately."
+      />
+
+      <ManualRouteImportModal
+        isOpen={showManualSync}
+        onClose={() => setShowManualSync(false)}
+        onImport={importManual}
+        loading={syncLoading}
       />
     </div>
   );
