@@ -23,11 +23,11 @@ export function useWebsiteSync(websiteId) {
     try {
       const result = await syncWebsite(websiteId);
       toast.success(`Successfully synchronized ${result.count} routes via manifest!`);
-      return result;
+      return { success: true, count: result.count, mode: result.mode };
     } catch (err) {
       console.error(err);
       toast.error("Auto manifest sync failed. Open manual route import fallback.");
-      throw err;
+      return { success: false, error: err };
     }
   }, [websiteId, syncWebsite, toast]);
 

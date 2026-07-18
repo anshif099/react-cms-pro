@@ -61,9 +61,8 @@ export function WebsiteDetailsPage() {
   } = useWebsiteSync(id);
 
   const handleSync = async () => {
-    try {
-      await sync();
-    } catch (err) {
+    const result = await sync();
+    if (!result || result.success === false) {
       setShowManualSync(true);
     }
   };
