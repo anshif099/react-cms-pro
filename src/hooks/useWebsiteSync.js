@@ -25,7 +25,7 @@ export function useWebsiteSync(websiteId) {
       toast.success(`Successfully synchronized ${result.count} routes via manifest!`);
       return { success: true, count: result.count, mode: result.mode };
     } catch (err) {
-      console.error(err);
+      console.warn("Sync failed, falling back to manual import:", err.message);
       toast.error("Auto manifest sync failed. Open manual route import fallback.");
       return { success: false, error: err };
     }

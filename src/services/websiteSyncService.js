@@ -79,7 +79,7 @@ export const websiteSyncService = {
 
       return { success: true, count: routes.length, mode: "manifest" };
     } catch (error) {
-      console.error("Auto manifest sync failed:", error);
+      console.warn("Auto manifest sync failed (CORS or network error). Switching to manual route import fallback.", error.message);
       
       await update(websiteRef, {
         syncStatus: "manual", // Indicate manual intervention / manifest check failed

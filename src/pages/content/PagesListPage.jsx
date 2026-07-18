@@ -157,7 +157,13 @@ export function PagesListPage() {
         </div>
         <div className="flex gap-3">
           <Button
-            onClick={sync}
+            onClick={async () => {
+              try {
+                await sync();
+              } catch (e) {
+                // Error is caught and toast notification is handled inside useWebsiteSync hook
+              }
+            }}
             variant="outline"
             className="gap-2 font-bold py-2.5 cursor-pointer border-slate-805 text-xs"
             loading={syncLoading}
