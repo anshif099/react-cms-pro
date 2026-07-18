@@ -5,6 +5,7 @@ import { useWebsites } from "../../hooks/useWebsites";
 import { useLocale } from "../../hooks/useLocale";
 import Card from "../../components/ui/Card";
 import Button from "../../components/ui/Button";
+import { cn } from "../../utils/cn";
 
 const AVAILABLE_LOCALES = [
   { code: "en", name: "English" },
