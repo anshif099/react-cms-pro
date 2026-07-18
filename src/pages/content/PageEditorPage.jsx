@@ -1,15 +1,18 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Save, Globe, Eye, Settings, Terminal, Plus, Trash2, Copy, EyeOff, Layout } from "lucide-react";
+import { ArrowLeft, Save, Globe, Eye, Terminal } from "lucide-react";
 import { usePages } from "../../hooks/usePages";
 import { useLocale } from "../../hooks/useLocale";
 import { useWebsites } from "../../hooks/useWebsites";
 import { useRevisions } from "../../hooks/useRevisions";
+import { useContentTypes } from "../../hooks/useContentTypes";
 import { useAuth } from "../../hooks/useAuth";
 import SEOPanel from "../../components/content/SEOPanel";
 import PublishPanel from "../../components/content/PublishPanel";
 import RevisionPanel from "../../components/content/RevisionPanel";
 import RevisionCompareModal from "../../components/content/RevisionCompareModal";
+import BlockEditor from "../../components/blocks/BlockEditor";
+import BLOCK_SCHEMAS from "../../components/blocks/blockSchemas";
 import Button from "../../components/ui/Button";
 import Card from "../../components/ui/Card";
 import Input from "../../components/ui/Input";
@@ -22,6 +25,7 @@ export function PageEditorPage() {
   const { selectedWebsite, selectWebsite } = useWebsites();
   const { activeLocales, activeLocale, setLocale } = useLocale(websiteId);
   const { revisions, loadRevisions, saveRevision, restoreRevision } = useRevisions();
+  const { createContentType } = useContentTypes();
   const { user } = useAuth();
 
   const [saving, setSaving] = useState(false);
@@ -134,19 +138,35 @@ export function PageEditorPage() {
     setIsCompareOpen(true);
   };
 
-  // Mock block operations for v2.0 Phase 2
-  const handleAddMockBlock = () => {
-    const newBlock = {
-      id: Math.random().toString(36).substring(2, 9),
-      type: "hero",
-      title: "Hero Banner",
-      subtitle: "Customize this header subtext in Phase 4 block editor."
-    };
-    setBlocks(prev => [...prev, newBlock]);
-  };
+  // Reusable Content Type conversion handler
+  const handleConvertToContentType = async (blockId) => {
+    const blockToConvert = blocks.find((b) => b.id === blockId);
+    if (!blockToConvert) return;
+    
+    const typeName = window.prompt("Enter a name for the reusable content type:", blockToConvert.type);
+    if (!typeName) return;
 
-  const handleRemoveBlock = (id) => {
-    setBlocks(prev => prev.filter(b => b.id !== id));
+    try {
+      const schema = BLOCK_SCHEMAS.find((s) => s.type === blockToConvert.type);
+      const fields = schema ? schema.fields : [];
+      
+      const created = await createContentType(websiteId, {
+        name: typeName,
+        fields: fields,
+        locales: {
+          [activeLocale]: blockToConvert
+        }
+      });
+
+      setBlocks(prev => prev.map(b => b.id === blockId ? {
+        id: blockId,
+        type: "contentTypeRef",
+        contentTypeRef: created.id,
+        title: created.name
+      } : b));
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   if (!selectedPage || !selectedWebsite) {
@@ -249,56 +269,17 @@ export function PageEditorPage() {
             </div>
           </Card>
 
-          {/* Block Editor Mock Shell */}
+          {/* Visual Block Editor */}
           <Card 
-            title="Block Editor" 
-            subtitle="Visual content editor blocks will reside here (fully styled in Phase 4)"
+            title="Block Layout Editor" 
+            subtitle="Build and customize your web page sections visually"
           >
-            <div className="space-y-4">
-              {blocks.length === 0 ? (
-                <div className="flex flex-col items-center justify-center border border-dashed border-admin-border dark:border-slate-800 rounded-xl p-8 bg-slate-950/10 text-center">
-                  <Layout className="w-8 h-8 text-slate-500 mb-2" />
-                  <p className="text-sm font-semibold text-slate-400 mb-1">No blocks added yet</p>
-                  <p className="text-xs text-admin-secondary mb-4">Blocks are sections like Hero, Pricing, Team, FAQs, CTA, etc.</p>
-                  <Button onClick={handleAddMockBlock} variant="secondary" className="gap-1.5 border-slate-800">
-                    <Plus className="w-4 h-4" /> Add Temporary Block
-                  </Button>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {blocks.map((block, idx) => (
-                    <div 
-                      key={block.id} 
-                      className="flex items-center justify-between p-3.5 rounded-xl border border-admin-border dark:border-slate-800 bg-slate-900/30"
-                    >
-                      <div className="text-left">
-                        <span className="text-xs font-bold text-primary uppercase tracking-wider block">
-                          Block {idx + 1}: {block.type}
-                        </span>
-                        <span className="text-sm font-semibold text-admin-text block mt-0.5">
-                          {block.title}
-                        </span>
-                        <span className="text-xs text-admin-secondary block">
-                          {block.subtitle}
-                        </span>
-                      </div>
-                      <button
-                        onClick={() => handleRemoveBlock(block.id)}
-                        className="p-2 text-admin-secondary hover:text-admin-danger hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
-                        title="Remove Block"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ))}
-                  <div className="flex justify-center pt-2">
-                    <Button onClick={handleAddMockBlock} variant="secondary" className="gap-1.5 border-slate-800">
-                      <Plus className="w-4 h-4" /> Add Another Block
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
+            <BlockEditor
+              blocks={blocks}
+              onChange={setBlocks}
+              activeLocale={activeLocale}
+              onConvertToContentType={handleConvertToContentType}
+            />
           </Card>
         </div>
 
