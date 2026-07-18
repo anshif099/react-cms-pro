@@ -4,6 +4,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider } from './context/AuthContext';
 import { WebsiteProvider } from './context/WebsiteContext';
+import { PageProvider } from './context/PageContext';
+import { MediaProvider } from './context/MediaContext';
+import { GlobalProvider } from './context/GlobalContext';
+import { SearchProvider } from './context/SearchContext';
 import { ToastProvider } from './context/ToastContext';
 import App from './App.jsx';
 import './index.css';
@@ -16,9 +20,17 @@ createRoot(document.getElementById('root')).render(
       <ThemeProvider>
         <AuthProvider>
           <WebsiteProvider>
-            <ToastProvider>
-              <App />
-            </ToastProvider>
+            <PageProvider>
+              <MediaProvider>
+                <GlobalProvider>
+                  <SearchProvider>
+                    <ToastProvider>
+                      <App />
+                    </ToastProvider>
+                  </SearchProvider>
+                </GlobalProvider>
+              </MediaProvider>
+            </PageProvider>
           </WebsiteProvider>
         </AuthProvider>
       </ThemeProvider>

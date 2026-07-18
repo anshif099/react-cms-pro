@@ -95,6 +95,52 @@ export const settingsService = {
       console.error("Failed to revoke API token:", error);
       throw error;
     }
+  },
+
+  async getCMSSettings(websiteId) {
+    try {
+      const settingsRef = ref(database, `settings/${websiteId}`);
+      const snapshot = await get(settingsRef);
+      if (snapshot.exists()) {
+        const data = snapshot.val();
+        return {
+          defaultLocale: data.defaultLocale || "en",
+          activeLocales: data.activeLocales || ["en"],
+          timezone: data.timezone || "UTC"
+        };
+      }
+      return {
+        defaultLocale: "en",
+        activeLocales: ["en"],
+        timezone: "UTC"
+      };
+    } catch (error) {
+      console.error(`Failed to fetch CMS settings for website ${websiteId}:`, error);
+      throw error;
+    }
+  },
+
+  async updateCMSSettings(websiteId, data) {
+    try {
+      const settingsRef = ref(database, `settings/${websiteId}`);
+      const updateData = {
+        ...data,
+        updatedAt: serverTimestamp()
+      };
+      await update(settingsRef, updateData);
+
+      await activityLogService.logActivity(
+        "cms_settings_updated",
+        "CMS Settings updated",
+        `Updated CMS settings for website`,
+        websiteId
+      );
+
+      return updateData;
+    } catch (error) {
+      console.error(`Failed to update CMS settings for website ${websiteId}:`, error);
+      throw error;
+    }
   }
 };
 

@@ -10,7 +10,13 @@ import {
   ShieldCheck, 
   Terminal, 
   ChevronDown, 
-  ChevronRight 
+  ChevronRight,
+  FileText,
+  Layers,
+  Image,
+  Database,
+  Search,
+  Sliders
 } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
 import { useWebsites } from "../../hooks/useWebsites";
@@ -22,6 +28,9 @@ export function Sidebar({ mobileOpen, setMobileOpen }) {
   const location = useLocation();
   const [websitesMenuOpen, setWebsitesMenuOpen] = useState(
     location.pathname.startsWith("/websites")
+  );
+  const [contentMenuOpen, setContentMenuOpen] = useState(
+    location.pathname.startsWith("/content")
   );
 
   const activeWebsiteId = selectedWebsite?.id || websites[0]?.id;
@@ -139,6 +148,65 @@ export function Sidebar({ mobileOpen, setMobileOpen }) {
               </div>
             )}
           </div>
+
+          {/* Content Group */}
+          {activeWebsiteId && (
+            <div>
+              <button
+                onClick={() => setContentMenuOpen(!contentMenuOpen)}
+                className={cn(
+                  "flex items-center justify-between w-full px-4 py-2.5 text-sm font-medium transition-colors rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 cursor-pointer",
+                  location.pathname.startsWith(`/content/${activeWebsiteId}`) ? "text-white bg-slate-800/40" : ""
+                )}
+              >
+                <div className="flex items-center gap-3">
+                  <Database className="w-4 h-4 flex-shrink-0" />
+                  <span>Content</span>
+                </div>
+                {contentMenuOpen ? (
+                  <ChevronDown className="w-4 h-4 text-slate-500" />
+                ) : (
+                  <ChevronRight className="w-4 h-4 text-slate-500" />
+                )}
+              </button>
+
+              {contentMenuOpen && (
+                <div className="mt-1 space-y-1 transition-all duration-200">
+                  {/* Pages */}
+                  <NavLink to={`/content/${activeWebsiteId}/pages`} onClick={() => setMobileOpen(false)} className={subNavItemClass}>
+                    <FileText className="w-3.5 h-3.5 flex-shrink-0" />
+                    <span>Pages</span>
+                  </NavLink>
+
+                  {/* Content Types */}
+                  <NavLink to={`/content/${activeWebsiteId}/content-types`} onClick={() => setMobileOpen(false)} className={subNavItemClass}>
+                    <Layers className="w-3.5 h-3.5 flex-shrink-0" />
+                    <span>Content Types</span>
+                  </NavLink>
+
+                  {/* Media */}
+                  <NavLink to={`/content/${activeWebsiteId}/media`} onClick={() => setMobileOpen(false)} className={subNavItemClass}>
+                    <Image className="w-3.5 h-3.5 flex-shrink-0" />
+                    <span>Media</span>
+                  </NavLink>
+
+                  {/* Global Content */}
+                  <NavLink to={`/content/${activeWebsiteId}/global`} onClick={() => setMobileOpen(false)} className={subNavItemClass}>
+                    <Globe className="w-3.5 h-3.5 flex-shrink-0" />
+                    <span>Global Content</span>
+                  </NavLink>
+
+                  <div className="my-1 border-t border-slate-800/60 mx-4" />
+
+                  {/* CMS Settings */}
+                  <NavLink to={`/content/${activeWebsiteId}/settings`} onClick={() => setMobileOpen(false)} className={subNavItemClass}>
+                    <Sliders className="w-3.5 h-3.5 flex-shrink-0" />
+                    <span>CMS Settings</span>
+                  </NavLink>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Settings */}
           <NavLink to="/settings" onClick={() => setMobileOpen(false)} className={navItemClass}>

@@ -1,8 +1,9 @@
-import React from "react";
+import React, { Suspense, lazy } from "react";
 import { Navigate } from "react-router-dom";
 import ProtectedRoute from "./ProtectedRoute";
 import PublicRoute from "./PublicRoute";
 import DashboardLayout from "../components/layouts/DashboardLayout";
+import LoadingSkeleton from "../components/ui/LoadingSkeleton";
 
 // Import Pages
 import LoginPage from "../pages/auth/LoginPage";
@@ -15,6 +16,23 @@ import SDKInstallPage from "../pages/websites/SDKInstallPage";
 import ProfilePage from "../pages/profile/ProfilePage";
 import SettingsPage from "../pages/settings/SettingsPage";
 
+// Lazy Loaded CMS Pages
+const PagesListPage = lazy(() => import("../pages/content/PagesListPage"));
+const PageEditorPage = lazy(() => import("../pages/content/PageEditorPage"));
+const ContentTypesPage = lazy(() => import("../pages/content/ContentTypesPage"));
+const ContentTypeEditorPage = lazy(() => import("../pages/content/ContentTypeEditorPage"));
+const MediaLibraryPage = lazy(() => import("../pages/content/MediaLibraryPage"));
+const GlobalContentPage = lazy(() => import("../pages/content/GlobalContentPage"));
+const SearchPage = lazy(() => import("../pages/content/SearchPage"));
+const LivePreviewPage = lazy(() => import("../pages/content/LivePreviewPage"));
+const CMSSettingsPage = lazy(() => import("../pages/content/CMSSettingsPage"));
+
+const lazyLoad = (Component) => (
+  <Suspense fallback={<div className="p-6"><LoadingSkeleton variant="card" /></div>}>
+    <Component />
+  </Suspense>
+);
+
 export const routesConfig = [
   // Authentication Routes
   {
@@ -26,6 +44,16 @@ export const routesConfig = [
     )
   },
   
+  // Full-screen Live Preview (Protected, no Sidebar/DashboardLayout)
+  {
+    path: "/content/:websiteId/preview/:pageId",
+    element: (
+      <ProtectedRoute>
+        {lazyLoad(LivePreviewPage)}
+      </ProtectedRoute>
+    )
+  },
+
   // App Shell Layout (Protected Routes)
   {
     path: "/",
@@ -65,6 +93,61 @@ export const routesConfig = [
           {
             path: ":id/sdk",
             element: <SDKInstallPage />
+          }
+        ]
+      },
+      {
+        path: "content/:websiteId",
+        children: [
+          {
+            path: "pages",
+            children: [
+              {
+                index: true,
+                element: lazyLoad(PagesListPage)
+              },
+              {
+                path: "new",
+                element: lazyLoad(PageEditorPage)
+              },
+              {
+                path: ":pageId",
+                element: lazyLoad(PageEditorPage)
+              }
+            ]
+          },
+          {
+            path: "content-types",
+            children: [
+              {
+                index: true,
+                element: lazyLoad(ContentTypesPage)
+              },
+              {
+                path: "new",
+                element: lazyLoad(ContentTypeEditorPage)
+              },
+              {
+                path: ":typeId",
+                element: lazyLoad(ContentTypeEditorPage)
+              }
+            ]
+          },
+          {
+            path: "media",
+            element: lazyLoad(MediaLibraryPage)
+          },
+          {
+            path: "global",
+            element: lazyLoad(GlobalContentPage)
+          },
+          {
+            path: "search",
+            element: lazyLoad(SearchPage)
+          },
+          {
+            path: "settings",
+            element: lazyLoad(CMSSettingsPage)
           }
         ]
       },
