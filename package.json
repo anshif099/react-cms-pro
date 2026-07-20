@@ -8,7 +8,7 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "turbo run build",
+    "build": "turbo run build && node scripts/copy-build.js",
     "dev": "turbo run dev",
     "test": "turbo run test",
     "lint": "turbo run lint",
