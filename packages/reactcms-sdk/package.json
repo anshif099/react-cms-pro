@@ -1,0 +1,26 @@
+{
+  "name": "@anshif.rainhopes/reactcms-sdk",
+  "version": "1.0.0",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch"
+  },
+  "dependencies": {
+    "@anshif.rainhopes/shared": "*"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-router-dom": ">=6 <8"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.17",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "react-router-dom": "^7.18.1",
+    "tsup": "^8.2.4",
+    "typescript": "^5.5.4"
+  }
+}
