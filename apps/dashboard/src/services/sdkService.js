@@ -1,4 +1,5 @@
 import { websiteService } from "./websiteService";
+import { registryService } from "./registryService";
 import { database } from "../lib/firebase";
 import { ref, get } from "firebase/database";
 
@@ -32,12 +33,25 @@ function App() {
   },
 
   async testConnection(id) {
-    // Check real Firestore status
+    // Check real Firestore/Firebase status
     const website = await websiteService.getById(id);
     if (!website) {
       throw new Error("Website not found.");
     }
     
+    // Check if website has heartbeat or runtime registered in Firebase Realtime Database
+    const runtimeStatus = await registryService.getRuntimeStatus(id);
+
+    if (runtimeStatus && (runtimeStatus.status === "online" || runtimeStatus.heartbeat)) {
+      const updated = await websiteService.update(id, {
+        sdkInstalled: true,
+        status: "connected",
+        sdkVersion: runtimeStatus.sdkVersion || "1.0.0",
+        connectionHealth: "healthy"
+      });
+      return { success: true, website: updated };
+    }
+
     if (website.sdkInstalled) {
       return { success: true, website };
     } else {
