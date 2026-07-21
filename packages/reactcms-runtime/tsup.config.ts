@@ -7,5 +7,15 @@ export default defineConfig({
   splitting: false,
   sourcemap: true,
   clean: true,
-  external: ['react', 'react-dom', 'react-router-dom', '@anshif.rainhopes/reactcms-sdk'],
+  platform: 'browser',
+  external: [
+    'react',
+    'react-dom',
+    'react-router-dom',
+    'firebase',
+    'firebase/app',
+    'firebase/database',
+    '@anshif.rainhopes/shared',
+    '@anshif.rainhopes/reactcms-sdk',
+  ],
 });

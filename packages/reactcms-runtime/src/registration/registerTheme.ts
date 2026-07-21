@@ -11,7 +11,8 @@ export async function registerTheme(
   try {
     const db = getFirebaseDatabase(apiKey);
     const themeRef = ref(db, paths.registryTheme(websiteId));
-    await set(themeRef, theme);
+    const cleanTheme = JSON.parse(JSON.stringify(theme));
+    await set(themeRef, cleanTheme);
   } catch (error) {
     console.error('[ReactCMS Runtime] Failed to register theme tokens:', error);
   }

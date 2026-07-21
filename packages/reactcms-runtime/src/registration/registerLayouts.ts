@@ -13,7 +13,7 @@ export async function registerLayouts(
 
     const updates: Record<string, any> = {};
     Object.entries(layouts).forEach(([id, layout]) => {
-      updates[id] = layout;
+      updates[id] = JSON.parse(JSON.stringify(layout));
     });
 
     if (Object.keys(updates).length > 0) {

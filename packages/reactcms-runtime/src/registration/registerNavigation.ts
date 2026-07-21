@@ -13,7 +13,7 @@ export async function registerNavigation(
 
     const updates: Record<string, any> = {};
     Object.entries(navigations).forEach(([id, nav]) => {
-      updates[id] = nav;
+      updates[id] = JSON.parse(JSON.stringify(nav));
     });
 
     if (Object.keys(updates).length > 0) {

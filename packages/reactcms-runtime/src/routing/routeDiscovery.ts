@@ -42,17 +42,25 @@ export function discoverRoutes(
 
     const routeId = normalizePathToId(fullPath);
 
-    // If it's a renderable route (has element, or component, or children, but let's assume it's a page if it has path/index)
+    // If it's a renderable route
     if (route.path !== undefined || route.index) {
-      result.push({
+      const entry: RouteEntry = {
         id: routeId,
         path: fullPath,
         title: route.title || route.id || routeId.charAt(0).toUpperCase() + routeId.slice(1),
         layout: route.layout || 'default',
-        contentModel: route.contentModel,
         source: 'registered',
         published: true,
-      });
+      };
+
+      if (route.contentModel) {
+        entry.contentModel = route.contentModel;
+      }
+      if (route.createdAt) {
+        entry.createdAt = route.createdAt;
+      }
+
+      result.push(entry);
     }
 
     // Recurse children

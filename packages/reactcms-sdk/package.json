@@ -1,16 +1,19 @@
 {
   "name": "@anshif.rainhopes/reactcms-sdk",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "license": "MIT",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch"
   },
   "dependencies": {
-    "@anshif.rainhopes/shared": "*"
+    "@anshif.rainhopes/shared": "^1.0.3"
   },
   "peerDependencies": {
     "react": ">=18",

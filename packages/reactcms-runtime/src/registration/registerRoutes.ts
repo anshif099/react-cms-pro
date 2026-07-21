@@ -16,7 +16,9 @@ export async function registerRoutes(
     const updates: Record<string, any> = {};
 
     discovered.forEach((route) => {
-      updates[route.id] = route;
+      // Remove any undefined properties before sending to Firebase
+      const cleanRoute = JSON.parse(JSON.stringify(route));
+      updates[route.id] = cleanRoute;
     });
 
     if (Object.keys(updates).length > 0) {
