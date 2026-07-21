@@ -15,9 +15,13 @@
     "clean": "turbo run clean"
   },
   "devDependencies": {
+    "tsup": "^8.2.4",
     "turbo": "^2.0.14",
     "typescript": "^5.5.4",
-    "vitest": "^2.0.5",
-    "tsup": "^8.2.4"
+    "vitest": "^2.0.5"
+  },
+  "dependencies": {
+    "@anshif.rainhopes/reactcms-runtime": "^1.0.4",
+    "@anshif.rainhopes/reactcms-sdk": "^1.0.2"
   }
 }
