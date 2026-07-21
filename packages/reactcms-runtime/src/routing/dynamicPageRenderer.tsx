@@ -1,4 +1,3 @@
-import React from 'react';
 
 export function DynamicPageRenderer({ slug }: { slug: string }) {
   return (
