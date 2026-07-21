@@ -67,6 +67,18 @@ export function RuntimeProvider({
   ) => {
     setRegions((prev) => {
       const pageRegions = prev[pageId] || {};
+      const existing = pageRegions[regionId];
+
+      // Fast check: If region already exists with identical props, preserve state reference to prevent infinite render loop
+      if (
+        existing &&
+        existing.type === type &&
+        existing.label === label &&
+        JSON.stringify(existing.defaultValue) === JSON.stringify(defaultValue)
+      ) {
+        return prev;
+      }
+
       return {
         ...prev,
         [pageId]: {
@@ -77,7 +89,7 @@ export function RuntimeProvider({
             label,
             editable: true,
             ...(defaultValue !== undefined ? { defaultValue } : {}),
-            registeredAt: Date.now(),
+            registeredAt: existing?.registeredAt || Date.now(),
           },
         },
       };

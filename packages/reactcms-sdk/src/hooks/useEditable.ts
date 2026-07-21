@@ -31,7 +31,8 @@ export function useEditable<T>(
         registry.unregisterRegion(pageId, regionId);
       }
     };
-  }, [registry, pageId, regionId, type, label, defaultValue]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [registry, pageId, regionId, type, label]);
 
   // Subscribe to live preview updates for this region
   useEffect(() => {
