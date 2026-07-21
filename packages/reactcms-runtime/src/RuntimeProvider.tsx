@@ -58,14 +58,27 @@ export function RuntimeProvider({
   };
 
   // SDK Editable Region Registry Handlers
-  const registerRegion = (pageId: string, regionId: string, type: EditableType, label: string) => {
+  const registerRegion = (
+    pageId: string,
+    regionId: string,
+    type: EditableType,
+    label: string,
+    defaultValue?: unknown
+  ) => {
     setRegions((prev) => {
       const pageRegions = prev[pageId] || {};
       return {
         ...prev,
         [pageId]: {
           ...pageRegions,
-          [regionId]: { id: regionId, type, label, registeredAt: Date.now() },
+          [regionId]: {
+            id: regionId,
+            type,
+            label,
+            editable: true,
+            ...(defaultValue !== undefined ? { defaultValue } : {}),
+            registeredAt: Date.now(),
+          },
         },
       };
     });

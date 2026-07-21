@@ -12,5 +12,7 @@ export interface EditableRegion {
   id: string;
   type: EditableType;
   label: string;
+  editable?: boolean;
+  defaultValue?: unknown;
   registeredAt?: number;
 }

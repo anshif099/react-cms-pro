@@ -24,14 +24,14 @@ export function useEditable<T>(
   // Register region with Runtime Context on mount
   useEffect(() => {
     if (registry) {
-      registry.registerRegion(pageId, regionId, type, label);
+      registry.registerRegion(pageId, regionId, type, label, defaultValue);
     }
     return () => {
       if (registry) {
         registry.unregisterRegion(pageId, regionId);
       }
     };
-  }, [registry, pageId, regionId, type, label]);
+  }, [registry, pageId, regionId, type, label, defaultValue]);
 
   // Subscribe to live preview updates for this region
   useEffect(() => {

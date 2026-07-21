@@ -11,9 +11,23 @@ export async function registerEditableRegions(
   try {
     const db = getFirebaseDatabase(apiKey);
     const regionsRef = ref(db, paths.registryRegions(websiteId, pageId));
-    
-    // Write schema metadata, safely stripping undefined fields
-    const cleanRegions = JSON.parse(JSON.stringify(regions));
+
+    // Construct clean editable region schema metadata dictionary
+    const cleanRegions: Record<string, any> = {};
+
+    Object.entries(regions || {}).forEach(([regionId, reg]) => {
+      if (reg && reg.id && reg.type) {
+        cleanRegions[regionId] = {
+          id: reg.id,
+          type: reg.type,
+          label: reg.label || reg.id,
+          editable: reg.editable !== undefined ? reg.editable : true,
+          ...(reg.defaultValue !== undefined ? { defaultValue: reg.defaultValue } : {}),
+          registeredAt: reg.registeredAt || Date.now(),
+        };
+      }
+    });
+
     await set(regionsRef, cleanRegions);
   } catch (error) {
     console.error(`[ReactCMS Runtime] Failed to register editable regions for page ${pageId}:`, error);
