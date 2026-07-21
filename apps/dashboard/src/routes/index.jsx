@@ -32,7 +32,7 @@ const PluginsPage = lazy(() => import("../pages/content/PluginsPage"));
 const NavigationPage = lazy(() => import("../pages/content/NavigationPage"));
 const LayoutsPage = lazy(() => import("../pages/content/LayoutsPage"));
 const EditableRegionsPage = lazy(() => import("../pages/content/EditableRegionsPage"));
-
+const VisualEditorPage = lazy(() => import("../pages/content/VisualEditorPage"));
 
 const lazyLoad = (Component) => (
   <Suspense fallback={<div className="p-6"><LoadingSkeleton variant="card" /></div>}>
@@ -51,12 +51,20 @@ export const routesConfig = [
     )
   },
   
-  // Full-screen Live Preview (Protected, no Sidebar/DashboardLayout)
+  // Full-screen Visual Editor & Live Preview (Protected, no Sidebar/DashboardLayout)
+  {
+    path: "/content/:websiteId/pages/:pageId/editor",
+    element: (
+      <ProtectedRoute>
+        {lazyLoad(VisualEditorPage)}
+      </ProtectedRoute>
+    )
+  },
   {
     path: "/content/:websiteId/preview/:pageId",
     element: (
       <ProtectedRoute>
-        {lazyLoad(LivePreviewPage)}
+        {lazyLoad(VisualEditorPage)}
       </ProtectedRoute>
     )
   },

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Plus, Search, FileText, ExternalLink, Trash2, Edit3, Eye, Settings, Globe, RefreshCw, ArrowRight } from "lucide-react";
+import { Plus, Search, FileText, ExternalLink, Trash2, Edit3, Eye, Settings, Globe, RefreshCw, ArrowRight, Sliders } from "lucide-react";
 import { usePages } from "../../hooks/usePages";
 import { useLocale } from "../../hooks/useLocale";
 import { useWebsites } from "../../hooks/useWebsites";
@@ -297,20 +297,29 @@ export function PagesListPage() {
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-1.5">
-                    {/* View Preview (New Tab) */}
+                    {/* Open Visual Editor */}
                     <button
-                      onClick={() => navigate(`/content/${websiteId}/preview/${page.id}`)}
+                      onClick={() => navigate(`/content/${websiteId}/pages/${page.id}/editor`)}
+                      className="p-1.5 rounded-lg hover:bg-slate-850 text-primary hover:text-white transition-colors cursor-pointer bg-primary/10 border border-primary/20"
+                      title="Open Visual Editor"
+                    >
+                      <Sliders className="w-4 h-4" />
+                    </button>
+
+                    {/* View Preview */}
+                    <button
+                      onClick={() => navigate(`/content/${websiteId}/pages/${page.id}/editor`)}
                       className="p-1.5 rounded-lg hover:bg-slate-850 text-admin-secondary hover:text-admin-text transition-colors cursor-pointer"
                       title="Live Preview"
                     >
                       <Eye className="w-4 h-4" />
                     </button>
 
-                    {/* Edit Page */}
+                    {/* Edit Page Form */}
                     <button
                       onClick={() => navigate(`/content/${websiteId}/pages/${page.id}`)}
                       className="p-1.5 rounded-lg hover:bg-slate-850 text-admin-secondary hover:text-primary transition-colors cursor-pointer"
-                      title="Edit Page"
+                      title="Edit Page Properties"
                     >
                       <Edit3 className="w-4 h-4" />
                     </button>
