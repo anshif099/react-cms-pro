@@ -310,18 +310,27 @@ export function VisualEditorPage() {
     }
   };
 
-  // Message listener for iframe events
+  // Memoized target origin to avoid running expensive URL parsing on every postMessage
+  const targetOrigin = React.useMemo(() => {
+    if (!targetDomain) return "";
+    try {
+      return new URL(targetDomain).origin;
+    } catch {
+      return "";
+    }
+  }, [targetDomain]);
+
+  // Fast Message listener for iframe events
   useEffect(() => {
     const handleMessage = (event) => {
-      if (!targetDomain) return;
+      const data = event.data;
+      // Fast guard check: skip non-RCMS messages without parsing overhead
+      if (!data || typeof data !== "object" || data.rcms !== true || data.version !== "v1") return;
+
       try {
-        const targetOrigin = new URL(targetDomain).origin;
-        if (event.origin !== targetOrigin) return;
+        if (targetOrigin && event.origin !== targetOrigin && event.origin !== window.location.origin) return;
 
-        const data = event.data;
-        if (!data) return;
-
-        if (data.rcms && data.type === "rcms/v1/region-selected") {
+        if (data.type === "rcms/v1/region-selected") {
           const payload = data.payload || {};
           setSelectedElement({
             regionId: payload.regionId,
@@ -331,13 +340,13 @@ export function VisualEditorPage() {
           });
         }
       } catch (err) {
-        console.warn("Message parsing error:", err);
+        // Silent catch
       }
     };
 
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
-  }, [targetDomain, pageId]);
+  }, [targetOrigin, pageId]);
 
   // Handle Edit/Preview mode toggle
   const handleToggleEditMode = (mode) => {
@@ -573,8 +582,8 @@ export function VisualEditorPage() {
           )}
 
           <div
-            style={{ width: getDeviceWidth() }}
-            className="h-full bg-white rounded-xl overflow-hidden shadow-2xl transition-all duration-300 border border-slate-800 relative"
+            style={{ width: getDeviceWidth(), transform: 'translateZ(0)', backfaceVisibility: 'hidden' }}
+            className="h-full bg-white rounded-xl overflow-hidden shadow-2xl transition-[width] duration-300 border border-slate-800 relative will-change-transform"
           >
             {previewUrl ? (
               <iframe

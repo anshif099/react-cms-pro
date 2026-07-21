@@ -12,8 +12,13 @@ export class MessageBus {
 
     window.addEventListener('message', (event) => {
       const data = event.data;
-      if (this.isValidRCMSMessage(data) && data.websiteId === websiteId) {
-        this.listeners.forEach((listener) => listener(data));
+      // Fast guard check to skip all non-RCMS events without overhead
+      if (!data || typeof data !== 'object' || (data as any).rcms !== true || (data as any).version !== 'v1') {
+        return;
+      }
+
+      if (data.websiteId === websiteId) {
+        this.listeners.forEach((listener) => listener(data as RCMSMessage));
       }
     });
   }
@@ -41,7 +46,7 @@ export class MessageBus {
     };
   }
 
-  private static isValidRCMSMessage(data: unknown): data is RCMSMessage {
+  public static isValidRCMSMessage(data: unknown): data is RCMSMessage {
     if (!data || typeof data !== 'object') return false;
     const msg = data as Record<string, unknown>;
     return msg.rcms === true && msg.version === 'v1' && typeof msg.type === 'string' && typeof msg.websiteId === 'string';
