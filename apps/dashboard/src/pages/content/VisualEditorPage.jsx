@@ -16,7 +16,10 @@ import {
   Maximize2,
   CheckCircle,
   AlertCircle,
-  Loader2
+  Loader2,
+  Settings,
+  Link2,
+  AlertTriangle
 } from "lucide-react";
 import { usePages } from "../../hooks/usePages";
 import { useLocale } from "../../hooks/useLocale";
@@ -26,10 +29,12 @@ import visualEditService from "../../services/visualEditService";
 import registryService from "../../services/registryService";
 import contentSyncService from "../../services/contentSyncService";
 import revisionService from "../../services/revisionService";
+import { websiteService } from "../../services/websiteService";
 import RegionTreePanel from "../../components/content/RegionTreePanel";
 import RegionInspectorPanel from "../../components/content/RegionInspectorPanel";
 import Modal from "../../components/ui/Modal";
 import Button from "../../components/ui/Button";
+import Input from "../../components/ui/Input";
 
 export function VisualEditorPage() {
   const { websiteId, pageId } = useParams();
@@ -45,6 +50,12 @@ export function VisualEditorPage() {
   const [activeDevice, setActiveDevice] = useState("full");
   const [selectedElement, setSelectedElement] = useState(null);
   const [regionsMap, setRegionsMap] = useState({});
+
+  // Target domain state & modal
+  const [targetDomain, setTargetDomain] = useState("");
+  const [showDomainModal, setShowDomainModal] = useState(false);
+  const [newDomainInput, setNewDomainInput] = useState("");
+  const [updatingDomain, setUpdatingDomain] = useState(false);
 
   // Draft & save states
   const [draftValues, setDraftValues] = useState({});
@@ -68,6 +79,14 @@ export function VisualEditorPage() {
       fetchPageById(websiteId, pageId);
     }
   }, [websiteId, pageId, selectWebsite, fetchPageById]);
+
+  // Keep target domain in sync with selected website
+  useEffect(() => {
+    if (selectedWebsite?.domain) {
+      setTargetDomain(selectedWebsite.domain);
+      setNewDomainInput(selectedWebsite.domain);
+    }
+  }, [selectedWebsite]);
 
   // Subscribe to registered editable regions schema metadata from Firebase registry
   useEffect(() => {
@@ -134,15 +153,35 @@ export function VisualEditorPage() {
     setSelectedElement((prev) => (prev ? { ...prev, value: newValue } : null));
 
     // Send visual field update to preview iframe live
-    if (iframeRef.current && selectedWebsite?.domain) {
+    if (iframeRef.current && targetDomain) {
       visualEditService.sendFieldUpdate(
         iframeRef.current,
-        selectedWebsite.domain,
+        targetDomain,
         websiteId,
         regionId,
         "value",
         newValue
       );
+    }
+  };
+
+  // Save Target App Domain
+  const handleUpdateDomain = async () => {
+    if (!newDomainInput.trim()) return;
+    let cleanInput = newDomainInput.trim();
+    if (!cleanInput.startsWith("http://") && !cleanInput.startsWith("https://")) {
+      cleanInput = `https://${cleanInput}`;
+    }
+
+    setUpdatingDomain(true);
+    try {
+      await websiteService.update(websiteId, { domain: cleanInput });
+      setTargetDomain(cleanInput);
+      setShowDomainModal(false);
+    } catch (err) {
+      console.error("Failed to update website domain:", err);
+    } finally {
+      setUpdatingDomain(false);
     }
   };
 
@@ -199,9 +238,9 @@ export function VisualEditorPage() {
       await publishPage(websiteId, pageId, user?.uid || "system");
 
       // 4. Broadcast publish event to iframe
-      if (iframeRef.current && selectedWebsite?.domain) {
+      if (iframeRef.current && targetDomain) {
         try {
-          const origin = new URL(selectedWebsite.domain).origin;
+          const origin = new URL(targetDomain).origin;
           iframeRef.current.contentWindow.postMessage(
             {
               rcms: true,
@@ -242,9 +281,9 @@ export function VisualEditorPage() {
     });
 
     // Notify preview iframe to highlight selected region
-    if (iframeRef.current && selectedWebsite?.domain) {
+    if (iframeRef.current && targetDomain) {
       try {
-        const origin = new URL(selectedWebsite.domain).origin;
+        const origin = new URL(targetDomain).origin;
         iframeRef.current.contentWindow.postMessage(
           {
             rcms: true,
@@ -266,7 +305,7 @@ export function VisualEditorPage() {
   const handleIframeLoad = () => {
     if (editModeActive) {
       setTimeout(() => {
-        visualEditService.enableEditMode(iframeRef.current, selectedWebsite?.domain, websiteId);
+        visualEditService.enableEditMode(iframeRef.current, targetDomain, websiteId);
       }, 500);
     }
   };
@@ -274,9 +313,9 @@ export function VisualEditorPage() {
   // Message listener for iframe events
   useEffect(() => {
     const handleMessage = (event) => {
-      if (!selectedWebsite?.domain) return;
+      if (!targetDomain) return;
       try {
-        const targetOrigin = new URL(selectedWebsite.domain).origin;
+        const targetOrigin = new URL(targetDomain).origin;
         if (event.origin !== targetOrigin) return;
 
         const data = event.data;
@@ -298,15 +337,15 @@ export function VisualEditorPage() {
 
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
-  }, [selectedWebsite, pageId]);
+  }, [targetDomain, pageId]);
 
   // Handle Edit/Preview mode toggle
   const handleToggleEditMode = (mode) => {
     setEditModeActive(mode);
     if (mode) {
-      visualEditService.enableEditMode(iframeRef.current, selectedWebsite?.domain, websiteId);
+      visualEditService.enableEditMode(iframeRef.current, targetDomain, websiteId);
     } else {
-      visualEditService.disableEditMode(iframeRef.current, selectedWebsite?.domain, websiteId);
+      visualEditService.disableEditMode(iframeRef.current, targetDomain, websiteId);
       setSelectedElement(null);
     }
   };
@@ -323,9 +362,23 @@ export function VisualEditorPage() {
     }
   };
 
-  const cleanDomain = selectedWebsite?.domain?.replace(/\/$/, "") || "";
-  const slug = selectedPage?.slug || "";
-  const previewUrl = `${cleanDomain}/${slug === "home" ? "" : slug}?rcms_preview=1`;
+  // Smart Path resolution for clean target preview URL
+  let rawPath = selectedPage?.slug || selectedPage?.route || "";
+  let cleanPath = "";
+  if (selectedPage?.route && selectedPage.route !== "/") {
+    cleanPath = selectedPage.route.replace(/^\/+/, "");
+  } else if (rawPath && rawPath !== "home" && !rawPath.startsWith("0.")) {
+    cleanPath = rawPath.replace(/^\/+/, "");
+  }
+
+  const cleanDomain = targetDomain.replace(/\/$/, "");
+  const previewUrl = cleanDomain ? `${cleanDomain}/${cleanPath}?rcms_preview=1` : "";
+
+  // Check if targetDomain points to Dashboard Vercel origin itself
+  const isSelfDashboardOrigin = cleanDomain && (
+    cleanDomain === window.location.origin ||
+    cleanDomain.includes("react-cms-pro.vercel.app")
+  );
 
   const handleExit = () => {
     if (hasUnsavedChanges) {
@@ -352,13 +405,30 @@ export function VisualEditorPage() {
           <div>
             <h1 className="text-xs font-bold text-slate-100 flex items-center gap-2">
               <span>{selectedPage?.title || "Page Editor"}</span>
-              <code className="text-[10px] text-purple-400 font-mono font-normal">/{slug}</code>
+              <code className="text-[10px] text-purple-400 font-mono font-normal">
+                {cleanPath ? `/${cleanPath}` : "/ (home)"}
+              </code>
             </h1>
           </div>
         </div>
 
-        {/* Middle: Save Status & Device Mode Switcher */}
-        <div className="flex items-center gap-6">
+        {/* Middle: Target App Domain & Auto-Save Status */}
+        <div className="flex items-center gap-4">
+          {/* Target App Domain Badge / Selector */}
+          <button
+            onClick={() => setShowDomainModal(true)}
+            className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg border font-mono transition-colors cursor-pointer ${
+              isSelfDashboardOrigin
+                ? "bg-amber-500/10 text-amber-400 border-amber-500/30 hover:bg-amber-500/20"
+                : "bg-slate-950 text-slate-300 border-slate-800 hover:border-slate-700"
+            }`}
+            title="Click to change connected client app preview URL"
+          >
+            <Link2 className="w-3.5 h-3.5" />
+            <span className="truncate max-w-[160px]">{targetDomain || "Set Target App Domain"}</span>
+            <Settings className="w-3 h-3 text-slate-500" />
+          </button>
+
           {/* Auto-save Status Indicator */}
           <div className="flex items-center gap-1.5 text-[11px] font-mono">
             {saveStatus === "saving" ? (
@@ -425,20 +495,22 @@ export function VisualEditorPage() {
         {/* Right: Actions */}
         <div className="flex items-center gap-2">
           {/* Open Preview in New Tab */}
-          <a
-            href={previewUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
-            title="Open Full Preview in New Tab"
-          >
-            <ExternalLink className="w-4 h-4" />
-          </a>
+          {previewUrl && (
+            <a
+              href={previewUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+              title="Open Full Preview in New Tab"
+            >
+              <ExternalLink className="w-4 h-4" />
+            </a>
+          )}
 
           {/* Refresh Frame */}
           <button
             onClick={() => {
-              if (iframeRef.current) iframeRef.current.src = previewUrl;
+              if (iframeRef.current && previewUrl) iframeRef.current.src = previewUrl;
             }}
             className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
             title="Reload Preview Frame"
@@ -481,19 +553,52 @@ export function VisualEditorPage() {
           />
         </div>
 
-        {/* Center Pane: Preview Iframe */}
+        {/* Center Pane: Preview Iframe Container */}
         <div className="flex-1 bg-slate-950 flex flex-col items-center justify-center p-4 overflow-auto relative">
+          {isSelfDashboardOrigin && (
+            <div className="mb-3 w-full max-w-2xl bg-amber-950/80 border border-amber-500/40 p-3 rounded-xl flex items-center justify-between text-xs text-amber-200">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0" />
+                <span>
+                  Connected app URL points to Dashboard (<strong>{targetDomain}</strong>). Enter your client React app domain (e.g. <code>http://localhost:5173</code>) to preview live.
+                </span>
+              </div>
+              <button
+                onClick={() => setShowDomainModal(true)}
+                className="px-2.5 py-1 bg-amber-500 text-slate-950 font-bold rounded hover:bg-amber-400 transition-colors ml-3 flex-shrink-0 cursor-pointer"
+              >
+                Change URL
+              </button>
+            </div>
+          )}
+
           <div
             style={{ width: getDeviceWidth() }}
-            className="h-full bg-white rounded-xl overflow-hidden shadow-2xl transition-all duration-300 border border-slate-800"
+            className="h-full bg-white rounded-xl overflow-hidden shadow-2xl transition-all duration-300 border border-slate-800 relative"
           >
-            <iframe
-              ref={iframeRef}
-              src={previewUrl}
-              onLoad={handleIframeLoad}
-              className="w-full h-full border-0"
-              title="Visual Site Preview"
-            />
+            {previewUrl ? (
+              <iframe
+                ref={iframeRef}
+                src={previewUrl}
+                onLoad={handleIframeLoad}
+                className="w-full h-full border-0"
+                title="Visual Site Preview"
+              />
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center p-8 text-center text-slate-500">
+                <Globe className="w-10 h-10 mb-3 text-slate-400" />
+                <h4 className="font-bold text-slate-700">No Target App URL Configured</h4>
+                <p className="text-xs text-slate-500 mt-1 max-w-sm">
+                  Please configure the domain URL of your connected client React application to display the live preview.
+                </p>
+                <button
+                  onClick={() => setShowDomainModal(true)}
+                  className="mt-4 px-4 py-2 bg-primary text-white font-bold rounded-lg text-xs hover:bg-primary/90"
+                >
+                  Set App Domain URL
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -507,6 +612,47 @@ export function VisualEditorPage() {
         </div>
       </div>
 
+      {/* Target Domain Configuration Modal */}
+      {showDomainModal && (
+        <Modal
+          isOpen={showDomainModal}
+          onClose={() => setShowDomainModal(false)}
+          title="Connected Client App URL"
+        >
+          <div className="space-y-4 text-left p-1">
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Enter the target domain or local URL where your connected React client application (with <code>@anshif.rainhopes/reactcms-runtime</code>) is running.
+            </p>
+            <Input
+              label="Connected Client App URL"
+              value={newDomainInput}
+              onChange={(e) => setNewDomainInput(e.target.value)}
+              placeholder="e.g. http://localhost:5173 or https://my-client-app.vercel.app"
+            />
+            <div className="text-[11px] text-slate-400 bg-slate-900 p-2.5 rounded border border-slate-800">
+              💡 For local testing, use <code>http://localhost:5173</code> (or your local dev server port).
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <Button
+                variant="secondary"
+                onClick={() => setShowDomainModal(false)}
+                className="text-xs font-bold"
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handleUpdateDomain}
+                loading={updatingDomain}
+                className="text-xs font-bold"
+              >
+                Save Connected URL
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
       {/* Publish Confirmation Modal */}
       {showPublishModal && (
         <Modal
@@ -516,7 +662,7 @@ export function VisualEditorPage() {
         >
           <div className="space-y-4 text-left p-1">
             <p className="text-xs text-slate-300 leading-relaxed">
-              Publishing will push your current draft changes live. This action will replace the current published website content for <strong className="text-white">/{slug}</strong> and create a new revision entry.
+              Publishing will push your current draft changes live. This action will replace the current published website content for <strong className="text-white">/{cleanPath || "home"}</strong> and create a new revision entry.
             </p>
             <div className="flex justify-end gap-3 pt-2">
               <Button
