@@ -55,7 +55,10 @@ export const pageService = {
       const pageData = {
         title: data.title,
         slug: data.slug || "",
-        status: "draft",
+        routeId: data.routeId || data.id || data.slug || "",
+        route: data.route || data.path || (data.slug === "home" ? "/" : `/${data.slug}`),
+        layout: data.layout || "default",
+        status: data.status || "draft",
         source: data.source || (data.template ? "generated" : "cms"),
         isImported: data.isImported || false,
         locales: data.locales || {

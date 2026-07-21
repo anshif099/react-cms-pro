@@ -35,7 +35,7 @@ export const websiteSyncService = {
       return data;
     } catch (error) {
       console.warn(`Failed to fetch manifest from ${url}:`, error);
-      throw error; // Let the caller decide to trigger manual import fallback
+      throw error;
     }
   },
 
@@ -50,22 +50,70 @@ export const websiteSyncService = {
     });
 
     try {
-      const manifest = await this.fetchManifest(website.domain);
-      const routes = manifest.routes.map(r => ({
-        id: r.id || normalizePathToId(r.path),
-        path: r.path,
-        title: r.title
-      }));
+      let routes = [];
+      let syncMode = "registry";
 
-      await this.processRoutes(websiteId, routes, "manifest");
+      // 1. First read runtime routes registered in Firebase Database: registry/{websiteId}/routes
+      const registryRoutesRef = ref(database, `registry/${websiteId}/routes`);
+      const registrySnap = await get(registryRoutesRef);
+
+      if (registrySnap.exists()) {
+        const val = registrySnap.val();
+        routes = Object.values(val || {}).map((r) => {
+          const routeId = r.id || normalizePathToId(r.path || "/");
+          const routePath = r.path || (routeId === "home" ? "/" : `/${routeId}`);
+          const slug = r.slug || (routeId === "home" ? "home" : routeId.replace(/^\/+/, ""));
+          return {
+            id: routeId,
+            routeId: routeId,
+            path: routePath,
+            route: routePath,
+            slug: slug,
+            title: r.title || (routeId.charAt(0).toUpperCase() + routeId.slice(1)),
+            layout: r.layout || "default",
+            source: r.source || "imported",
+            published: r.published !== undefined ? r.published : true
+          };
+        });
+      }
+
+      // 2. Fallback to manifest HTTP fetch if registry routes are empty
+      if (routes.length === 0 && website.domain) {
+        try {
+          const manifest = await this.fetchManifest(website.domain);
+          syncMode = "manifest";
+          routes = (manifest.routes || []).map((r) => {
+            const routeId = r.id || normalizePathToId(r.path || "/");
+            const routePath = r.path || (routeId === "home" ? "/" : `/${routeId}`);
+            const slug = r.slug || (routeId === "home" ? "home" : routeId.replace(/^\/+/, ""));
+            return {
+              id: routeId,
+              routeId: routeId,
+              path: routePath,
+              route: routePath,
+              slug: slug,
+              title: r.title || (routeId.charAt(0).toUpperCase() + routeId.slice(1)),
+              layout: r.layout || "default",
+              source: "imported"
+            };
+          });
+        } catch (manifestErr) {
+          console.warn("Manifest fetch fallback failed:", manifestErr);
+        }
+      }
+
+      if (routes.length === 0) {
+        throw new Error("No runtime routes found in registry or manifest. Ensure connected app is running with ReactCMS Runtime.");
+      }
+
+      await this.processRoutes(websiteId, routes, syncMode);
       
       // Update website metadata on success
       await update(websiteRef, {
         syncStatus: "idle",
-        syncMode: "manifest",
+        syncMode: syncMode,
         lastSync: serverTimestamp(),
         sdkInstalled: true,
-        sdkVersion: manifest.sdkVersion || "1.0.0",
         connectionHealth: "healthy",
         updatedAt: serverTimestamp()
       });
@@ -73,21 +121,21 @@ export const websiteSyncService = {
       await activityLogService.logActivity(
         "website_sync_success",
         "Website Synced Successfully",
-        `Discovered and synchronized ${routes.length} pages via manifest`,
+        `Discovered and synchronized ${routes.length} pages via ${syncMode}`,
         websiteId
       );
 
-      return { success: true, count: routes.length, mode: "manifest" };
+      return { success: true, count: routes.length, mode: syncMode };
     } catch (error) {
-      console.warn("Auto manifest sync failed (CORS or network error). Switching to manual route import fallback.", error.message);
+      console.warn("Sync failed:", error.message);
       
       await update(websiteRef, {
-        syncStatus: "manual", // Indicate manual intervention / manifest check failed
+        syncStatus: "manual",
         connectionHealth: "error",
         updatedAt: serverTimestamp()
       });
 
-      throw error; // Re-throw to allow details page to display manual import wizard
+      throw error;
     }
   },
 
@@ -100,11 +148,21 @@ export const websiteSyncService = {
     });
 
     try {
-      const formattedRoutes = routes.map(r => ({
-        id: r.id ? r.id.trim() : normalizePathToId(r.path),
-        path: r.path.trim(),
-        title: r.title.trim()
-      }));
+      const formattedRoutes = routes.map((r) => {
+        const routeId = r.id ? r.id.trim() : normalizePathToId(r.path);
+        const routePath = r.path.trim();
+        const slug = r.slug || (routeId === "home" ? "home" : routeId.replace(/^\/+/, ""));
+        return {
+          id: routeId,
+          routeId: routeId,
+          path: routePath,
+          route: routePath,
+          slug: slug,
+          title: r.title.trim(),
+          layout: r.layout || "default",
+          source: "imported"
+        };
+      });
 
       await this.processRoutes(websiteId, formattedRoutes, "manual", userId);
 
@@ -143,13 +201,16 @@ export const websiteSyncService = {
 
     if (snapshot.exists()) {
       const val = snapshot.val();
-      Object.keys(val).forEach(key => {
+      Object.keys(val).forEach((key) => {
         const page = { id: key, ...val[key] };
         if (page.routeId) {
           existingPagesMap[page.routeId] = page;
         }
         if (page.slug) {
           existingSlugsMap[page.slug] = page;
+        }
+        if (page.route) {
+          existingSlugsMap[page.route] = page;
         }
       });
     }
@@ -158,36 +219,39 @@ export const websiteSyncService = {
 
     // 2. Loop through routes
     for (const route of routes) {
-      const routeId = route.id;
+      const routeId = route.id || route.routeId || normalizePathToId(route.path || "/");
       processedRouteIds.add(routeId);
-      
-      const normalizedSlug = routeId === "home" ? "home" : routeId;
-      
-      // Check duplicate matches
-      const matchedPage = existingPagesMap[routeId] || existingSlugsMap[normalizedSlug];
+
+      const routePath = route.path || route.route || (routeId === "home" ? "/" : `/${routeId}`);
+      const slug = route.slug || (routeId === "home" ? "home" : routeId.replace(/^\/+/, ""));
+      const title = route.title || (routeId.charAt(0).toUpperCase() + routeId.slice(1));
+      const layout = route.layout || "default";
+
+      // Match existing page by routeId, slug, or route path
+      const matchedPage = existingPagesMap[routeId] || existingSlugsMap[slug] || existingSlugsMap[routePath];
 
       if (matchedPage) {
-        // Update existing page metadata without touching blocks or current editing states
+        // Update existing page metadata without overwriting custom blocks or editing state
         const pageUpdateRef = ref(database, `pages/${websiteId}/${matchedPage.id}`);
         const updates = {
-          title: route.title,
-          slug: normalizedSlug,
+          title: title,
+          slug: slug,
           routeId: routeId,
-          route: route.path,
+          route: routePath,
+          layout: layout,
           source: matchedPage.source || "imported",
           isImported: true,
           lastSynced: serverTimestamp(),
           updatedAt: serverTimestamp()
         };
 
-        // Sync first locale default parameters if locales structure doesn't exist
         if (!matchedPage.locales) {
           updates.locales = {
             en: {
-              title: route.title,
-              slug: normalizedSlug,
+              title: title,
+              slug: slug,
               seo: {
-                metaTitle: route.title,
+                metaTitle: title,
                 metaDescription: ""
               },
               blocks: []
@@ -197,39 +261,28 @@ export const websiteSyncService = {
 
         await update(pageUpdateRef, updates);
       } else {
-        // Create new imported page
+        // Create new imported page preserving full route metadata
         await pageService.create(websiteId, {
-          title: route.title,
-          slug: normalizedSlug,
+          title: title,
+          slug: slug,
+          routeId: routeId,
+          route: routePath,
+          layout: layout,
+          source: "imported",
+          isImported: true,
           userId: userId || "system",
           locales: {
             en: {
-              title: route.title,
-              slug: normalizedSlug,
+              title: title,
+              slug: slug,
               seo: {
-                metaTitle: route.title,
+                metaTitle: title,
                 metaDescription: ""
               },
               blocks: []
             }
           }
         });
-
-        // Query the newly added page to stamp imported properties
-        const freshSnapshot = await get(pagesRef);
-        if (freshSnapshot.exists()) {
-          const freshVal = freshSnapshot.val();
-          const newPageKey = Object.keys(freshVal).find(k => freshVal[k].slug === normalizedSlug && !freshVal[k].routeId);
-          if (newPageKey) {
-            await update(ref(database, `pages/${websiteId}/${newPageKey}`), {
-              routeId: routeId,
-              route: route.path,
-              source: "imported",
-              isImported: true,
-              lastSynced: serverTimestamp()
-            });
-          }
-        }
       }
     }
 
@@ -259,7 +312,7 @@ export const websiteSyncService = {
 
     if (finalSnapshot.exists()) {
       const val = finalSnapshot.val();
-      Object.keys(val).forEach(k => {
+      Object.keys(val).forEach((k) => {
         const page = val[k];
         totalPages++;
         if (page.source === "imported") {
@@ -299,11 +352,9 @@ export const websiteSyncService = {
       line = line.trim();
       if (!line) continue;
 
-      // Split line by comma, handle simple comma quotes if necessary
-      const parts = line.split(",").map(p => p.trim().replace(/^["']|["']$/g, ""));
+      const parts = line.split(",").map((p) => p.trim().replace(/^["']|["']$/g, ""));
       if (parts.length < 2) continue;
 
-      // Skip header if line matches headers
       if (parts[0].toLowerCase() === "id" || parts[0].toLowerCase() === "path" || parts[0].toLowerCase() === "route") {
         continue;
       }
