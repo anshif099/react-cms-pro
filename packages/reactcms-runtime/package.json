@@ -1,9 +1,14 @@
 {
   "name": "@anshif.rainhopes/reactcms-runtime",
   "version": "1.0.0",
+  "license": "MIT",
+  "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch"
