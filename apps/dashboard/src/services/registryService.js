@@ -39,6 +39,12 @@ export const registryService = {
     return snapshot.exists() ? snapshot.val() : null;
   },
 
+  async getEditableRegions(websiteId) {
+    const regionsRef = ref(database, `registry/${websiteId}/editableRegions`);
+    const snapshot = await get(regionsRef);
+    return snapshot.exists() ? snapshot.val() : {};
+  },
+
   async saveNavigation(websiteId, menus) {
     const navRef = ref(database, paths.registryNav(websiteId));
     await set(navRef, menus);
@@ -70,6 +76,13 @@ export const registryService = {
   subscribeToRoutes(websiteId, cb) {
     const routesRef = ref(database, paths.registryRoutes(websiteId));
     return onValue(routesRef, (snapshot) => {
+      cb(snapshot.exists() ? snapshot.val() : {});
+    });
+  },
+
+  subscribeToEditableRegions(websiteId, cb) {
+    const regionsRef = ref(database, `registry/${websiteId}/editableRegions`);
+    return onValue(regionsRef, (snapshot) => {
       cb(snapshot.exists() ? snapshot.val() : {});
     });
   }

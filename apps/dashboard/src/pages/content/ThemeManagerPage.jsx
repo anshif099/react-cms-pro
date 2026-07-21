@@ -9,8 +9,12 @@ import Input from "../../components/ui/Input";
 import ImagePicker from "../../components/ui/ImagePicker";
 import ColorPicker from "../../components/ui/ColorPicker";
 
+import visualEditService from "../../services/visualEditService";
+import { useWebsites } from "../../hooks/useWebsites";
+
 export function ThemeManagerPage() {
   const { websiteId } = useParams();
+  const { selectedWebsite } = useWebsites();
   const toast = useToast();
   
   const [loading, setLoading] = useState(false);
@@ -45,6 +49,15 @@ export function ThemeManagerPage() {
     setSaving(true);
     try {
       await themeService.saveTheme(websiteId, themeData);
+
+      // Broadcast live theme update to preview frame if connected
+      if (selectedWebsite?.domain) {
+        const iframes = document.querySelectorAll("iframe");
+        iframes.forEach((frame) => {
+          visualEditService.sendThemeUpdate(frame, selectedWebsite.domain, websiteId, themeData);
+        });
+      }
+
       toast.success("Branding and theme tokens saved & pushed to client SDK successfully!");
     } catch (err) {
       console.error(err);

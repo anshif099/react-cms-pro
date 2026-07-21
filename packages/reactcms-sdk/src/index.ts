@@ -10,6 +10,7 @@ export { useTheme } from './hooks/useTheme';
 export { useSEO } from './hooks/useSEO';
 export { useNavigation } from './hooks/useNavigation';
 export { useEditable } from './hooks/useEditable';
+export { useLivePreview } from './hooks/useLivePreview';
 export { usePlugins } from './hooks/usePlugins';
 
 // Export contexts
@@ -23,8 +24,17 @@ export { EditableRegistryContext } from './context/EditableRegistryContext';
 // Export messaging
 export { MessageBus } from './messaging/MessageBus';
 export { postMessageBridge } from './messaging/postMessageBridge';
+export { setupFirebaseBridge } from './messaging/firebaseBridge';
 
 // Export firebase
 export { getFirebaseApp, getFirebaseDatabase } from './firebase/firebaseClient';
+export { editableSync } from './firebase/editableSync';
 
-
+// Export primitive components
+export { EditableText } from './components/EditableText';
+export { EditableImage } from './components/EditableImage';
+export { EditableButton } from './components/EditableButton';
+export { EditableSection } from './components/EditableSection';
+export { EditableRichText } from './components/EditableRichText';
+export { EditableRepeater } from './components/EditableRepeater';
+export { EditableVideo } from './components/EditableVideo';

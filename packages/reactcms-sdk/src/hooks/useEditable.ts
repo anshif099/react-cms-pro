@@ -5,6 +5,8 @@ import { PageContext } from '../context/PageContext';
 import { CMSContext } from '../context/CMSContext';
 import { MessageBus } from '../messaging/MessageBus';
 
+import { editableSync } from '../firebase/editableSync';
+
 export function useEditable<T>(
   regionId: string,
   defaultValue: T,
@@ -59,7 +61,10 @@ export function useEditable<T>(
         value: newValue,
       });
 
-      // Milestone 2 will write to contentDraft path directly in Firebase
+      // Write to contentDraft path directly in Firebase
+      if (cms.apiKey) {
+        editableSync.saveDraftRegion(cms.apiKey, cms.websiteId, pageId, regionId, newValue);
+      }
     }
   };
 

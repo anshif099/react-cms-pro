@@ -194,6 +194,12 @@ export function Sidebar({ mobileOpen, setMobileOpen }) {
                     <span>Layouts</span>
                   </NavLink>
 
+                  {/* Editable Regions */}
+                  <NavLink to={`/content/${activeWebsiteId}/editable`} onClick={() => setMobileOpen(false)} className={subNavItemClass}>
+                    <Sliders className="w-3.5 h-3.5 flex-shrink-0" />
+                    <span>Editable Regions</span>
+                  </NavLink>
+
                   {/* Content Types */}
                   <NavLink to={`/content/${activeWebsiteId}/content-types`} onClick={() => setMobileOpen(false)} className={subNavItemClass}>
                     <Layers className="w-3.5 h-3.5 flex-shrink-0" />

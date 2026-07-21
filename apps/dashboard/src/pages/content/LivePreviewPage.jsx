@@ -211,12 +211,12 @@ export function LivePreviewPage() {
     // Reactivate edit overlays if active
     if (editModeActive) {
       setTimeout(() => {
-        visualEditService.enableEditMode(iframeRef.current, selectedWebsite?.domain);
+        visualEditService.enableEditMode(iframeRef.current, selectedWebsite?.domain, websiteId);
       }, 800);
     }
   };
 
-  // Listen for visual element selection messages from iframe
+  // Listen for visual element selection messages from iframe (v1 versioned & backward-compatible)
   useEffect(() => {
     const handleMessage = (event) => {
       if (!selectedWebsite?.domain) return;
@@ -225,7 +225,19 @@ export function LivePreviewPage() {
         if (event.origin !== targetOrigin) return;
 
         const data = event.data;
-        if (data && data.type === "RCMS_ELEMENT_SELECTED") {
+        if (!data) return;
+
+        // Versioned RCMSMessage format: rcms/v1/region-selected
+        if (data.rcms && data.type === "rcms/v1/region-selected") {
+          const payload = data.payload || {};
+          setSelectedElement({
+            regionId: payload.regionId,
+            type: payload.type,
+            pageId: payload.pageId,
+            value: payload.value,
+            blockId: payload.regionId, // fallback mapping
+          });
+        } else if (data.type === "RCMS_ELEMENT_SELECTED") {
           setSelectedElement({
             blockId: data.blockId,
             fieldKey: data.fieldKey,
@@ -245,20 +257,20 @@ export function LivePreviewPage() {
   // Sync CMS Edit Mode activation state to client iframe
   useEffect(() => {
     if (editModeActive) {
-      visualEditService.enableEditMode(iframeRef.current, selectedWebsite?.domain);
+      visualEditService.enableEditMode(iframeRef.current, selectedWebsite?.domain, websiteId);
     } else {
-      visualEditService.disableEditMode(iframeRef.current, selectedWebsite?.domain);
+      visualEditService.disableEditMode(iframeRef.current, selectedWebsite?.domain, websiteId);
       setSelectedElement(null);
     }
-  }, [editModeActive, selectedWebsite]);
+  }, [editModeActive, selectedWebsite, websiteId]);
 
   const handleInspectorBlockChange = (blockId, updatedBlock) => {
     // Update CMS blocks layout list
     setBlocks(prev => prev.map(b => b.id === blockId ? updatedBlock : b));
 
-    // Send visual update payload back to client iframe
-    if (selectedElement && selectedElement.blockId === blockId) {
-      const fieldKey = selectedElement.fieldKey;
+    // Send visual update payload back to client iframe & persist to Firebase draft
+    if (selectedElement && (selectedElement.blockId === blockId || selectedElement.regionId === blockId)) {
+      const fieldKey = selectedElement.fieldKey || "value";
       const schema = BLOCK_SCHEMAS.find(s => s.type === updatedBlock.type);
       const fieldSchema = schema?.fields.find(f => f.key === fieldKey);
       const isLoc = fieldSchema?.localized;
@@ -269,10 +281,14 @@ export function LivePreviewPage() {
       visualEditService.sendFieldUpdate(
         iframeRef.current,
         selectedWebsite?.domain,
+        websiteId,
         blockId,
         fieldKey,
         value
       );
+
+      // Persist to Firebase draft path
+      visualEditService.persistFieldUpdate(websiteId, pageId, blockId, value);
     }
   };
 

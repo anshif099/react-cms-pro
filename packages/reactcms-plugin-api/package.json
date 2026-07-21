@@ -1,0 +1,12 @@
+{
+  "name": "@anshif.rainhopes/reactcms-plugin-api",
+  "version": "1.0.0",
+  "description": "ReactCMS Plugin API placeholder directory for future v2 extension system",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "private": false,
+  "license": "MIT",
+  "scripts": {
+    "build": "echo 'Plugin API is a placeholder in v1' && exit 0"
+  }
+}

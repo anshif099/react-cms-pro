@@ -7,6 +7,9 @@ export function setupRuntimeMessageHandler(
     onExitEditMode?: () => void;
     onThemeUpdate?: (theme: any) => void;
     onNavigationUpdate?: (menus: any[]) => void;
+    onFieldUpdate?: (payload: any) => void;
+    onRegionSelected?: (payload: any) => void;
+    onOpenInspector?: (payload: any) => void;
   }
 ) {
   return MessageBus.subscribe((msg) => {
@@ -24,6 +27,15 @@ export function setupRuntimeMessageHandler(
         break;
       case 'rcms/v1/navigation-update':
         if (callbacks.onNavigationUpdate) callbacks.onNavigationUpdate(msg.payload as any[]);
+        break;
+      case 'rcms/v1/field-update':
+        if (callbacks.onFieldUpdate) callbacks.onFieldUpdate(msg.payload);
+        break;
+      case 'rcms/v1/region-selected':
+        if (callbacks.onRegionSelected) callbacks.onRegionSelected(msg.payload);
+        break;
+      case 'rcms/v1/open-inspector':
+        if (callbacks.onOpenInspector) callbacks.onOpenInspector(msg.payload);
         break;
     }
   });

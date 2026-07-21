@@ -31,6 +31,7 @@ const ThemeManagerPage = lazy(() => import("../pages/content/ThemeManagerPage"))
 const PluginsPage = lazy(() => import("../pages/content/PluginsPage"));
 const NavigationPage = lazy(() => import("../pages/content/NavigationPage"));
 const LayoutsPage = lazy(() => import("../pages/content/LayoutsPage"));
+const EditableRegionsPage = lazy(() => import("../pages/content/EditableRegionsPage"));
 
 
 const lazyLoad = (Component) => (
@@ -174,6 +175,10 @@ export const routesConfig = [
           {
             path: "layouts",
             element: lazyLoad(LayoutsPage)
+          },
+          {
+            path: "editable",
+            element: lazyLoad(EditableRegionsPage)
           }
         ]
       },

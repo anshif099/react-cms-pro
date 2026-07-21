@@ -1,5 +1,6 @@
 import { database } from "../lib/firebase";
 import { ref, get, set } from "firebase/database";
+import { paths } from "@anshif.rainhopes/shared";
 import activityLogService from "./activityLogService";
 
 const DEFAULT_THEME = {
@@ -28,7 +29,7 @@ const DEFAULT_THEME = {
 
 export const themeService = {
   async getTheme(websiteId) {
-    const themeRef = ref(database, `content/${websiteId}/theme`);
+    const themeRef = ref(database, paths.contentTheme(websiteId));
     const snapshot = await get(themeRef);
     if (snapshot.exists()) {
       const data = snapshot.val();
@@ -43,13 +44,18 @@ export const themeService = {
   },
 
   async saveTheme(websiteId, tokens) {
-    const themeRef = ref(database, `content/${websiteId}/theme`);
-    await set(themeRef, tokens);
+    // Write resolved values to content path
+    const contentThemeRef = ref(database, paths.contentTheme(websiteId));
+    await set(contentThemeRef, tokens);
+
+    // Write design tokens metadata to registry path
+    const registryThemeRef = ref(database, paths.registryTheme(websiteId));
+    await set(registryThemeRef, tokens);
 
     await activityLogService.logActivity(
       "theme_update",
       "Branding & Theme Tokens Synced",
-      "Global design layout styles tokens pushed to SDK client successfully",
+      "Global design layout styles tokens pushed to SDK client & registry successfully",
       websiteId
     );
     return true;
