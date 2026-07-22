@@ -7,6 +7,26 @@ import { MessageBus } from '../messaging/MessageBus';
 
 import { editableSync } from '../firebase/editableSync';
 
+function resolvePageId(pageContext: any): string {
+  if (pageContext?.currentPage) {
+    if (pageContext.currentPage.id) return pageContext.currentPage.id;
+    if (pageContext.currentPage.slug) return pageContext.currentPage.slug;
+    if (pageContext.currentPage.route) {
+      const clean = pageContext.currentPage.route.replace(/^\/+|\/+$/g, '');
+      return clean || 'home';
+    }
+  }
+
+  // Fallback to active browser URL pathname if available (e.g. /about -> about, / -> home)
+  if (typeof window !== 'undefined' && window.location && window.location.pathname) {
+    const rawPath = window.location.pathname.replace(/^\/+|\/+$/g, '');
+    if (rawPath) return rawPath;
+    return 'home';
+  }
+
+  return 'global';
+}
+
 export function useEditable<T>(
   regionId: string,
   defaultValue: T,
@@ -17,12 +37,16 @@ export function useEditable<T>(
   const page = useContext(PageContext);
   const registry = useContext(EditableRegistryContext);
 
-  const pageId = page?.currentPage?.id || 'global';
+  const pageId = resolvePageId(page);
 
   const [value, setLocalValue] = useState<T>(defaultValue);
 
   // Register region with Runtime Context on mount
   useEffect(() => {
+    if (pageId === 'global') {
+      console.warn(`[ReactCMS SDK] Warning: Region "${regionId}" registered under fallback "global" because no page context was resolved.`);
+    }
+
     if (registry) {
       registry.registerRegion(pageId, regionId, type, label, defaultValue);
     }

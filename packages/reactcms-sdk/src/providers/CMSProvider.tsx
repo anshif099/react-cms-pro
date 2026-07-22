@@ -51,6 +51,13 @@ export function CMSProvider({
     });
 
     setIsConnected(true);
+
+    // Notify parent frame that runtime is ready
+    MessageBus.send('rcms/v1/runtime-ready', websiteId, {
+      ready: true,
+      timestamp: Date.now(),
+    });
+
     return () => {
       unsubscribe();
     };

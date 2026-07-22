@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CMSProvider, EditableRegistryContext } from '@anshif.rainhopes/reactcms-sdk';
+import { CMSProvider, EditableRegistryContext, MessageBus } from '@anshif.rainhopes/reactcms-sdk';
 import { LayoutDefinition, NavMenu, EditableRegion, EditableType, ThemeTokens } from '@anshif.rainhopes/shared';
 import { RuntimeContext } from './RuntimeContext';
 import { registerWebsite } from './registration/registerWebsite';
@@ -65,6 +65,8 @@ export function RuntimeProvider({
     label: string,
     defaultValue?: unknown
   ) => {
+    console.log(`Registered region:\n  Page: ${pageId}\n  Region: ${regionId}\n  Type: ${type}`);
+
     setRegions((prev) => {
       const pageRegions = prev[pageId] || {};
       const existing = pageRegions[regionId];
@@ -160,10 +162,11 @@ export function RuntimeProvider({
     }
   }, [navigations, websiteId, apiKey]);
 
-  // Sync Editable Regions per page
+  // Sync Editable Regions per page to Firebase & Dashboard message bus
   useEffect(() => {
     Object.entries(regions).forEach(([pageId, pageRegions]) => {
       registerEditableRegions(websiteId, apiKey, pageId, pageRegions);
+      MessageBus.send('rcms/v1/regions-registered', websiteId, { pageId, regions: pageRegions });
     });
   }, [regions, websiteId, apiKey]);
 

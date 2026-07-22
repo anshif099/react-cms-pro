@@ -93,8 +93,28 @@ export function VisualEditorPage() {
     if (!websiteId || !pageId) return;
 
     const unsubscribe = registryService.subscribeToEditableRegions(websiteId, (allRegions) => {
-      const pageRegions = allRegions[pageId] || {};
-      setRegionsMap(pageRegions);
+      if (!allRegions) {
+        setRegionsMap({});
+        return;
+      }
+
+      // 1. Check exact pageId key
+      let pageRegions = allRegions[pageId];
+
+      // 2. If not found by exact pageId, check by slug or fallback to 'global' or merge all keys if empty
+      if (!pageRegions || Object.keys(pageRegions).length === 0) {
+        if (allRegions.global && Object.keys(allRegions.global).length > 0) {
+          pageRegions = allRegions.global;
+        } else {
+          // Merge all available regions from all pages if pageId-specific entry is empty
+          pageRegions = Object.values(allRegions).reduce((acc, curr) => ({ ...acc, ...curr }), {});
+        }
+      } else if (allRegions.global) {
+        // Merge global regions with page specific regions
+        pageRegions = { ...allRegions.global, ...pageRegions };
+      }
+
+      setRegionsMap(pageRegions || {});
     });
 
     return () => unsubscribe();
@@ -330,7 +350,16 @@ export function VisualEditorPage() {
       try {
         if (targetOrigin && event.origin !== targetOrigin && event.origin !== window.location.origin) return;
 
-        if (data.type === "rcms/v1/region-selected") {
+        if (data.type === "rcms/v1/runtime-ready") {
+          if (editModeActive && iframeRef.current && targetDomain) {
+            visualEditService.enableEditMode(iframeRef.current, targetDomain, websiteId);
+          }
+        } else if (data.type === "rcms/v1/regions-registered") {
+          const payload = data.payload || {};
+          if (payload.regions) {
+            setRegionsMap((prev) => ({ ...prev, ...payload.regions }));
+          }
+        } else if (data.type === "rcms/v1/region-selected") {
           const payload = data.payload || {};
           setSelectedElement({
             regionId: payload.regionId,

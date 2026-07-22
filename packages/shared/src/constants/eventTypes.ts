@@ -7,7 +7,9 @@ export const EVENT_TYPES = {
   'theme-update': 'rcms/v1/theme-update',
   'navigation-update': 'rcms/v1/navigation-update',
   'publish-page': 'rcms/v1/publish-page',
-  'heartbeat': 'rcms/v1/heartbeat'
+  'heartbeat': 'rcms/v1/heartbeat',
+  'runtime-ready': 'rcms/v1/runtime-ready',
+  'regions-registered': 'rcms/v1/regions-registered'
 } as const;
 
 export type EventType = typeof EVENT_TYPES[keyof typeof EVENT_TYPES];
