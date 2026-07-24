@@ -229,7 +229,7 @@ export function SEODashboardPage() {
                       </div>
                     </div>
                     <Link
-                      to={`/content/${websiteId}/pages/${issue.pageId}`}
+                      to={`/content/${websiteId}/pages/${issue.pageId}/editor`}
                       className="text-xs font-bold text-primary hover:text-primary-hover flex items-center gap-1 self-start sm:self-auto shrink-0 hover:underline"
                     >
                       <span>Fix Metadata</span>

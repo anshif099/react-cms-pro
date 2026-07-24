@@ -127,7 +127,7 @@ export const routesConfig = [
               },
               {
                 path: ":pageId",
-                element: lazyLoad(PageEditorPage)
+                element: lazyLoad(VisualEditorPage)
               }
             ]
           },

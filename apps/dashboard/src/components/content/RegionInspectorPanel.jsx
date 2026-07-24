@@ -32,21 +32,127 @@ export function RegionInspectorPanel({
     switch (type) {
       case "text":
       case "textarea":
+      case "heading": {
+        const textObj = typeof value === "object" && value !== null
+          ? value
+          : { text: typeof value === "string" ? value : "", fontSize: "16px", fontWeight: "400", color: "#f8fafc", align: "left" };
+
+        const currentText = typeof textObj === "string" ? textObj : (textObj.text || "");
+
         return (
-          <div className="space-y-3">
-            <Input
-              label="Text Content"
-              value={typeof value === "string" ? value : (value?.text || "")}
-              onChange={(e) => handleFieldChange(e.target.value)}
-              placeholder="Enter text..."
-            />
+          <div className="space-y-4">
+            <div className="space-y-1 text-left">
+              <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider block">
+                Text Content
+              </label>
+              {type === "textarea" ? (
+                <textarea
+                  rows={4}
+                  value={currentText}
+                  onChange={(e) => {
+                    const updated = typeof textObj === "object" ? { ...textObj, text: e.target.value } : e.target.value;
+                    handleFieldChange(updated);
+                  }}
+                  className="w-full text-xs p-2.5 rounded-lg border border-slate-750 bg-slate-850 text-slate-200 outline-none focus:border-primary"
+                  placeholder="Enter text..."
+                />
+              ) : (
+                <Input
+                  value={currentText}
+                  onChange={(e) => {
+                    const updated = typeof textObj === "object" ? { ...textObj, text: e.target.value } : e.target.value;
+                    handleFieldChange(updated);
+                  }}
+                  placeholder="Enter text..."
+                />
+              )}
+            </div>
+
+            {/* Typography Controls */}
+            <div className="space-y-3 pt-2 border-t border-slate-800">
+              <h5 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Typography & Styling</h5>
+
+              {/* Font Size & Font Weight */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="flex flex-col gap-1 text-left">
+                  <label className="text-[10px] font-semibold text-slate-400 uppercase">Font Size</label>
+                  <select
+                    value={textObj.fontSize || "16px"}
+                    onChange={(e) => handleFieldChange({ ...textObj, text: currentText, fontSize: e.target.value })}
+                    className="w-full text-xs py-1.5 px-2 rounded-lg border border-slate-750 bg-slate-850 text-slate-200 outline-none focus:border-primary"
+                  >
+                    <option value="12px">12px (Small)</option>
+                    <option value="14px">14px (Base Small)</option>
+                    <option value="16px">16px (Body)</option>
+                    <option value="18px">18px (Large Body)</option>
+                    <option value="20px">20px (H4)</option>
+                    <option value="24px">24px (H3)</option>
+                    <option value="32px">32px (H2)</option>
+                    <option value="48px">48px (H1 Hero)</option>
+                    <option value="64px">64px (Display)</option>
+                  </select>
+                </div>
+
+                <div className="flex flex-col gap-1 text-left">
+                  <label className="text-[10px] font-semibold text-slate-400 uppercase">Font Weight</label>
+                  <select
+                    value={textObj.fontWeight || "400"}
+                    onChange={(e) => handleFieldChange({ ...textObj, text: currentText, fontWeight: e.target.value })}
+                    className="w-full text-xs py-1.5 px-2 rounded-lg border border-slate-750 bg-slate-850 text-slate-200 outline-none focus:border-primary"
+                  >
+                    <option value="300">Light (300)</option>
+                    <option value="400">Normal (400)</option>
+                    <option value="500">Medium (500)</option>
+                    <option value="600">Semibold (600)</option>
+                    <option value="700">Bold (700)</option>
+                    <option value="900">Black (900)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Text Color & Alignment */}
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <div className="flex flex-col gap-1 text-left">
+                  <label className="text-[10px] font-semibold text-slate-400 uppercase">Text Color</label>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="color"
+                      value={textObj.color && textObj.color.startsWith("#") ? textObj.color : "#ffffff"}
+                      onChange={(e) => handleFieldChange({ ...textObj, text: currentText, color: e.target.value })}
+                      className="w-7 h-7 rounded border border-slate-700 bg-transparent cursor-pointer"
+                    />
+                    <input
+                      type="text"
+                      value={textObj.color || "#ffffff"}
+                      onChange={(e) => handleFieldChange({ ...textObj, text: currentText, color: e.target.value })}
+                      className="w-full text-[11px] font-mono py-1 px-2 rounded border border-slate-750 bg-slate-850 text-slate-200 outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1 text-left">
+                  <label className="text-[10px] font-semibold text-slate-400 uppercase">Alignment</label>
+                  <select
+                    value={textObj.align || "left"}
+                    onChange={(e) => handleFieldChange({ ...textObj, text: currentText, align: e.target.value })}
+                    className="w-full text-xs py-1.5 px-2 rounded-lg border border-slate-750 bg-slate-850 text-slate-200 outline-none focus:border-primary"
+                  >
+                    <option value="left">Left</option>
+                    <option value="center">Center</option>
+                    <option value="right">Right</option>
+                    <option value="justify">Justify</option>
+                  </select>
+                </div>
+              </div>
+            </div>
           </div>
         );
+      }
 
-      case "image":
+      case "image": {
         const imgObj = typeof value === "object" && value !== null
           ? value
-          : { src: typeof value === "string" ? value : "", alt: "" };
+          : { src: typeof value === "string" ? value : "", alt: "", width: "100%", height: "auto" };
 
         return (
           <div className="space-y-4">
@@ -60,46 +166,132 @@ export function RegionInspectorPanel({
               label="Alt Description"
               value={imgObj.alt || ""}
               onChange={(e) => handleFieldChange({ ...imgObj, alt: e.target.value })}
-              placeholder="Image alt text for accessibility..."
+              placeholder="Image alt text for SEO & accessibility..."
             />
+
+            {/* Layout Dimensions */}
+            <div className="space-y-2 pt-2 border-t border-slate-800">
+              <h5 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Dimensions</h5>
+              <div className="grid grid-cols-2 gap-2">
+                <Input
+                  label="Width"
+                  value={imgObj.width || "100%"}
+                  onChange={(e) => handleFieldChange({ ...imgObj, width: e.target.value })}
+                  placeholder="e.g. 100% or 400px"
+                />
+                <Input
+                  label="Height"
+                  value={imgObj.height || "auto"}
+                  onChange={(e) => handleFieldChange({ ...imgObj, height: e.target.value })}
+                  placeholder="e.g. auto or 300px"
+                />
+              </div>
+            </div>
           </div>
         );
+      }
 
-      case "button":
+      case "button": {
         const btnObj = typeof value === "object" && value !== null
           ? value
-          : { text: typeof value === "string" ? value : "Button Label", href: "", variant: "primary" };
+          : { text: typeof value === "string" ? value : "Button Label", href: "", variant: "primary", style: "solid" };
 
         return (
           <div className="space-y-4">
             <Input
-              label="Button Text"
-              value={btnObj.text || ""}
-              onChange={(e) => handleFieldChange({ ...btnObj, text: e.target.value })}
-              placeholder="e.g. Get Started"
+              label="Button Text / Label"
+              value={btnObj.text || btnObj.label || ""}
+              onChange={(e) => handleFieldChange({ ...btnObj, text: e.target.value, label: e.target.value })}
+              placeholder="e.g. Get Started Now"
             />
             <Input
-              label="Link Destination (HREF)"
-              value={btnObj.href || ""}
-              onChange={(e) => handleFieldChange({ ...btnObj, href: e.target.value })}
-              placeholder="e.g. /signup or https://..."
+              label="Link Destination (HREF / URL)"
+              value={btnObj.href || btnObj.link || ""}
+              onChange={(e) => handleFieldChange({ ...btnObj, href: e.target.value, link: e.target.value })}
+              placeholder="e.g. /pricing or https://..."
             />
-            <div className="flex flex-col gap-1 text-left">
-              <label className="text-xs font-semibold text-admin-secondary uppercase tracking-wider block">
-                Button Variant
-              </label>
-              <select
-                value={btnObj.variant || "primary"}
-                onChange={(e) => handleFieldChange({ ...btnObj, variant: e.target.value })}
-                className="w-full text-xs py-2 px-3 rounded-lg border border-slate-750 bg-slate-850 text-slate-200 outline-none focus:border-primary"
-              >
-                <option value="primary">Primary Solid</option>
-                <option value="secondary">Secondary Outline</option>
-                <option value="accent">Accent Highlight</option>
-              </select>
+
+            <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800">
+              <div className="flex flex-col gap-1 text-left">
+                <label className="text-[10px] font-semibold text-slate-400 uppercase block">
+                  Button Variant
+                </label>
+                <select
+                  value={btnObj.variant || "primary"}
+                  onChange={(e) => handleFieldChange({ ...btnObj, variant: e.target.value })}
+                  className="w-full text-xs py-1.5 px-2 rounded-lg border border-slate-750 bg-slate-850 text-slate-200 outline-none focus:border-primary"
+                >
+                  <option value="primary">Primary Accent</option>
+                  <option value="secondary">Secondary Dark</option>
+                  <option value="accent">Highlight Accent</option>
+                  <option value="danger">Danger Red</option>
+                  <option value="ghost">Ghost / Text</option>
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1 text-left">
+                <label className="text-[10px] font-semibold text-slate-400 uppercase block">
+                  Button Style
+                </label>
+                <select
+                  value={btnObj.style || "solid"}
+                  onChange={(e) => handleFieldChange({ ...btnObj, style: e.target.value })}
+                  className="w-full text-xs py-1.5 px-2 rounded-lg border border-slate-750 bg-slate-850 text-slate-200 outline-none focus:border-primary"
+                >
+                  <option value="solid">Solid Filled</option>
+                  <option value="outline">Border Outline</option>
+                  <option value="soft">Soft Tint</option>
+                  <option value="glass">Glassmorphism</option>
+                </select>
+              </div>
             </div>
           </div>
         );
+      }
+
+      case "section": {
+        const secObj = typeof value === "object" && value !== null
+          ? value
+          : { background: "#0f172a", padding: "4rem 2rem", margin: "0" };
+
+        return (
+          <div className="space-y-4">
+            <div className="space-y-1 text-left">
+              <label className="text-[10px] font-semibold text-slate-400 uppercase block">Background Color</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={secObj.background && secObj.background.startsWith("#") ? secObj.background : "#0f172a"}
+                  onChange={(e) => handleFieldChange({ ...secObj, background: e.target.value })}
+                  className="w-8 h-8 rounded border border-slate-700 bg-transparent cursor-pointer"
+                />
+                <input
+                  type="text"
+                  value={secObj.background || "#0f172a"}
+                  onChange={(e) => handleFieldChange({ ...secObj, background: e.target.value })}
+                  className="flex-1 text-xs font-mono py-1.5 px-2 rounded border border-slate-750 bg-slate-850 text-slate-200 outline-none"
+                  placeholder="#0f172a or transparent..."
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800">
+              <Input
+                label="Section Padding"
+                value={secObj.padding || "4rem 2rem"}
+                onChange={(e) => handleFieldChange({ ...secObj, padding: e.target.value })}
+                placeholder="e.g. 4rem 2rem"
+              />
+              <Input
+                label="Section Margin"
+                value={secObj.margin || "0"}
+                onChange={(e) => handleFieldChange({ ...secObj, margin: e.target.value })}
+                placeholder="e.g. 0 auto"
+              />
+            </div>
+          </div>
+        );
+      }
 
       case "richtext":
         return (
@@ -108,8 +300,8 @@ export function RegionInspectorPanel({
               HTML / Rich Text Markup
             </label>
             <textarea
-              rows={6}
-              value={typeof value === "string" ? value : ""}
+              rows={8}
+              value={typeof value === "string" ? value : (value?.html || value?.text || "")}
               onChange={(e) => handleFieldChange(e.target.value)}
               className="w-full text-xs font-mono p-3 rounded-lg border border-slate-750 bg-slate-850 text-slate-200 outline-none focus:border-primary"
               placeholder="Enter HTML content..."
@@ -117,7 +309,7 @@ export function RegionInspectorPanel({
           </div>
         );
 
-      case "video":
+      case "video": {
         const vidObj = typeof value === "object" && value !== null
           ? value
           : { url: typeof value === "string" ? value : "", title: "" };
@@ -130,10 +322,17 @@ export function RegionInspectorPanel({
               onChange={(e) => handleFieldChange({ ...vidObj, url: e.target.value })}
               placeholder="e.g. https://www.youtube.com/embed/..."
             />
+            <Input
+              label="Video Title"
+              value={vidObj.title || ""}
+              onChange={(e) => handleFieldChange({ ...vidObj, title: e.target.value })}
+              placeholder="e.g. Product Demo Video"
+            />
           </div>
         );
+      }
 
-      case "repeater":
+      case "repeater": {
         const items = Array.isArray(value) ? value : [];
         return (
           <div className="space-y-3">
@@ -179,8 +378,8 @@ export function RegionInspectorPanel({
             </div>
           </div>
         );
+      }
 
-      case "section":
       default:
         return (
           <div className="space-y-3">
@@ -190,7 +389,7 @@ export function RegionInspectorPanel({
               disabled
             />
             <div className="text-xs text-slate-400 italic bg-slate-950/40 p-3 rounded border border-slate-800">
-              Section wrapper region selected. Child elements inside this section can be inspected individually.
+              Selected element properties. Adjust values above to update live site preview.
             </div>
           </div>
         );

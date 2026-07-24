@@ -32,6 +32,10 @@ import revisionService from "../../services/revisionService";
 import { websiteService } from "../../services/websiteService";
 import RegionTreePanel from "../../components/content/RegionTreePanel";
 import RegionInspectorPanel from "../../components/content/RegionInspectorPanel";
+import SEOPanel from "../../components/content/SEOPanel";
+import RevisionPanel from "../../components/content/RevisionPanel";
+import BlockEditor from "../../components/blocks/BlockEditor";
+import { useRevisions } from "../../hooks/useRevisions";
 import Modal from "../../components/ui/Modal";
 import Button from "../../components/ui/Button";
 import Input from "../../components/ui/Input";
@@ -44,6 +48,7 @@ export function VisualEditorPage() {
   const { selectedWebsite, selectWebsite } = useWebsites();
   const { activeLocales, activeLocale, setLocale } = useLocale(websiteId);
   const { user } = useAuth();
+  const { revisions, loadRevisions, restoreRevision } = useRevisions();
 
   // Mode and view states
   const [editModeActive, setEditModeActive] = useState(true);
@@ -56,6 +61,15 @@ export function VisualEditorPage() {
   const [showDomainModal, setShowDomainModal] = useState(false);
   const [newDomainInput, setNewDomainInput] = useState("");
   const [updatingDomain, setUpdatingDomain] = useState(false);
+
+  // Page Settings / Configuration Modal States
+  const [showPageSettingsModal, setShowPageSettingsModal] = useState(false);
+  const [activeSettingsTab, setActiveSettingsTab] = useState("general");
+  const [pageTitle, setPageTitle] = useState("");
+  const [pageSlug, setPageSlug] = useState("");
+  const [pageRoute, setPageRoute] = useState("");
+  const [pageSeo, setPageSeo] = useState({});
+  const [pageBlocks, setPageBlocks] = useState([]);
 
   // Draft & save states
   const [draftValues, setDraftValues] = useState({});
@@ -77,8 +91,53 @@ export function VisualEditorPage() {
     if (websiteId && pageId) {
       selectWebsite(websiteId);
       fetchPageById(websiteId, pageId);
+      loadRevisions(websiteId, "page", pageId);
     }
-  }, [websiteId, pageId, selectWebsite, fetchPageById]);
+  }, [websiteId, pageId, selectWebsite, fetchPageById, loadRevisions]);
+
+  // Sync page metadata with local state
+  useEffect(() => {
+    if (selectedPage) {
+      const localeData = selectedPage.locales?.[activeLocale] || {};
+      setPageTitle(localeData.title || selectedPage.title || "");
+      setPageSlug(localeData.slug || selectedPage.slug || "");
+      setPageRoute(selectedPage.route || `/${localeData.slug || selectedPage.slug || ""}`);
+      setPageSeo(localeData.seo || {});
+      setPageBlocks(localeData.blocks || []);
+    }
+  }, [selectedPage, activeLocale]);
+
+  // Save Page Settings handler
+  const handleSavePageSettings = async () => {
+    try {
+      await updatePage(websiteId, pageId, activeLocale, {
+        title: pageTitle,
+        slug: pageSlug,
+        route: pageRoute,
+        seo: pageSeo,
+        blocks: pageBlocks
+      });
+      setShowPageSettingsModal(false);
+    } catch (err) {
+      console.error("Failed to update page settings:", err);
+    }
+  };
+
+  const handleRestoreRevision = async (revisionId) => {
+    if (window.confirm("Restore this revision? Unsaved page setting draft changes will be overwritten.")) {
+      try {
+        const snapshot = await restoreRevision(websiteId, "page", pageId, revisionId);
+        if (snapshot) {
+          if (snapshot.title) setPageTitle(snapshot.title);
+          if (snapshot.slug) setPageSlug(snapshot.slug);
+          if (snapshot.seo) setPageSeo(snapshot.seo);
+          if (snapshot.blocks) setPageBlocks(snapshot.blocks);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  };
 
   // Keep target domain in sync with selected website
   useEffect(() => {
@@ -556,6 +615,16 @@ export function VisualEditorPage() {
             <RefreshCw className="w-4 h-4" />
           </button>
 
+          {/* Page Settings & Configuration */}
+          <button
+            onClick={() => setShowPageSettingsModal(true)}
+            className="flex items-center gap-1.5 text-xs text-slate-300 hover:text-white px-2.5 py-1.5 rounded-lg border border-slate-800 hover:bg-slate-800 transition-colors cursor-pointer bg-slate-950/60"
+            title="Page Properties, SEO Metadata & Revisions"
+          >
+            <Settings className="w-3.5 h-3.5 text-primary" />
+            <span className="hidden sm:inline font-semibold">Settings</span>
+          </button>
+
           {/* Save Draft */}
           <Button
             onClick={handleSaveDraft}
@@ -749,6 +818,144 @@ export function VisualEditorPage() {
                 className="text-xs font-bold"
               >
                 Leave Anyway
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Page Settings & Configuration Modal */}
+      {showPageSettingsModal && (
+        <Modal
+          isOpen={showPageSettingsModal}
+          onClose={() => setShowPageSettingsModal(false)}
+          title={`Page Configuration: ${pageTitle || "Page Settings"}`}
+          size="lg"
+        >
+          <div className="space-y-4 text-left p-1">
+            {/* Modal Tabs */}
+            <div className="flex border-b border-slate-800 gap-2 pb-2 overflow-x-auto">
+              {[
+                { id: "general", label: "Page Properties" },
+                { id: "seo", label: "SEO Metadata" },
+                { id: "blocks", label: "Fallback Blocks" },
+                { id: "revisions", label: "Revisions" }
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveSettingsTab(tab.id)}
+                  className={`text-xs px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer whitespace-nowrap ${
+                    activeSettingsTab === tab.id
+                      ? "bg-primary text-white shadow-sm"
+                      : "text-slate-400 hover:text-white bg-slate-900 border border-slate-800"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* General Tab */}
+            {activeSettingsTab === "general" && (
+              <div className="space-y-4">
+                <Input
+                  label="Page Display Title"
+                  value={pageTitle}
+                  onChange={(e) => setPageTitle(e.target.value)}
+                  placeholder="e.g. Home Page"
+                />
+                <Input
+                  label="Path Slug"
+                  value={pageSlug}
+                  onChange={(e) => setPageSlug(e.target.value)}
+                  placeholder="e.g. home or about-us"
+                />
+                <Input
+                  label="Route Path Override"
+                  value={pageRoute}
+                  onChange={(e) => setPageRoute(e.target.value)}
+                  placeholder="e.g. /about"
+                />
+                <div className="flex gap-4">
+                  <div className="flex-1 space-y-1 text-left">
+                    <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider block">
+                      Page Status
+                    </label>
+                    <select
+                      value={selectedPage?.status || "draft"}
+                      onChange={(e) => updatePage(websiteId, pageId, activeLocale, { status: e.target.value })}
+                      className="w-full text-xs py-2 px-3 rounded-lg border border-slate-750 bg-slate-850 text-slate-200 outline-none focus:border-primary"
+                    >
+                      <option value="draft">Draft</option>
+                      <option value="published">Published</option>
+                      <option value="archived">Archived</option>
+                    </select>
+                  </div>
+                  <div className="flex-1 space-y-1 text-left">
+                    <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider block">
+                      Page Source
+                    </label>
+                    <input
+                      disabled
+                      value={selectedPage?.source || "cms"}
+                      className="w-full text-xs py-2 px-3 rounded-lg border border-slate-800 bg-slate-900 text-slate-400 outline-none capitalize font-mono"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* SEO Tab */}
+            {activeSettingsTab === "seo" && (
+              <div className="max-h-[420px] overflow-y-auto pr-1">
+                <SEOPanel
+                  seoData={pageSeo}
+                  onChange={setPageSeo}
+                  blocks={pageBlocks}
+                />
+              </div>
+            )}
+
+            {/* Fallback Block Layout Tab */}
+            {activeSettingsTab === "blocks" && (
+              <div className="max-h-[420px] overflow-y-auto pr-1">
+                <p className="text-xs text-slate-400 mb-3">
+                  Configure structural JSON block fallbacks for original CMS layout rendering.
+                </p>
+                <BlockEditor
+                  blocks={pageBlocks}
+                  onChange={setPageBlocks}
+                  activeLocale={activeLocale}
+                />
+              </div>
+            )}
+
+            {/* Revisions Tab */}
+            {activeSettingsTab === "revisions" && (
+              <div className="max-h-[420px] overflow-y-auto pr-1">
+                <RevisionPanel
+                  revisions={revisions}
+                  onRestore={handleRestoreRevision}
+                />
+              </div>
+            )}
+
+            {/* Footer Buttons */}
+            <div className="flex justify-end gap-3 pt-3 border-t border-slate-800">
+              <Button
+                variant="secondary"
+                onClick={() => setShowPageSettingsModal(false)}
+                className="text-xs font-bold"
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handleSavePageSettings}
+                className="text-xs font-bold gap-1.5"
+              >
+                <Save className="w-3.5 h-3.5" />
+                Save Page Settings
               </Button>
             </div>
           </div>

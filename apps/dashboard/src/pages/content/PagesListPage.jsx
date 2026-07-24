@@ -269,11 +269,17 @@ export function PagesListPage() {
             return (
               <TableRow key={page.id}>
                 <TableCell className="font-semibold text-admin-text flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-lg bg-slate-950/20 border border-slate-800/40 flex items-center justify-center text-primary flex-shrink-0">
+                  <div 
+                    onClick={() => navigate(`/content/${websiteId}/pages/${page.id}/editor`)}
+                    className="w-8 h-8 rounded-lg bg-slate-950/20 border border-slate-800/40 flex items-center justify-center text-primary flex-shrink-0 cursor-pointer hover:bg-primary/20 transition-colors"
+                  >
                     <FileText className="w-4 h-4" />
                   </div>
-                  <div>
-                    <span className="block text-sm font-semibold">{displayTitle}</span>
+                  <div 
+                    onClick={() => navigate(`/content/${websiteId}/pages/${page.id}/editor`)}
+                    className="cursor-pointer group"
+                  >
+                    <span className="block text-sm font-semibold group-hover:text-primary transition-colors">{displayTitle}</span>
                     <span className="block text-[10px] text-admin-secondary font-mono mt-0.5">
                       {page.route || `/${displaySlug}`}
                     </span>
@@ -315,11 +321,11 @@ export function PagesListPage() {
                       <Eye className="w-4 h-4" />
                     </button>
 
-                    {/* Edit Page Form */}
+                    {/* Edit Page */}
                     <button
-                      onClick={() => navigate(`/content/${websiteId}/pages/${page.id}`)}
+                      onClick={() => navigate(`/content/${websiteId}/pages/${page.id}/editor`)}
                       className="p-1.5 rounded-lg hover:bg-slate-850 text-admin-secondary hover:text-primary transition-colors cursor-pointer"
-                      title="Edit Page Properties"
+                      title="Edit Page in Visual Editor"
                     >
                       <Edit3 className="w-4 h-4" />
                     </button>

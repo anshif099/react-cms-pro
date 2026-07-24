@@ -355,7 +355,7 @@ export function LivePreviewPage() {
           {/* Render consolidated toolbar workstation */}
           <PreviewToolbar
             title={title}
-            onBack={() => navigate(`/content/${websiteId}/pages/${pageId}`)}
+            onBack={() => navigate(`/content/${websiteId}/pages/${pageId}/editor`)}
             activeLocale={activeLocale}
             activeLocales={activeLocales}
             onLocaleSelect={setLocale}

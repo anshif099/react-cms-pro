@@ -55,7 +55,7 @@ export function SearchPage() {
 
   const handleNavigate = (item) => {
     if (item.type === "page") {
-      navigate(`/content/${websiteId}/pages/${item.id}`);
+      navigate(`/content/${websiteId}/pages/${item.id}/editor`);
     } else if (item.type === "media") {
       navigate(`/content/${websiteId}/media`);
     }
