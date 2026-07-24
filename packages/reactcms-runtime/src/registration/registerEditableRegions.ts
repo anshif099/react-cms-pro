@@ -1,6 +1,6 @@
 import { ref, set } from 'firebase/database';
 import { getFirebaseDatabase } from '@anshif.rainhopes/reactcms-sdk';
-import { paths, EditableRegion } from '@anshif.rainhopes/shared';
+import { paths, EditableRegion, encodeFirebaseKey } from '@anshif.rainhopes/shared';
 
 export async function registerEditableRegions(
   websiteId: string,
@@ -17,7 +17,8 @@ export async function registerEditableRegions(
 
     Object.entries(regions || {}).forEach(([regionId, reg]) => {
       if (reg && reg.id && reg.type) {
-        cleanRegions[regionId] = {
+        const encodedKey = encodeFirebaseKey(regionId);
+        cleanRegions[encodedKey] = {
           id: reg.id,
           type: reg.type,
           label: reg.label || reg.id,

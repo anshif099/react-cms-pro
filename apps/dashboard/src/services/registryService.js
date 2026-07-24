@@ -1,6 +1,6 @@
 import { database } from "../lib/firebase";
 import { ref, get, set, update, onValue } from "firebase/database";
-import { paths } from "@anshif.rainhopes/shared";
+import { paths, decodeFirebaseKey, decodeFirebaseObject } from "@anshif.rainhopes/shared";
 
 export const registryService = {
   async getRegistry(websiteId) {
@@ -42,7 +42,14 @@ export const registryService = {
   async getEditableRegions(websiteId) {
     const regionsRef = ref(database, `registry/${websiteId}/editableRegions`);
     const snapshot = await get(regionsRef);
-    return snapshot.exists() ? snapshot.val() : {};
+    if (!snapshot.exists()) return {};
+    const raw = snapshot.val();
+    const decoded = {};
+    Object.entries(raw).forEach(([pageKey, pageRegions]) => {
+      const decodedPageKey = decodeFirebaseKey(pageKey);
+      decoded[decodedPageKey] = decodeFirebaseObject(pageRegions);
+    });
+    return decoded;
   },
 
   async saveNavigation(websiteId, menus) {
@@ -83,7 +90,17 @@ export const registryService = {
   subscribeToEditableRegions(websiteId, cb) {
     const regionsRef = ref(database, `registry/${websiteId}/editableRegions`);
     return onValue(regionsRef, (snapshot) => {
-      cb(snapshot.exists() ? snapshot.val() : {});
+      if (!snapshot.exists()) {
+        cb({});
+        return;
+      }
+      const raw = snapshot.val();
+      const decoded = {};
+      Object.entries(raw).forEach(([pageKey, pageRegions]) => {
+        const decodedPageKey = decodeFirebaseKey(pageKey);
+        decoded[decodedPageKey] = decodeFirebaseObject(pageRegions);
+      });
+      cb(decoded);
     });
   }
 };

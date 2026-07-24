@@ -1,4 +1,4 @@
-import { EVENT_TYPES, paths } from "@anshif.rainhopes/shared";
+import { EVENT_TYPES, paths, encodeFirebaseKey } from "@anshif.rainhopes/shared";
 import { database } from "../lib/firebase";
 import { ref, set } from "firebase/database";
 
@@ -65,7 +65,8 @@ export const visualEditService = {
   async persistFieldUpdate(websiteId, pageId, regionId, value) {
     if (!websiteId || !pageId || !regionId) return;
     try {
-      const draftPath = `${paths.contentDraft(websiteId, pageId)}/${regionId}`;
+      const encodedRegionId = encodeFirebaseKey(regionId);
+      const draftPath = `${paths.contentDraft(websiteId, pageId)}/${encodedRegionId}`;
       const draftRef = ref(database, draftPath);
       await set(draftRef, value);
     } catch (err) {

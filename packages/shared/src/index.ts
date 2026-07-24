@@ -32,3 +32,7 @@ export * from './validators/routeValidator';
 export * from './validators/themeValidator';
 export * from './validators/contentModelValidator';
 export * from './validators/registryValidator';
+
+// Export utils
+export * from './utils/keyUtils';
+

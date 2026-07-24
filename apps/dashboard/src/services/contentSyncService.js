@@ -1,11 +1,13 @@
 import { database } from "../lib/firebase";
 import { ref, set, remove } from "firebase/database";
+import { encodeFirebaseObject } from "@anshif.rainhopes/shared";
 
 export const contentSyncService = {
   async syncPublished(websiteId, type, id, data) {
     try {
       const contentRef = ref(database, `content/${websiteId}/published/${type}/${id}`);
-      await set(contentRef, data);
+      const safeData = encodeFirebaseObject(data);
+      await set(contentRef, safeData);
       return true;
     } catch (error) {
       console.error(`Failed to sync published content (${type}/${id}):`, error);
@@ -16,7 +18,8 @@ export const contentSyncService = {
   async syncDraft(websiteId, type, id, data) {
     try {
       const contentRef = ref(database, `content/${websiteId}/draft/${type}/${id}`);
-      await set(contentRef, data);
+      const safeData = encodeFirebaseObject(data);
+      await set(contentRef, safeData);
       return true;
     } catch (error) {
       console.error(`Failed to sync draft content (${type}/${id}):`, error);
