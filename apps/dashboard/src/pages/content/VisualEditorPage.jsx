@@ -193,6 +193,19 @@ export function VisualEditorPage() {
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [hasUnsavedChanges]);
 
+  // Resolve page slug from selectedPage for consistent sync keys.
+  // The SDK resolves pageId from the browser URL (e.g. "home", "about"),
+  // so we must publish/draft under the same slug — not the Firebase doc ID.
+  const resolvePageSlug = () => {
+    if (selectedPage?.route && selectedPage.route !== "/") {
+      return selectedPage.route.replace(/^\/+|\/+$/g, "") || "home";
+    }
+    const slug = selectedPage?.slug || "";
+    if (slug && slug !== "home" && !slug.startsWith("0.")) return slug;
+    if (selectedPage?.route === "/" || !slug || slug === "home") return "home";
+    return slug || "home";
+  };
+
   // Auto-save debounced handler (2.5 seconds)
   const triggerAutoSave = useCallback((updatedValues) => {
     setHasUnsavedChanges(true);
@@ -205,8 +218,9 @@ export function VisualEditorPage() {
     autoSaveTimerRef.current = setTimeout(async () => {
       setSaveStatus("saving");
       try {
-        await contentSyncService.syncDraft(websiteId, "pages", pageId, {
-          id: pageId,
+        const pageSlug = resolvePageSlug();
+        await contentSyncService.syncDraft(websiteId, pageSlug, {
+          id: pageSlug,
           regions: updatedValues,
           updatedAt: Date.now()
         });
@@ -218,7 +232,8 @@ export function VisualEditorPage() {
         setSaveStatus("unsaved");
       }
     }, 2500);
-  }, [websiteId, pageId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [websiteId, pageId, selectedPage]);
 
   // Handle region value modification from inspector or iframe
   const handleRegionValueChange = (regionId, newValue) => {
@@ -270,8 +285,9 @@ export function VisualEditorPage() {
     setSaving(true);
     setSaveStatus("saving");
     try {
-      await contentSyncService.syncDraft(websiteId, "pages", pageId, {
-        id: pageId,
+      const pageSlug = resolvePageSlug();
+      await contentSyncService.syncDraft(websiteId, pageSlug, {
+        id: pageSlug,
         regions: draftValues,
         updatedAt: Date.now()
       });
@@ -293,9 +309,10 @@ export function VisualEditorPage() {
   const handleExecutePublish = async () => {
     setPublishing(true);
     try {
-      // 1. Sync draft values to published path
-      await contentSyncService.syncPublished(websiteId, "pages", pageId, {
-        id: pageId,
+      const pageSlug = resolvePageSlug();
+      // 1. Sync draft values to published path (keyed by slug so the SDK can find it from the URL)
+      await contentSyncService.syncPublished(websiteId, pageSlug, {
+        id: pageSlug,
         regions: draftValues,
         publishedAt: Date.now()
       });

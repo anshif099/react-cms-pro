@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CMSProvider, EditableRegistryContext, MessageBus } from '@anshif.rainhopes/reactcms-sdk';
+import { CMSProvider, EditableRegistryContext, MessageBus, editableSync } from '@anshif.rainhopes/reactcms-sdk';
 import { LayoutDefinition, NavMenu, EditableRegion, EditableType, ThemeTokens } from '@anshif.rainhopes/shared';
 import { RuntimeContext } from './RuntimeContext';
 import { registerWebsite } from './registration/registerWebsite';
@@ -111,6 +111,23 @@ export function RuntimeProvider({
 
   // Startup Sequence
   useEffect(() => {
+    // Resolve the current page identifier from the browser URL — same logic as useEditable's resolvePageId
+    const resolveCurrentPageId = (): string => {
+      if (typeof window === 'undefined') return 'global';
+      const search = window.location.search;
+      if (search) {
+        try {
+          const params = new URLSearchParams(search);
+          const q = params.get('page');
+          if (q) return q;
+        } catch { /* noop */ }
+      }
+      const rawPath = window.location.pathname.replace(/^\/+|\/+$/g, '');
+      return rawPath || 'home';
+    };
+
+    const currentPageId = resolveCurrentPageId();
+
     const runStartup = async () => {
       // 1. Register Website online status
       await registerWebsite(websiteId, apiKey);
@@ -124,9 +141,32 @@ export function RuntimeProvider({
       }
       // 5. Start Heartbeat Ping (every 30s)
       HeartbeatService.start(websiteId, apiKey);
+
+      // 6. Hydrate region values from published Firebase content
+      //    This makes CMS-published changes (text, color, etc.) appear on the live site on load
+      try {
+        const publishedRegions = await editableSync.getPublishedRegions(apiKey, websiteId, currentPageId);
+        if (Object.keys(publishedRegions).length > 0) {
+          Object.entries(publishedRegions).forEach(([regionId, value]) => {
+            MessageBus.send('rcms/v1/field-update', websiteId, { regionId, value });
+          });
+        }
+      } catch (err) {
+        console.warn('[ReactCMS Runtime] Failed to hydrate published regions:', err);
+      }
     };
 
     runStartup();
+
+    // Subscribe to published region changes — so publish from dashboard immediately reflects on live site
+    const unsubscribePublished = editableSync.subscribeToPublishedRegions(
+      apiKey, websiteId, currentPageId,
+      (publishedRegions) => {
+        Object.entries(publishedRegions).forEach(([regionId, value]) => {
+          MessageBus.send('rcms/v1/field-update', websiteId, { regionId, value });
+        });
+      }
+    );
 
     // Subscribe to namespaced versioned messages
     const unsubscribeMessages = setupRuntimeMessageHandler(websiteId, {
@@ -144,6 +184,7 @@ export function RuntimeProvider({
 
     return () => {
       HeartbeatService.stop();
+      unsubscribePublished();
       unsubscribeMessages();
     };
   }, [websiteId, apiKey, routes]);
