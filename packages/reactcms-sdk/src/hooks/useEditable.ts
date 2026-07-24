@@ -17,11 +17,22 @@ function resolvePageId(pageContext: any): string {
     }
   }
 
-  // Fallback to active browser URL pathname if available (e.g. /about -> about, / -> home)
-  if (typeof window !== 'undefined' && window.location && window.location.pathname) {
-    const rawPath = window.location.pathname.replace(/^\/+|\/+$/g, '');
-    if (rawPath) return rawPath;
-    return 'home';
+  // Fallback to active browser URL query parameter (?page=home) or pathname (/about -> about, / -> home)
+  if (typeof window !== 'undefined' && window.location) {
+    if (window.location.search) {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const queryPage = params.get('page');
+        if (queryPage) return queryPage;
+      } catch {
+        // Fallthrough
+      }
+    }
+    if (window.location.pathname) {
+      const rawPath = window.location.pathname.replace(/^\/+|\/+$/g, '');
+      if (rawPath) return rawPath;
+      return 'home';
+    }
   }
 
   return 'global';
