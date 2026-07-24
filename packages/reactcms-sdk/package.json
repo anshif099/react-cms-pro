@@ -1,6 +1,6 @@
 {
   "name": "@anshif.rainhopes/reactcms-sdk",
-  "version": "1.0.6",
+  "version": "1.0.10",
   "license": "MIT",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
