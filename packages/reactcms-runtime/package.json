@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "@anshif.rainhopes/shared": "^1.0.3",
-    "@anshif.rainhopes/reactcms-sdk": "^1.0.2",
+    "@anshif.rainhopes/reactcms-sdk": "^1.0.5",
     "firebase": "^10.8.0"
   },
   "peerDependencies": {

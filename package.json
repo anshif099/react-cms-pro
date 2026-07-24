@@ -22,6 +22,6 @@
   },
   "dependencies": {
     "@anshif.rainhopes/reactcms-runtime": "^1.0.4",
-    "@anshif.rainhopes/reactcms-sdk": "^1.0.2"
+    "@anshif.rainhopes/reactcms-sdk": "^1.0.5"
   }
 }
