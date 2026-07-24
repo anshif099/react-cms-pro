@@ -3,6 +3,7 @@ import { useEditable } from '../hooks/useEditable';
 import { CMSContext } from '../context/CMSContext';
 import { PageContext } from '../context/PageContext';
 import { MessageBus } from '../messaging/MessageBus';
+import { getElementComputedStyle } from '../utils/domStyles';
 
 export interface EditableTextProps {
   regionId: string;
@@ -42,11 +43,13 @@ export function EditableText({
   const handleClick = (e: React.MouseEvent) => {
     if (editMode && cms?.websiteId) {
       e.stopPropagation();
+      const computedStyle = getElementComputedStyle(e.currentTarget as HTMLElement);
       MessageBus.send('rcms/v1/region-selected', cms.websiteId, {
         regionId,
         type: 'text',
         pageId,
         value,
+        computedStyle,
       });
       MessageBus.send('rcms/v1/open-inspector', cms.websiteId, {
         regionId,

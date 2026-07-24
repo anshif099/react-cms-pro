@@ -1,4 +1,4 @@
-import { MessageBus } from '@anshif.rainhopes/reactcms-sdk';
+import { MessageBus, getElementComputedStyle } from '@anshif.rainhopes/reactcms-sdk';
 
 export function setupRuntimeMessageHandler(
   websiteId: string,
@@ -34,9 +34,21 @@ export function setupRuntimeMessageHandler(
       case 'rcms/v1/region-selected':
         if (callbacks.onRegionSelected) callbacks.onRegionSelected(msg.payload);
         break;
-      case 'rcms/v1/open-inspector':
+      case 'rcms/v1/open-inspector': {
+        const payload = (msg.payload || {}) as { regionId?: string };
+        if (payload.regionId && typeof document !== 'undefined') {
+          const el = document.querySelector(`[data-rcms-region="${payload.regionId}"]`) as HTMLElement | null;
+          if (el) {
+            const computedStyle = getElementComputedStyle(el);
+            MessageBus.send('rcms/v1/region-selected', websiteId, {
+              regionId: payload.regionId,
+              computedStyle,
+            });
+          }
+        }
         if (callbacks.onOpenInspector) callbacks.onOpenInspector(msg.payload);
         break;
+      }
     }
   });
 }

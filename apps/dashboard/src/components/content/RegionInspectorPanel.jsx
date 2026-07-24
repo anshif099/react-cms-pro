@@ -22,7 +22,7 @@ export function RegionInspectorPanel({
     );
   }
 
-  const { regionId, type = "text", label = regionId, value } = selectedElement;
+  const { regionId, type = "text", label = regionId, value, computedStyle = {} } = selectedElement;
 
   const handleFieldChange = (newValue) => {
     onChangeRegion(regionId, newValue);
@@ -60,6 +60,10 @@ export function RegionInspectorPanel({
           }
         };
 
+        const activeColor = textObj.color && textObj.color.startsWith("#")
+          ? textObj.color
+          : (computedStyle.color && computedStyle.color.startsWith("#") ? computedStyle.color : "#ffffff");
+
         return (
           <div className="space-y-4">
             <div className="space-y-1 text-left">
@@ -96,7 +100,7 @@ export function RegionInspectorPanel({
                     onChange={(e) => updateProp("fontSize", e.target.value)}
                     className="w-full text-xs py-1.5 px-2 rounded-lg border border-slate-750 bg-slate-850 text-slate-200 outline-none focus:border-primary"
                   >
-                    <option value="">Default (CSS)</option>
+                    <option value="">Default {computedStyle.fontSize ? `(${computedStyle.fontSize})` : "(CSS)"}</option>
                     <option value="12px">12px (Small)</option>
                     <option value="14px">14px (Base Small)</option>
                     <option value="16px">16px (Body)</option>
@@ -116,7 +120,7 @@ export function RegionInspectorPanel({
                     onChange={(e) => updateProp("fontWeight", e.target.value)}
                     className="w-full text-xs py-1.5 px-2 rounded-lg border border-slate-750 bg-slate-850 text-slate-200 outline-none focus:border-primary"
                   >
-                    <option value="">Default (CSS)</option>
+                    <option value="">Default {computedStyle.fontWeight ? `(${computedStyle.fontWeight})` : "(CSS)"}</option>
                     <option value="300">Light (300)</option>
                     <option value="400">Normal (400)</option>
                     <option value="500">Medium (500)</option>
@@ -134,7 +138,7 @@ export function RegionInspectorPanel({
                   <div className="flex items-center gap-1.5">
                     <input
                       type="color"
-                      value={textObj.color && textObj.color.startsWith("#") ? textObj.color : "#ffffff"}
+                      value={activeColor}
                       onChange={(e) => updateProp("color", e.target.value)}
                       className="w-7 h-7 rounded border border-slate-700 bg-transparent cursor-pointer"
                     />
@@ -142,7 +146,7 @@ export function RegionInspectorPanel({
                       type="text"
                       value={textObj.color || ""}
                       onChange={(e) => updateProp("color", e.target.value)}
-                      placeholder="Default (CSS)"
+                      placeholder={computedStyle.color ? `Auto: ${computedStyle.color}` : "Default (CSS)"}
                       className="w-full text-[11px] font-mono py-1 px-2 rounded border border-slate-750 bg-slate-850 text-slate-200 outline-none placeholder:text-slate-500"
                     />
                   </div>
@@ -155,7 +159,7 @@ export function RegionInspectorPanel({
                     onChange={(e) => updateProp("align", e.target.value)}
                     className="w-full text-xs py-1.5 px-2 rounded-lg border border-slate-750 bg-slate-850 text-slate-200 outline-none focus:border-primary"
                   >
-                    <option value="">Default (CSS)</option>
+                    <option value="">Default {computedStyle.align ? `(${computedStyle.align})` : "(CSS)"}</option>
                     <option value="left">Left</option>
                     <option value="center">Center</option>
                     <option value="right">Right</option>

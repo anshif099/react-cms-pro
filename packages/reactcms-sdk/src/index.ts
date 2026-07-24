@@ -38,3 +38,7 @@ export { EditableSection } from './components/EditableSection';
 export { EditableRichText } from './components/EditableRichText';
 export { EditableRepeater } from './components/EditableRepeater';
 export { EditableVideo } from './components/EditableVideo';
+
+// Export utils
+export { getElementComputedStyle } from './utils/domStyles';
+

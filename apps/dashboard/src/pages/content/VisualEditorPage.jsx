@@ -437,11 +437,16 @@ export function VisualEditorPage() {
           }
         } else if (data.type === "rcms/v1/region-selected") {
           const payload = data.payload || {};
-          setSelectedElement({
-            regionId: payload.regionId,
-            type: payload.type || "text",
-            pageId: payload.pageId || pageId,
-            value: payload.value
+          setSelectedElement((prev) => {
+            const isSameRegion = prev && prev.regionId === payload.regionId;
+            return {
+              regionId: payload.regionId,
+              type: payload.type || (isSameRegion ? prev.type : "text"),
+              label: payload.label || (isSameRegion ? prev.label : payload.regionId),
+              pageId: payload.pageId || pageId,
+              value: payload.value !== undefined ? payload.value : (isSameRegion ? prev.value : undefined),
+              computedStyle: payload.computedStyle || (isSameRegion ? prev.computedStyle : {})
+            };
           });
         }
       } catch (err) {
