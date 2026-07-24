@@ -33,11 +33,32 @@ export function RegionInspectorPanel({
       case "text":
       case "textarea":
       case "heading": {
-        const textObj = typeof value === "object" && value !== null
-          ? value
-          : { text: typeof value === "string" ? value : "", fontSize: "16px", fontWeight: "400", color: "#f8fafc", align: "left" };
+        const isObjectValue = typeof value === "object" && value !== null;
+        const currentText = isObjectValue ? (value.text !== undefined ? value.text : "") : (typeof value === "string" ? value : "");
+        const textObj = isObjectValue ? value : {};
 
-        const currentText = typeof textObj === "string" ? textObj : (textObj.text || "");
+        const updateProp = (prop, val) => {
+          const base = isObjectValue ? { ...value } : (currentText ? { text: currentText } : {});
+          if (!val) {
+            delete base[prop];
+          } else {
+            base[prop] = val;
+          }
+          const keys = Object.keys(base).filter((k) => k !== "text");
+          if (keys.length === 0 && typeof base.text === "string") {
+            handleFieldChange(base.text);
+          } else {
+            handleFieldChange(base);
+          }
+        };
+
+        const handleTextChange = (newText) => {
+          if (isObjectValue) {
+            handleFieldChange({ ...value, text: newText });
+          } else {
+            handleFieldChange(newText);
+          }
+        };
 
         return (
           <div className="space-y-4">
@@ -49,20 +70,14 @@ export function RegionInspectorPanel({
                 <textarea
                   rows={4}
                   value={currentText}
-                  onChange={(e) => {
-                    const updated = typeof textObj === "object" ? { ...textObj, text: e.target.value } : e.target.value;
-                    handleFieldChange(updated);
-                  }}
+                  onChange={(e) => handleTextChange(e.target.value)}
                   className="w-full text-xs p-2.5 rounded-lg border border-slate-750 bg-slate-850 text-slate-200 outline-none focus:border-primary"
                   placeholder="Enter text..."
                 />
               ) : (
                 <Input
                   value={currentText}
-                  onChange={(e) => {
-                    const updated = typeof textObj === "object" ? { ...textObj, text: e.target.value } : e.target.value;
-                    handleFieldChange(updated);
-                  }}
+                  onChange={(e) => handleTextChange(e.target.value)}
                   placeholder="Enter text..."
                 />
               )}
@@ -77,10 +92,11 @@ export function RegionInspectorPanel({
                 <div className="flex flex-col gap-1 text-left">
                   <label className="text-[10px] font-semibold text-slate-400 uppercase">Font Size</label>
                   <select
-                    value={textObj.fontSize || "16px"}
-                    onChange={(e) => handleFieldChange({ ...textObj, text: currentText, fontSize: e.target.value })}
+                    value={textObj.fontSize || ""}
+                    onChange={(e) => updateProp("fontSize", e.target.value)}
                     className="w-full text-xs py-1.5 px-2 rounded-lg border border-slate-750 bg-slate-850 text-slate-200 outline-none focus:border-primary"
                   >
+                    <option value="">Default (CSS)</option>
                     <option value="12px">12px (Small)</option>
                     <option value="14px">14px (Base Small)</option>
                     <option value="16px">16px (Body)</option>
@@ -96,10 +112,11 @@ export function RegionInspectorPanel({
                 <div className="flex flex-col gap-1 text-left">
                   <label className="text-[10px] font-semibold text-slate-400 uppercase">Font Weight</label>
                   <select
-                    value={textObj.fontWeight || "400"}
-                    onChange={(e) => handleFieldChange({ ...textObj, text: currentText, fontWeight: e.target.value })}
+                    value={textObj.fontWeight || ""}
+                    onChange={(e) => updateProp("fontWeight", e.target.value)}
                     className="w-full text-xs py-1.5 px-2 rounded-lg border border-slate-750 bg-slate-850 text-slate-200 outline-none focus:border-primary"
                   >
+                    <option value="">Default (CSS)</option>
                     <option value="300">Light (300)</option>
                     <option value="400">Normal (400)</option>
                     <option value="500">Medium (500)</option>
@@ -118,14 +135,15 @@ export function RegionInspectorPanel({
                     <input
                       type="color"
                       value={textObj.color && textObj.color.startsWith("#") ? textObj.color : "#ffffff"}
-                      onChange={(e) => handleFieldChange({ ...textObj, text: currentText, color: e.target.value })}
+                      onChange={(e) => updateProp("color", e.target.value)}
                       className="w-7 h-7 rounded border border-slate-700 bg-transparent cursor-pointer"
                     />
                     <input
                       type="text"
-                      value={textObj.color || "#ffffff"}
-                      onChange={(e) => handleFieldChange({ ...textObj, text: currentText, color: e.target.value })}
-                      className="w-full text-[11px] font-mono py-1 px-2 rounded border border-slate-750 bg-slate-850 text-slate-200 outline-none"
+                      value={textObj.color || ""}
+                      onChange={(e) => updateProp("color", e.target.value)}
+                      placeholder="Default (CSS)"
+                      className="w-full text-[11px] font-mono py-1 px-2 rounded border border-slate-750 bg-slate-850 text-slate-200 outline-none placeholder:text-slate-500"
                     />
                   </div>
                 </div>
@@ -133,10 +151,11 @@ export function RegionInspectorPanel({
                 <div className="flex flex-col gap-1 text-left">
                   <label className="text-[10px] font-semibold text-slate-400 uppercase">Alignment</label>
                   <select
-                    value={textObj.align || "left"}
-                    onChange={(e) => handleFieldChange({ ...textObj, text: currentText, align: e.target.value })}
+                    value={textObj.align || ""}
+                    onChange={(e) => updateProp("align", e.target.value)}
                     className="w-full text-xs py-1.5 px-2 rounded-lg border border-slate-750 bg-slate-850 text-slate-200 outline-none focus:border-primary"
                   >
+                    <option value="">Default (CSS)</option>
                     <option value="left">Left</option>
                     <option value="center">Center</option>
                     <option value="right">Right</option>

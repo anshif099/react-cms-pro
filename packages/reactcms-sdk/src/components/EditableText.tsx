@@ -29,15 +29,15 @@ export function EditableText({
   const pageId = page?.currentPage?.id || 'global';
 
   const isRich = typeof value === 'object' && value !== null;
-  const displayValue = isRich ? value.text : value;
-  const textStyle: React.CSSProperties = isRich
-    ? {
-        fontSize: value.fontSize,
-        fontWeight: value.fontWeight,
-        color: value.color,
-        textAlign: value.align,
-      }
-    : {};
+  const displayValue = isRich ? (value.text !== undefined ? value.text : '') : value;
+  
+  const textStyle: React.CSSProperties = {};
+  if (isRich) {
+    if (value.fontSize) textStyle.fontSize = value.fontSize;
+    if (value.fontWeight) textStyle.fontWeight = value.fontWeight;
+    if (value.color) textStyle.color = value.color;
+    if (value.align) textStyle.textAlign = value.align;
+  }
 
   const handleClick = (e: React.MouseEvent) => {
     if (editMode && cms?.websiteId) {
