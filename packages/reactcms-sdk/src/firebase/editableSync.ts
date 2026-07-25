@@ -48,8 +48,12 @@ export const editableSync = {
   ): Promise<DraftPageRegionValues> {
     try {
       const db = getFirebaseDatabase(apiKey);
-      const draftRef = ref(db, paths.contentDraft(websiteId, pageId));
-      const snapshot = await get(draftRef);
+      let draftRef = ref(db, paths.contentDraft(websiteId, pageId));
+      let snapshot = await get(draftRef);
+      if (!snapshot.exists() && pageId !== 'home') {
+        draftRef = ref(db, paths.contentDraft(websiteId, 'home'));
+        snapshot = await get(draftRef);
+      }
       if (!snapshot.exists()) return {};
       return decodeRegionsSnapshot(snapshot.val() as Record<string, unknown>);
     } catch (err) {
@@ -66,8 +70,12 @@ export const editableSync = {
   ): Promise<DraftPageRegionValues> {
     try {
       const db = getFirebaseDatabase(apiKey);
-      const publishedRef = ref(db, paths.contentPublished(websiteId, pageId));
-      const snapshot = await get(publishedRef);
+      let publishedRef = ref(db, paths.contentPublished(websiteId, pageId));
+      let snapshot = await get(publishedRef);
+      if (!snapshot.exists() && pageId !== 'home') {
+        publishedRef = ref(db, paths.contentPublished(websiteId, 'home'));
+        snapshot = await get(publishedRef);
+      }
       if (!snapshot.exists()) return {};
       return decodeRegionsSnapshot(snapshot.val() as Record<string, unknown>);
     } catch (err) {

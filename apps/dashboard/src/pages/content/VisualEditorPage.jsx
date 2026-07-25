@@ -227,8 +227,8 @@ export function VisualEditorPage() {
       return selectedPage.route.replace(/^\/+|\/+$/g, "") || "home";
     }
     const slug = selectedPage?.slug || "";
-    if (slug && slug !== "home" && !slug.startsWith("0.")) return slug;
-    if (selectedPage?.route === "/" || !slug || slug === "home") return "home";
+    if (slug && slug !== "home" && !slug.startsWith("0.") && !slug.startsWith("-")) return slug;
+    if (selectedPage?.route === "/" || !slug || slug === "home" || slug.startsWith("-")) return "home";
     return slug || "home";
   };
 
@@ -245,17 +245,23 @@ export function VisualEditorPage() {
       setSaveStatus("saving");
       try {
         const pageSlug = resolvePageSlug();
-        const existingDraft = await contentSyncService.getDraft(websiteId, pageSlug);
+        const existingDraft = (await contentSyncService.getDraft(websiteId, pageSlug))
+          || (await contentSyncService.getDraft(websiteId, "home"));
+
         const mergedValues = {
           ...(existingDraft?.regions || {}),
           ...updatedValues
         };
 
-        await contentSyncService.syncDraft(websiteId, pageSlug, {
+        const payload = {
           id: pageSlug,
           regions: mergedValues,
           updatedAt: Date.now()
-        });
+        };
+
+        const targetKeys = Array.from(new Set([pageSlug, "home", pageId]));
+        await Promise.all(targetKeys.map((key) => contentSyncService.syncDraft(websiteId, key, payload)));
+
         setHasUnsavedChanges(false);
         setSaveStatus("saved");
         setLastSavedTime(new Date().toLocaleTimeString());
@@ -279,7 +285,7 @@ export function VisualEditorPage() {
     setSelectedElement((prev) => (prev ? { ...prev, value: newValue } : null));
 
     // Send visual field update to preview iframe live
-    if (iframeRef.current && targetDomain) {
+    if (iframeRef.current) {
       visualEditService.sendFieldUpdate(
         iframeRef.current,
         targetDomain,
@@ -318,17 +324,23 @@ export function VisualEditorPage() {
     setSaveStatus("saving");
     try {
       const pageSlug = resolvePageSlug();
-      const existingDraft = await contentSyncService.getDraft(websiteId, pageSlug);
+      const existingDraft = (await contentSyncService.getDraft(websiteId, pageSlug))
+        || (await contentSyncService.getDraft(websiteId, "home"));
+
       const mergedValues = {
         ...(existingDraft?.regions || {}),
         ...draftValues
       };
 
-      await contentSyncService.syncDraft(websiteId, pageSlug, {
+      const payload = {
         id: pageSlug,
         regions: mergedValues,
         updatedAt: Date.now()
-      });
+      };
+
+      const targetKeys = Array.from(new Set([pageSlug, "home", pageId]));
+      await Promise.all(targetKeys.map((key) => contentSyncService.syncDraft(websiteId, key, payload)));
+
       await updatePage(websiteId, pageId, activeLocale, {
         status: "draft"
       });
@@ -348,8 +360,10 @@ export function VisualEditorPage() {
     setPublishing(true);
     try {
       const pageSlug = resolvePageSlug();
-      const existingDraft = await contentSyncService.getDraft(websiteId, pageSlug);
-      const existingPublished = await contentSyncService.getPublished(websiteId, pageSlug);
+      const existingDraft = (await contentSyncService.getDraft(websiteId, pageSlug))
+        || (await contentSyncService.getDraft(websiteId, "home"));
+      const existingPublished = (await contentSyncService.getPublished(websiteId, pageSlug))
+        || (await contentSyncService.getPublished(websiteId, "home"));
 
       const combinedRegions = {
         ...(existingPublished?.regions || {}),
@@ -357,12 +371,15 @@ export function VisualEditorPage() {
         ...draftValues
       };
 
-      // 1. Sync draft values to published path (keyed by slug so the SDK can find it from the URL)
-      await contentSyncService.syncPublished(websiteId, pageSlug, {
+      const payload = {
         id: pageSlug,
         regions: combinedRegions,
         publishedAt: Date.now()
-      });
+      };
+
+      // 1. Sync to all target page keys (slug, home, pageId) so client SDK resolves it on any route
+      const targetKeys = Array.from(new Set([pageSlug, "home", pageId]));
+      await Promise.all(targetKeys.map((key) => contentSyncService.syncPublished(websiteId, key, payload)));
 
       // 2. Save revision
       await revisionService.save(
@@ -381,19 +398,18 @@ export function VisualEditorPage() {
       await publishPage(websiteId, pageId, user?.uid || "system");
 
       // 4. Broadcast publish event to iframe
-      if (iframeRef.current && targetDomain) {
+      if (iframeRef.current) {
         try {
-          const origin = new URL(targetDomain).origin;
           iframeRef.current.contentWindow.postMessage(
             {
               rcms: true,
               version: "v1",
               type: "rcms/v1/publish-page",
               websiteId,
-              payload: { slug: selectedPage?.slug || "" },
+              payload: { slug: pageSlug },
               timestamp: Date.now()
             },
-            origin
+            "*"
           );
         } catch (e) {
           console.warn(e);
