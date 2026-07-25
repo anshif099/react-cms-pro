@@ -123,4 +123,34 @@ export const editableSync = {
       return () => {};
     }
   },
+
+  /** Publish draft region values directly to published path in Firebase */
+  async publishDraftRegions(
+    apiKey: string,
+    websiteId: string,
+    pageId: string
+  ): Promise<boolean> {
+    try {
+      const db = getFirebaseDatabase(apiKey);
+      const draftRef = ref(db, paths.contentDraft(websiteId, pageId));
+      const snapshot = await get(draftRef);
+      if (!snapshot.exists()) return false;
+
+      const draftVal = snapshot.val();
+      const payload = {
+        ...(typeof draftVal === 'object' && draftVal !== null ? draftVal : {}),
+        publishedAt: Date.now(),
+      };
+
+      // Write to target pageId, home, and slug paths so client resolves it on any route
+      const keys = Array.from(new Set([pageId, 'home']));
+      await Promise.all(
+        keys.map((key) => set(ref(db, paths.contentPublished(websiteId, key)), payload))
+      );
+      return true;
+    } catch (err) {
+      console.error(`[ReactCMS SDK] Failed to publish draft regions:`, err);
+      return false;
+    }
+  },
 };

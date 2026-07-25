@@ -242,6 +242,43 @@ export function RuntimeProvider({
     });
   }, [regions, websiteId, apiKey]);
 
+  // Floating Publish state when running in preview mode
+  const [publishingLive, setPublishingLive] = useState(false);
+  const [publishedToast, setPublishedToast] = useState(false);
+
+  const handlePublishFromPreview = async () => {
+    setPublishingLive(true);
+    try {
+      const resolveCurrentPageId = (): string => {
+        if (typeof window === 'undefined') return 'home';
+        const search = window.location.search;
+        if (search) {
+          try {
+            const params = new URLSearchParams(search);
+            const q = params.get('page');
+            if (q) return q;
+          } catch { /* noop */ }
+        }
+        const rawPath = window.location.pathname.replace(/^\/+|\/+$/g, '');
+        return rawPath || 'home';
+      };
+      const currentPageId = resolveCurrentPageId();
+      await editableSync.publishDraftRegions(apiKey, websiteId, currentPageId);
+      setPublishedToast(true);
+      setTimeout(() => setPublishedToast(false), 4000);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setPublishingLive(false);
+    }
+  };
+
+  const isPreviewMode = typeof window !== 'undefined' && (
+    window.location.search.includes('rcms_preview') ||
+    window.location.search.includes('rcms_edit') ||
+    window.self !== window.top
+  );
+
   return (
     <RuntimeContext.Provider
       value={{
@@ -261,6 +298,59 @@ export function RuntimeProvider({
       >
         <CMSProvider websiteId={websiteId} apiKey={apiKey} environment="production">
           {children}
+
+          {/* Floating Publish Bar in Preview Mode */}
+          {isPreviewMode && (
+            <div
+              style={{
+                position: 'fixed',
+                bottom: '20px',
+                right: '20px',
+                zIndex: 999999,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                background: '#0f172a',
+                border: '1px solid #334155',
+                borderRadius: '12px',
+                padding: '8px 14px',
+                boxShadow: '0 20px 30px -5px rgba(0, 0, 0, 0.7)',
+                fontFamily: 'sans-serif',
+                color: '#f8fafc',
+                fontSize: '12px',
+              }}
+            >
+              {publishedToast ? (
+                <span style={{ color: '#4ade80', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  ✓ Published Live! Changes are live on your site!
+                </span>
+              ) : (
+                <>
+                  <span style={{ color: '#94a3b8', fontSize: '11px', fontWeight: 600 }}>
+                    ✏️ Visual Edit Mode
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handlePublishFromPreview}
+                    disabled={publishingLive}
+                    style={{
+                      background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
+                      color: '#ffffff',
+                      border: 'none',
+                      borderRadius: '8px',
+                      padding: '6px 14px',
+                      fontSize: '12px',
+                      fontWeight: 'bold',
+                      cursor: 'pointer',
+                      boxShadow: '0 4px 12px rgba(37, 99, 235, 0.4)',
+                    }}
+                  >
+                    {publishingLive ? 'Publishing...' : '🚀 Publish Live'}
+                  </button>
+                </>
+              )}
+            </div>
+          )}
         </CMSProvider>
       </EditableRegistryContext.Provider>
     </RuntimeContext.Provider>
