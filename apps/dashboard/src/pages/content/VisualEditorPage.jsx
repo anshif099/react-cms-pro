@@ -284,7 +284,12 @@ export function VisualEditorPage() {
     // Update active inspector element
     setSelectedElement((prev) => (prev ? { ...prev, value: newValue } : null));
 
-    // Send visual field update to preview iframe live
+    // 1. Immediately write to Firebase draft so the preview iframe's real-time
+    //    draft subscription picks it up instantly (most reliable cross-origin live preview)
+    visualEditService.persistFieldUpdate(websiteId, resolvePageSlug(), regionId, newValue)
+      .catch(() => {}); // fire-and-forget
+
+    // 2. Also send postMessage to iframe for instant update (belt + suspenders)
     if (iframeRef.current) {
       visualEditService.sendFieldUpdate(
         iframeRef.current,

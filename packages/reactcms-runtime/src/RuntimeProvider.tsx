@@ -170,6 +170,34 @@ export function RuntimeProvider({
       }
     );
 
+    // Subscribe to DRAFT region changes when running in preview/edit mode
+    // This makes inspector edits appear in real-time in the preview iframe via Firebase
+    const isPreviewMode = typeof window !== 'undefined' && (
+      window.self !== window.top ||
+      window.location.search.includes('rcms_preview') ||
+      window.location.search.includes('rcms_edit')
+    );
+
+    let unsubscribeDraft = () => {};
+    if (isPreviewMode) {
+      unsubscribeDraft = editableSync.subscribeToDraftRegions(
+        apiKey, websiteId, currentPageId,
+        (draftRegions) => {
+          Object.entries(draftRegions).forEach(([regionId, value]) => {
+            MessageBus.setStoredRegionValue(currentPageId, regionId, value);
+            MessageBus.dispatchLocal({
+              rcms: true,
+              version: 'v1',
+              type: 'rcms/v1/field-update',
+              websiteId,
+              payload: { pageId: currentPageId, regionId, value },
+              timestamp: Date.now(),
+            });
+          });
+        }
+      );
+    }
+
     // Subscribe to namespaced versioned messages
     const unsubscribeMessages = setupRuntimeMessageHandler(websiteId, {
       onThemeUpdate: (updatedTheme) => {
@@ -187,6 +215,7 @@ export function RuntimeProvider({
     return () => {
       HeartbeatService.stop();
       unsubscribePublished();
+      unsubscribeDraft();
       unsubscribeMessages();
     };
   }, [websiteId, apiKey, routes]);
