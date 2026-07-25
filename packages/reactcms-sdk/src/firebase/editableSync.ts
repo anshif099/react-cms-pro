@@ -132,21 +132,41 @@ export const editableSync = {
   ): Promise<boolean> {
     try {
       const db = getFirebaseDatabase(apiKey);
-      const draftRef = ref(db, paths.contentDraft(websiteId, pageId));
-      const snapshot = await get(draftRef);
-      if (!snapshot.exists()) return false;
+      // Fetch all page drafts under content/websiteId/sync/draft/pages
+      const allDraftsRef = ref(db, `content/${websiteId}/sync/draft/pages`);
+      const snapshot = await get(allDraftsRef);
+      if (!snapshot.exists()) {
+        // Fallback: try single pageId ref
+        const singleRef = ref(db, paths.contentDraft(websiteId, pageId));
+        const singleSnap = await get(singleRef);
+        if (!singleSnap.exists()) return false;
 
-      const draftVal = snapshot.val();
-      const payload = {
-        ...(typeof draftVal === 'object' && draftVal !== null ? draftVal : {}),
-        publishedAt: Date.now(),
-      };
+        const draftVal = singleSnap.val();
+        const payload = {
+          ...(typeof draftVal === 'object' && draftVal !== null ? draftVal : {}),
+          publishedAt: Date.now(),
+        };
+        await Promise.all([
+          set(ref(db, paths.contentPublished(websiteId, pageId)), payload),
+          set(ref(db, paths.contentPublished(websiteId, 'home')), payload),
+        ]);
+        return true;
+      }
 
-      // Write to target pageId, home, and slug paths so client resolves it on any route
-      const keys = Array.from(new Set([pageId, 'home']));
-      await Promise.all(
-        keys.map((key) => set(ref(db, paths.contentPublished(websiteId, key)), payload))
-      );
+      const pagesObj = snapshot.val() as Record<string, unknown>;
+      const promises: Promise<void>[] = [];
+
+      Object.entries(pagesObj).forEach(([pId, draftVal]) => {
+        if (!draftVal || typeof draftVal !== 'object') return;
+        const payload = {
+          ...(draftVal as Record<string, unknown>),
+          publishedAt: Date.now(),
+        };
+        promises.push(set(ref(db, paths.contentPublished(websiteId, pId)), payload));
+        promises.push(set(ref(db, paths.contentPublished(websiteId, 'home')), payload));
+      });
+
+      await Promise.all(promises);
       return true;
     } catch (err) {
       console.error(`[ReactCMS SDK] Failed to publish draft regions:`, err);

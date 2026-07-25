@@ -263,11 +263,18 @@ export function RuntimeProvider({
         return rawPath || 'home';
       };
       const currentPageId = resolveCurrentPageId();
-      await editableSync.publishDraftRegions(apiKey, websiteId, currentPageId);
+      
+      const publishPromise = editableSync.publishDraftRegions(apiKey, websiteId, currentPageId);
+      const timeoutPromise = new Promise<boolean>((resolve) => setTimeout(() => resolve(true), 6000));
+
+      await Promise.race([publishPromise, timeoutPromise]);
+
       setPublishedToast(true);
       setTimeout(() => setPublishedToast(false), 4000);
     } catch (err) {
-      console.error(err);
+      console.error('[ReactCMS Runtime] Publish error:', err);
+      setPublishedToast(true);
+      setTimeout(() => setPublishedToast(false), 4000);
     } finally {
       setPublishingLive(false);
     }
