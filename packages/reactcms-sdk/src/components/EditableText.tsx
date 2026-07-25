@@ -188,6 +188,10 @@ export function EditableText({
         userSelect: 'none',
       }}
       onMouseDown={handleMouseDown}
+      onClick={(e: React.MouseEvent) => {
+        e.stopPropagation();
+        e.preventDefault();
+      }}
       data-rcms-region={regionId}
       data-rcms-type="text"
     >

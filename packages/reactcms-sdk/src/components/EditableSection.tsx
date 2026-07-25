@@ -32,6 +32,11 @@ export function EditableSection({
 
   const handleClick = (e: React.MouseEvent) => {
     if (editMode && cms?.websiteId) {
+      // Ignore click if it originated from a child editable region inside this section
+      const target = e.target as HTMLElement;
+      if (target && target.closest('.rcms-editable-region') !== e.currentTarget) {
+        return;
+      }
       e.stopPropagation();
       MessageBus.send('rcms/v1/region-selected', cms.websiteId, {
         regionId,
