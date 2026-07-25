@@ -148,7 +148,8 @@ export function RuntimeProvider({
         const publishedRegions = await editableSync.getPublishedRegions(apiKey, websiteId, currentPageId);
         if (Object.keys(publishedRegions).length > 0) {
           Object.entries(publishedRegions).forEach(([regionId, value]) => {
-            MessageBus.send('rcms/v1/field-update', websiteId, { regionId, value });
+            MessageBus.setStoredRegionValue(currentPageId, regionId, value);
+            MessageBus.send('rcms/v1/field-update', websiteId, { pageId: currentPageId, regionId, value });
           });
         }
       } catch (err) {
@@ -163,7 +164,8 @@ export function RuntimeProvider({
       apiKey, websiteId, currentPageId,
       (publishedRegions) => {
         Object.entries(publishedRegions).forEach(([regionId, value]) => {
-          MessageBus.send('rcms/v1/field-update', websiteId, { regionId, value });
+          MessageBus.setStoredRegionValue(currentPageId, regionId, value);
+          MessageBus.send('rcms/v1/field-update', websiteId, { pageId: currentPageId, regionId, value });
         });
       }
     );

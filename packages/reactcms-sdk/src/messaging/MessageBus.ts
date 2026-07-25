@@ -5,6 +5,7 @@ type MessageListener = (message: RCMSMessage) => void;
 export class MessageBus {
   private static listeners = new Set<MessageListener>();
   private static isListening = false;
+  private static regionValuesStore = new Map<string, unknown>();
 
   public static start(websiteId: string) {
     if (this.isListening) return;
@@ -18,9 +19,37 @@ export class MessageBus {
       }
 
       if (data.websiteId === websiteId) {
+        if (data.type === 'rcms/v1/field-update' && data.payload && typeof data.payload === 'object') {
+          const p = data.payload as { pageId?: string; regionId?: string; value?: unknown };
+          if (p.regionId && p.value !== undefined) {
+            MessageBus.setStoredRegionValue(p.pageId || 'global', p.regionId, p.value);
+          }
+        }
         this.listeners.forEach((listener) => listener(data as RCMSMessage));
       }
     });
+  }
+
+  public static setStoredRegionValue(pageId: string, regionId: string, value: unknown) {
+    this.regionValuesStore.set(`${pageId}:${regionId}`, value);
+    this.regionValuesStore.set(regionId, value);
+  }
+
+  public static getStoredRegionValue(pageId: string, regionId: string): unknown | undefined {
+    if (this.regionValuesStore.has(`${pageId}:${regionId}`)) {
+      return this.regionValuesStore.get(`${pageId}:${regionId}`);
+    }
+    return this.regionValuesStore.get(regionId);
+  }
+
+  public static dispatchLocal(message: RCMSMessage) {
+    if (message.type === 'rcms/v1/field-update' && message.payload && typeof message.payload === 'object') {
+      const p = message.payload as { pageId?: string; regionId?: string; value?: unknown };
+      if (p.regionId && p.value !== undefined) {
+        this.setStoredRegionValue(p.pageId || 'global', p.regionId, p.value);
+      }
+    }
+    this.listeners.forEach((listener) => listener(message));
   }
 
   public static send<T>(type: string, websiteId: string, payload: T) {
@@ -33,8 +62,19 @@ export class MessageBus {
       timestamp: Date.now(),
     };
     
+    // Store region value if this is a field update
+    if (type === 'rcms/v1/field-update' && payload && typeof payload === 'object') {
+      const p = payload as { pageId?: string; regionId?: string; value?: unknown };
+      if (p.regionId && p.value !== undefined) {
+        this.setStoredRegionValue(p.pageId || 'global', p.regionId, p.value);
+      }
+    }
+
+    // Notify in-window subscribers
+    this.listeners.forEach((listener) => listener(message as RCMSMessage));
+
     // Send to parent iframe (visual editing mode)
-    if (window.parent && window.parent !== window) {
+    if (typeof window !== 'undefined' && window.parent && window.parent !== window) {
       window.parent.postMessage(message, '*');
     }
   }
@@ -52,3 +92,4 @@ export class MessageBus {
     return msg.rcms === true && msg.version === 'v1' && typeof msg.type === 'string' && typeof msg.websiteId === 'string';
   }
 }
+

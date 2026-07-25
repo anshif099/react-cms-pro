@@ -1,16 +1,22 @@
 import { database } from "../lib/firebase";
-import { ref, set, remove } from "firebase/database";
+import { ref, set, get, remove } from "firebase/database";
 import { paths, encodeFirebaseObject } from "@anshif.rainhopes/shared";
 
 export const contentSyncService = {
   /**
    * Publish page regions to the live published path.
    * Uses paths.contentPublished so the SDK can read them on page load.
-   * @param {string} websiteId
-   * @param {string} pageSlug - URL slug / route key (e.g. "home", "about") — must match what the SDK resolves from the URL
-   * @param {object} data - { id, regions, publishedAt }
+   * Supports both (websiteId, pageSlug, data) and legacy (websiteId, type, pageSlug, data).
    */
-  async syncPublished(websiteId, pageSlug, data) {
+  async syncPublished(websiteId, pageSlugOrType, dataOrPageSlug, optionalData) {
+    let pageSlug = pageSlugOrType;
+    let data = dataOrPageSlug;
+
+    if (optionalData !== undefined) {
+      pageSlug = dataOrPageSlug;
+      data = optionalData;
+    }
+
     try {
       const contentRef = ref(database, paths.contentPublished(websiteId, pageSlug));
       const safeData = encodeFirebaseObject(data);
@@ -25,11 +31,17 @@ export const contentSyncService = {
   /**
    * Save draft page regions.
    * Uses paths.contentDraft so the SDK can read them in preview/edit mode.
-   * @param {string} websiteId
-   * @param {string} pageSlug - URL slug / route key (e.g. "home", "about")
-   * @param {object} data - { id, regions, updatedAt }
+   * Supports both (websiteId, pageSlug, data) and legacy (websiteId, type, pageSlug, data).
    */
-  async syncDraft(websiteId, pageSlug, data) {
+  async syncDraft(websiteId, pageSlugOrType, dataOrPageSlug, optionalData) {
+    let pageSlug = pageSlugOrType;
+    let data = dataOrPageSlug;
+
+    if (optionalData !== undefined) {
+      pageSlug = dataOrPageSlug;
+      data = optionalData;
+    }
+
     try {
       const contentRef = ref(database, paths.contentDraft(websiteId, pageSlug));
       const safeData = encodeFirebaseObject(data);
@@ -42,9 +54,44 @@ export const contentSyncService = {
   },
 
   /**
+   * Fetch published page regions for a website & page slug.
+   */
+  async getPublished(websiteId, pageSlug) {
+    try {
+      const contentRef = ref(database, paths.contentPublished(websiteId, pageSlug));
+      const snapshot = await get(contentRef);
+      if (snapshot.exists()) {
+        return snapshot.val();
+      }
+      return null;
+    } catch (error) {
+      console.error(`Failed to fetch published content for page "${pageSlug}":`, error);
+      return null;
+    }
+  },
+
+  /**
+   * Fetch draft page regions for a website & page slug.
+   */
+  async getDraft(websiteId, pageSlug) {
+    try {
+      const contentRef = ref(database, paths.contentDraft(websiteId, pageSlug));
+      const snapshot = await get(contentRef);
+      if (snapshot.exists()) {
+        return snapshot.val();
+      }
+      return null;
+    } catch (error) {
+      console.error(`Failed to fetch draft content for page "${pageSlug}":`, error);
+      return null;
+    }
+  },
+
+  /**
    * Remove published + draft content for a page.
    */
-  async unsync(websiteId, pageSlug) {
+  async unsync(websiteId, pageSlugOrType, optionalPageSlug) {
+    const pageSlug = optionalPageSlug !== undefined ? optionalPageSlug : pageSlugOrType;
     try {
       const publishedRef = ref(database, paths.contentPublished(websiteId, pageSlug));
       const draftRef = ref(database, paths.contentDraft(websiteId, pageSlug));
@@ -59,3 +106,4 @@ export const contentSyncService = {
 };
 
 export default contentSyncService;
+

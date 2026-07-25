@@ -50,12 +50,21 @@ export function useEditable<T>(
 
   const pageId = resolvePageId(page);
 
-  const [value, setLocalValue] = useState<T>(defaultValue);
+  // Initialize from stored region value if available (hydrated from Firebase published/draft path)
+  const storedInitial = MessageBus.getStoredRegionValue(pageId, regionId) as T;
+  const [value, setLocalValue] = useState<T>(
+    storedInitial !== undefined ? storedInitial : defaultValue
+  );
 
-  // Register region with Runtime Context on mount
+  // Register region with Runtime Context on mount & check for stored value updates
   useEffect(() => {
     if (pageId === 'global') {
       console.warn(`[ReactCMS SDK] Warning: Region "${regionId}" registered under fallback "global" because no page context was resolved.`);
+    }
+
+    const currentStored = MessageBus.getStoredRegionValue(pageId, regionId) as T;
+    if (currentStored !== undefined && currentStored !== value) {
+      setLocalValue(currentStored);
     }
 
     if (registry) {
@@ -69,10 +78,8 @@ export function useEditable<T>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [registry, pageId, regionId, type, label]);
 
-  // Subscribe to live preview updates for this region
+  // Subscribe to live preview and published region updates for this region
   useEffect(() => {
-    if (!cms?.websiteId) return;
-
     const unsubscribe = MessageBus.subscribe((msg) => {
       if (msg.type === 'rcms/v1/field-update') {
         const payload = msg.payload as { regionId: string; value: unknown };
@@ -85,14 +92,16 @@ export function useEditable<T>(
     return () => {
       unsubscribe();
     };
-  }, [cms?.websiteId, regionId]);
+  }, [regionId]);
 
   const setValue = (newValue: T) => {
     setLocalValue(newValue);
+    MessageBus.setStoredRegionValue(pageId, regionId, newValue);
 
     if (cms?.websiteId) {
-      // Broadcast update to parent dashboard
+      // Broadcast update to parent dashboard & local listeners
       MessageBus.send('rcms/v1/field-update', cms.websiteId, {
+        pageId,
         regionId,
         value: newValue,
       });

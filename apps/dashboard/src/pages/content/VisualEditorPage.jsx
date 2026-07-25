@@ -107,6 +107,32 @@ export function VisualEditorPage() {
     }
   }, [selectedPage, activeLocale]);
 
+  // Pre-populate draftValues from Firebase draft / published region content on mount
+  useEffect(() => {
+    if (!websiteId || !selectedPage) return;
+    const pageSlug = resolvePageSlug();
+
+    const loadInitialRegions = async () => {
+      try {
+        const draftData = await contentSyncService.getDraft(websiteId, pageSlug);
+        const publishedData = await contentSyncService.getPublished(websiteId, pageSlug);
+
+        const initialRegions = {
+          ...(publishedData?.regions || {}),
+          ...(draftData?.regions || {})
+        };
+
+        if (Object.keys(initialRegions).length > 0) {
+          setDraftValues((prev) => ({ ...initialRegions, ...prev }));
+        }
+      } catch (err) {
+        console.warn("Failed to load initial page regions:", err);
+      }
+    };
+
+    loadInitialRegions();
+  }, [websiteId, selectedPage?.id]);
+
   // Save Page Settings handler
   const handleSavePageSettings = async () => {
     try {
@@ -219,9 +245,15 @@ export function VisualEditorPage() {
       setSaveStatus("saving");
       try {
         const pageSlug = resolvePageSlug();
+        const existingDraft = await contentSyncService.getDraft(websiteId, pageSlug);
+        const mergedValues = {
+          ...(existingDraft?.regions || {}),
+          ...updatedValues
+        };
+
         await contentSyncService.syncDraft(websiteId, pageSlug, {
           id: pageSlug,
-          regions: updatedValues,
+          regions: mergedValues,
           updatedAt: Date.now()
         });
         setHasUnsavedChanges(false);
@@ -286,9 +318,15 @@ export function VisualEditorPage() {
     setSaveStatus("saving");
     try {
       const pageSlug = resolvePageSlug();
+      const existingDraft = await contentSyncService.getDraft(websiteId, pageSlug);
+      const mergedValues = {
+        ...(existingDraft?.regions || {}),
+        ...draftValues
+      };
+
       await contentSyncService.syncDraft(websiteId, pageSlug, {
         id: pageSlug,
-        regions: draftValues,
+        regions: mergedValues,
         updatedAt: Date.now()
       });
       await updatePage(websiteId, pageId, activeLocale, {
@@ -310,10 +348,19 @@ export function VisualEditorPage() {
     setPublishing(true);
     try {
       const pageSlug = resolvePageSlug();
+      const existingDraft = await contentSyncService.getDraft(websiteId, pageSlug);
+      const existingPublished = await contentSyncService.getPublished(websiteId, pageSlug);
+
+      const combinedRegions = {
+        ...(existingPublished?.regions || {}),
+        ...(existingDraft?.regions || {}),
+        ...draftValues
+      };
+
       // 1. Sync draft values to published path (keyed by slug so the SDK can find it from the URL)
       await contentSyncService.syncPublished(websiteId, pageSlug, {
         id: pageSlug,
-        regions: draftValues,
+        regions: combinedRegions,
         publishedAt: Date.now()
       });
 
@@ -324,7 +371,7 @@ export function VisualEditorPage() {
         pageId,
         {
           id: pageId,
-          regions: draftValues,
+          regions: combinedRegions,
           title: selectedPage?.title || "Page"
         },
         user?.uid || "system"
