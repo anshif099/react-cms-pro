@@ -37,12 +37,21 @@ export const visualEditService = {
   sendFieldUpdate(iframe, targetDomain, websiteId, regionId, fieldKey, value) {
     if (!iframe) return;
     try {
+      // Payload must match { regionId, value } as expected by MessageBus field-update handler
       const msg = createMessage(EVENT_TYPES["field-update"], websiteId, {
         regionId,
-        fieldKey,
         value
       });
-      iframe.contentWindow.postMessage(msg, "*");
+      // Try exact origin first, fall back to wildcard for cross-origin iframes
+      let targetOrigin = "*";
+      try {
+        if (targetDomain) targetOrigin = new URL(targetDomain).origin;
+      } catch { /* keep wildcard */ }
+      iframe.contentWindow.postMessage(msg, targetOrigin);
+      // Also attempt wildcard in case origin mismatch
+      if (targetOrigin !== "*") {
+        try { iframe.contentWindow.postMessage(msg, "*"); } catch { /* ignore */ }
+      }
     } catch (err) {
       console.warn("Failed to dispatch visual field update message to frame:", err);
     }

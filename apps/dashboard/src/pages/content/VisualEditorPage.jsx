@@ -800,6 +800,10 @@ export function VisualEditorPage() {
             selectedElement={selectedElement}
             onChangeRegion={handleRegionValueChange}
             activePageId={pageId}
+            onSwitchDevice={(bp) => {
+              const deviceMap = { mobile: "mobile", tablet: "tablet", desktop: "desktop" };
+              setActiveDevice(deviceMap[bp] || "full");
+            }}
           />
         </div>
       </div>

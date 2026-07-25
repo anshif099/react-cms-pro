@@ -37,7 +37,18 @@ export function EditableText({
     if (value.fontSize) textStyle.fontSize = value.fontSize;
     if (value.fontWeight) textStyle.fontWeight = value.fontWeight;
     if (value.color) textStyle.color = value.color;
-    if (value.align) textStyle.textAlign = value.align;
+
+    // Responsive alignment: pick breakpoint-specific value based on viewport width
+    const vw = typeof window !== 'undefined' ? window.innerWidth : 1280;
+    let resolvedAlign: string | undefined;
+    if (vw < 768 && value.alignMobile) {
+      resolvedAlign = value.alignMobile;
+    } else if (vw < 1024 && value.alignTablet) {
+      resolvedAlign = value.alignTablet;
+    } else if (value.align) {
+      resolvedAlign = value.align;
+    }
+    if (resolvedAlign) textStyle.textAlign = resolvedAlign as React.CSSProperties['textAlign'];
   }
 
   const handleClick = (e: React.MouseEvent) => {

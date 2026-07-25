@@ -1,13 +1,20 @@
-import React from "react";
-import { MousePointerClick, ChevronRight, Sliders, Layers, Type, Image as ImageIcon, Video, Repeat, Box, FileText } from "lucide-react";
+import React, { useState } from "react";
+import { MousePointerClick, ChevronRight, Sliders, Layers, Type, Image as ImageIcon, Video, Repeat, Box, FileText, Smartphone, Tablet, Monitor, AlignLeft, AlignCenter, AlignRight, AlignJustify } from "lucide-react";
 import Input from "../ui/Input";
 import ImagePicker from "../ui/ImagePicker";
 
 export function RegionInspectorPanel({
   selectedElement,
   onChangeRegion = () => {},
-  activePageId = "global"
+  activePageId = "global",
+  onSwitchDevice = null
 }) {
+  const [alignBreakpoint, setAlignBreakpoint] = useState("desktop");
+
+  const handleBreakpointTab = (bp) => {
+    setAlignBreakpoint(bp);
+    if (onSwitchDevice) onSwitchDevice(bp);
+  };
   if (!selectedElement || !selectedElement.regionId) {
     return (
       <div className="h-full flex flex-col items-center justify-center p-6 text-center select-none text-slate-500 max-w-sm mx-auto">
@@ -131,41 +138,82 @@ export function RegionInspectorPanel({
                 </div>
               </div>
 
-              {/* Text Color & Alignment */}
-              <div className="grid grid-cols-2 gap-2 pt-1">
-                <div className="flex flex-col gap-1 text-left">
-                  <label className="text-[10px] font-semibold text-slate-400 uppercase">Text Color</label>
-                  <div className="flex items-center gap-1.5">
-                    <input
-                      type="color"
-                      value={activeColor}
-                      onChange={(e) => updateProp("color", e.target.value)}
-                      className="w-7 h-7 rounded border border-slate-700 bg-transparent cursor-pointer"
-                    />
-                    <input
-                      type="text"
-                      value={textObj.color || ""}
-                      onChange={(e) => updateProp("color", e.target.value)}
-                      placeholder={computedStyle.color ? `Auto: ${computedStyle.color}` : "Default (CSS)"}
-                      className="w-full text-[11px] font-mono py-1 px-2 rounded border border-slate-750 bg-slate-850 text-slate-200 outline-none placeholder:text-slate-500"
-                    />
+              {/* Text Color */}
+              <div className="flex flex-col gap-1 text-left">
+                <label className="text-[10px] font-semibold text-slate-400 uppercase">Text Color</label>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="color"
+                    value={activeColor}
+                    onChange={(e) => updateProp("color", e.target.value)}
+                    className="w-7 h-7 rounded border border-slate-700 bg-transparent cursor-pointer"
+                  />
+                  <input
+                    type="text"
+                    value={textObj.color || ""}
+                    onChange={(e) => updateProp("color", e.target.value)}
+                    placeholder={computedStyle.color ? `Auto: ${computedStyle.color}` : "Default (CSS)"}
+                    className="w-full text-[11px] font-mono py-1 px-2 rounded border border-slate-750 bg-slate-850 text-slate-200 outline-none placeholder:text-slate-500"
+                  />
+                </div>
+              </div>
+
+              {/* Per-Breakpoint Alignment */}
+              <div className="flex flex-col gap-2 pt-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-semibold text-slate-400 uppercase">Alignment</label>
+                  {/* Breakpoint Tabs */}
+                  <div className="flex items-center gap-0.5 bg-slate-950 p-0.5 rounded-lg border border-slate-800">
+                    {[
+                      { id: "mobile",  Icon: Smartphone, label: "Mobile  (<768px)",  propKey: "alignMobile" },
+                      { id: "tablet",  Icon: Tablet,     label: "Tablet  (768–1024px)", propKey: "alignTablet" },
+                      { id: "desktop", Icon: Monitor,    label: "Desktop (>1024px)", propKey: "align" },
+                    ].map(({ id, Icon, label: tip }) => (
+                      <button
+                        key={id}
+                        title={tip}
+                        onClick={() => handleBreakpointTab(id)}
+                        className={`p-1 rounded cursor-pointer transition-colors ${
+                          alignBreakpoint === id
+                            ? "bg-primary text-white"
+                            : "text-slate-500 hover:text-slate-200"
+                        }`}
+                      >
+                        <Icon className="w-3 h-3" />
+                      </button>
+                    ))}
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-1 text-left">
-                  <label className="text-[10px] font-semibold text-slate-400 uppercase">Alignment</label>
-                  <select
-                    value={textObj.align || ""}
-                    onChange={(e) => updateProp("align", e.target.value)}
-                    className="w-full text-xs py-1.5 px-2 rounded-lg border border-slate-750 bg-slate-850 text-slate-200 outline-none focus:border-primary"
-                  >
-                    <option value="">Default {computedStyle.align ? `(${computedStyle.align})` : "(CSS)"}</option>
-                    <option value="left">Left</option>
-                    <option value="center">Center</option>
-                    <option value="right">Right</option>
-                    <option value="justify">Justify</option>
-                  </select>
-                </div>
+                {/* Alignment Buttons for active breakpoint */}
+                {[{ id: "mobile", propKey: "alignMobile" }, { id: "tablet", propKey: "alignTablet" }, { id: "desktop", propKey: "align" }]
+                  .filter(({ id }) => id === alignBreakpoint)
+                  .map(({ propKey }) => {
+                    const currentAlign = textObj[propKey] || "";
+                    return (
+                      <div key={propKey} className="flex gap-1">
+                        {[
+                          { val: "left",    Icon: AlignLeft,    tip: "Left" },
+                          { val: "center",  Icon: AlignCenter,  tip: "Center" },
+                          { val: "right",   Icon: AlignRight,   tip: "Right" },
+                          { val: "justify", Icon: AlignJustify, tip: "Justify" },
+                        ].map(({ val, Icon, tip }) => (
+                          <button
+                            key={val}
+                            title={tip}
+                            onClick={() => updateProp(propKey, currentAlign === val ? "" : val)}
+                            className={`flex-1 flex items-center justify-center py-1.5 rounded-lg border cursor-pointer transition-all ${
+                              currentAlign === val
+                                ? "bg-primary border-primary text-white"
+                                : "border-slate-750 bg-slate-850 text-slate-400 hover:text-white hover:border-slate-600"
+                            }`}
+                          >
+                            <Icon className="w-3.5 h-3.5" />
+                          </button>
+                        ))}
+                      </div>
+                    );
+                  })}
               </div>
             </div>
           </div>

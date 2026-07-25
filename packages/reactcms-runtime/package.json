@@ -1,6 +1,6 @@
 {
   "name": "@anshif.rainhopes/reactcms-runtime",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "@anshif.rainhopes/shared": "^1.0.4",
-    "@anshif.rainhopes/reactcms-sdk": "^1.0.16",
+    "@anshif.rainhopes/reactcms-sdk": "^1.0.17",
     "firebase": "^10.8.0"
   },
   "peerDependencies": {
