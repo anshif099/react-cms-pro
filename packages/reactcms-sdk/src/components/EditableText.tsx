@@ -34,6 +34,11 @@ export function EditableText({
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const dragStartRef = useRef<{ startX: number; startY: number; initX: number; initY: number } | null>(null);
 
+  // Resizing state for corner handle
+  const [isResizing, setIsResizing] = useState(false);
+  const [resizeWidth, setResizeWidth] = useState<number | null>(null);
+  const resizeStartRef = useRef<{ startX: number; startWidth: number } | null>(null);
+
   const isRich = typeof value === 'object' && value !== null;
   const displayValue = isRich ? (value.text !== undefined ? value.text : '') : value;
   
@@ -42,6 +47,8 @@ export function EditableText({
     if (value.fontSize) textStyle.fontSize = value.fontSize;
     if (value.fontWeight) textStyle.fontWeight = value.fontWeight;
     if (value.color) textStyle.color = value.color;
+    if (value.width) textStyle.width = value.width;
+    if (value.maxWidth) textStyle.maxWidth = value.maxWidth;
 
     // Responsive alignment: pick breakpoint-specific value based on viewport width
     const vw = typeof window !== 'undefined' ? window.innerWidth : 1280;
@@ -64,6 +71,12 @@ export function EditableText({
     textStyle.transform = `translate(${dragOffset.x}px, ${dragOffset.y}px)`;
   }
 
+  if (resizeWidth) {
+    textStyle.width = `${resizeWidth}px`;
+    textStyle.maxWidth = '100%';
+    textStyle.display = 'inline-block';
+  }
+
   const handleUpdateAlign = (newAlign: string) => {
     const vw = typeof window !== 'undefined' ? window.innerWidth : 1280;
     let alignKey = 'align';
@@ -79,8 +92,51 @@ export function EditableText({
     const baseObj = isRich ? { ...value } : { text: displayValue };
     delete baseObj.offsetX;
     delete baseObj.offsetY;
+    delete baseObj.width;
     setDragOffset({ x: 0, y: 0 });
+    setResizeWidth(null);
     setValue(baseObj);
+  };
+
+  const handleResizeMouseDown = (e: React.MouseEvent) => {
+    if (!editMode) return;
+    e.stopPropagation();
+    e.preventDefault();
+    setIsResizing(true);
+
+    const targetEl = e.currentTarget.parentElement as HTMLElement;
+    const startWidth = targetEl ? targetEl.getBoundingClientRect().width : 300;
+
+    resizeStartRef.current = {
+      startX: e.clientX,
+      startWidth,
+    };
+
+    const handleMouseMove = (moveEv: MouseEvent) => {
+      if (!resizeStartRef.current) return;
+      const dx = moveEv.clientX - resizeStartRef.current.startX;
+      const newWidth = Math.max(120, Math.round(resizeStartRef.current.startWidth + dx));
+      setResizeWidth(newWidth);
+    };
+
+    const handleMouseUp = (upEv: MouseEvent) => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+
+      if (resizeStartRef.current) {
+        const dx = upEv.clientX - resizeStartRef.current.startX;
+        const finalWidth = Math.max(120, Math.round(resizeStartRef.current.startWidth + dx));
+        const baseObj = isRich ? { ...value } : { text: displayValue };
+        baseObj.width = `${finalWidth}px`;
+        setValue(baseObj);
+      }
+
+      setIsResizing(false);
+      resizeStartRef.current = null;
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -308,6 +364,31 @@ export function EditableText({
             ✕
           </button>
         </span>
+      )}
+
+      {/* Bottom-Right Corner Handle to resize text area width */}
+      {editMode && (
+        <span
+          title="Drag handle to resize text area width"
+          style={{
+            position: 'absolute',
+            bottom: '-6px',
+            right: '-6px',
+            width: '12px',
+            height: '12px',
+            background: isResizing ? '#2563eb' : '#3b82f6',
+            border: '2px solid #ffffff',
+            borderRadius: '3px',
+            cursor: 'se-resize',
+            zIndex: 99999,
+            boxShadow: '0 2px 6px rgba(0, 0, 0, 0.4)',
+          }}
+          onMouseDown={handleResizeMouseDown}
+          onClick={(e: React.MouseEvent) => {
+            e.stopPropagation();
+            e.preventDefault();
+          }}
+        />
       )}
     </Component>
   );
