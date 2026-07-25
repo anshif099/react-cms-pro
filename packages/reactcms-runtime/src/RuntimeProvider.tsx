@@ -299,57 +299,72 @@ export function RuntimeProvider({
         <CMSProvider websiteId={websiteId} apiKey={apiKey} environment="production">
           {children}
 
-          {/* Floating Publish Bar in Preview Mode */}
+          {/* Top Admin Header Bar in Preview Mode */}
           {isPreviewMode && (
-            <div
-              style={{
-                position: 'fixed',
-                bottom: '20px',
-                right: '20px',
-                zIndex: 999999,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                background: '#0f172a',
-                border: '1px solid #334155',
-                borderRadius: '12px',
-                padding: '8px 14px',
-                boxShadow: '0 20px 30px -5px rgba(0, 0, 0, 0.7)',
-                fontFamily: 'sans-serif',
-                color: '#f8fafc',
-                fontSize: '12px',
-              }}
-            >
-              {publishedToast ? (
-                <span style={{ color: '#4ade80', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  ✓ Published Live! Changes are live on your site!
-                </span>
-              ) : (
-                <>
-                  <span style={{ color: '#94a3b8', fontSize: '11px', fontWeight: 600 }}>
-                    ✏️ Visual Edit Mode
+            <>
+              <div
+                style={{
+                  position: 'fixed',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: '42px',
+                  zIndex: 9999999,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  background: '#090d16',
+                  borderBottom: '1px solid #1e293b',
+                  padding: '0 20px',
+                  boxSizing: 'border-box',
+                  fontFamily: 'sans-serif',
+                  color: '#f8fafc',
+                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.4)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#1e293b', padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 600, color: '#38bdf8' }}>
+                    <span>✏️</span> ReactCMS Visual Editor
                   </span>
-                  <button
-                    type="button"
-                    onClick={handlePublishFromPreview}
-                    disabled={publishingLive}
-                    style={{
-                      background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
-                      color: '#ffffff',
-                      border: 'none',
-                      borderRadius: '8px',
-                      padding: '6px 14px',
-                      fontSize: '12px',
-                      fontWeight: 'bold',
-                      cursor: 'pointer',
-                      boxShadow: '0 4px 12px rgba(37, 99, 235, 0.4)',
-                    }}
-                  >
-                    {publishingLive ? 'Publishing...' : '🚀 Publish Live'}
-                  </button>
-                </>
-              )}
-            </div>
+                  <span style={{ fontSize: '11px', color: '#64748b' }}>
+                    Draft auto-saves in real-time
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  {publishedToast ? (
+                    <span style={{ color: '#4ade80', fontWeight: 'bold', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      ✓ Published Live! Changes are live on your site!
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handlePublishFromPreview}
+                      disabled={publishingLive}
+                      style={{
+                        background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
+                        color: '#ffffff',
+                        border: 'none',
+                        borderRadius: '6px',
+                        padding: '6px 16px',
+                        fontSize: '12px',
+                        fontWeight: 'bold',
+                        cursor: 'pointer',
+                        boxShadow: '0 2px 8px rgba(37, 99, 235, 0.4)',
+                        transition: 'all 0.2s ease',
+                      }}
+                    >
+                      {publishingLive ? 'Publishing...' : '🚀 Publish Live'}
+                    </button>
+                  )}
+                </div>
+              </div>
+              <style>{`
+                body {
+                  margin-top: 42px !important;
+                }
+              `}</style>
+            </>
           )}
         </CMSProvider>
       </EditableRegistryContext.Provider>
