@@ -2,10 +2,36 @@ import { RCMSMessage } from '@anshif.rainhopes/shared';
 
 type MessageListener = (message: RCMSMessage) => void;
 
+function getGlobalStore(): Map<string, unknown> {
+  if (typeof window !== 'undefined') {
+    if (!(window as any).__RCMS_REGION_STORE__) {
+      (window as any).__RCMS_REGION_STORE__ = new Map<string, unknown>();
+    }
+    return (window as any).__RCMS_REGION_STORE__;
+  }
+  return new Map<string, unknown>();
+}
+
+function getGlobalListeners(): Set<MessageListener> {
+  if (typeof window !== 'undefined') {
+    if (!(window as any).__RCMS_LISTENERS__) {
+      (window as any).__RCMS_LISTENERS__ = new Set<MessageListener>();
+    }
+    return (window as any).__RCMS_LISTENERS__;
+  }
+  return new Set<MessageListener>();
+}
+
 export class MessageBus {
-  private static listeners = new Set<MessageListener>();
+  private static get listeners(): Set<MessageListener> {
+    return getGlobalListeners();
+  }
+
+  private static get regionValuesStore(): Map<string, unknown> {
+    return getGlobalStore();
+  }
+
   private static isListening = false;
-  private static regionValuesStore = new Map<string, unknown>();
 
   public static start(websiteId: string) {
     if (this.isListening) return;
