@@ -139,6 +139,141 @@ export function EditableText({
     window.addEventListener('mouseup', handleMouseUp);
   };
 
+  const handleTouchResizeStart = (e: React.TouchEvent) => {
+    if (!editMode) return;
+    e.stopPropagation();
+    const touch = e.touches[0];
+    if (!touch) return;
+    setIsResizing(true);
+
+    const targetEl = e.currentTarget.parentElement as HTMLElement;
+    const startWidth = targetEl ? targetEl.getBoundingClientRect().width : 300;
+
+    resizeStartRef.current = {
+      startX: touch.clientX,
+      startWidth,
+    };
+
+    const handleTouchMove = (moveEv: TouchEvent) => {
+      if (!resizeStartRef.current || !moveEv.touches[0]) return;
+      const t = moveEv.touches[0];
+      const dx = t.clientX - resizeStartRef.current.startX;
+      const newWidth = Math.max(120, Math.round(resizeStartRef.current.startWidth + dx));
+      setResizeWidth(newWidth);
+    };
+
+    const handleTouchEnd = (endEv: TouchEvent) => {
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchend', handleTouchEnd);
+
+      if (resizeStartRef.current) {
+        const lastTouch = endEv.changedTouches[0];
+        if (lastTouch) {
+          const dx = lastTouch.clientX - resizeStartRef.current.startX;
+          const finalWidth = Math.max(120, Math.round(resizeStartRef.current.startWidth + dx));
+          const baseObj = isRich ? { ...value } : { text: displayValue };
+          baseObj.width = `${finalWidth}px`;
+          setValue(baseObj);
+        }
+      }
+
+      setIsResizing(false);
+      resizeStartRef.current = null;
+    };
+
+    window.addEventListener('touchmove', handleTouchMove);
+    window.addEventListener('touchend', handleTouchEnd);
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (!editMode) return;
+    e.stopPropagation();
+    setIsSelected(true);
+
+    const touch = e.touches[0];
+    if (!touch) return;
+
+    if (cms?.websiteId) {
+      const computedStyle = getElementComputedStyle(e.currentTarget as HTMLElement);
+      MessageBus.send('rcms/v1/region-selected', cms.websiteId, {
+        regionId,
+        type: 'text',
+        pageId,
+        value,
+        computedStyle,
+      });
+      MessageBus.send('rcms/v1/open-inspector', cms.websiteId, {
+        regionId,
+        type: 'text',
+        pageId,
+      });
+    }
+
+    const initX = (isRich ? value.offsetX : 0) || 0;
+    const initY = (isRich ? value.offsetY : 0) || 0;
+
+    dragStartRef.current = {
+      startX: touch.clientX,
+      startY: touch.clientY,
+      initX,
+      initY,
+    };
+
+    const handleTouchMove = (moveEv: TouchEvent) => {
+      if (!dragStartRef.current || !moveEv.touches[0]) return;
+      const t = moveEv.touches[0];
+      const dx = t.clientX - dragStartRef.current.startX;
+      const dy = t.clientY - dragStartRef.current.startY;
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+        setIsDragging(true);
+        setDragOffset({
+          x: dragStartRef.current.initX + dx,
+          y: dragStartRef.current.initY + dy,
+        });
+      }
+    };
+
+    const handleTouchEnd = (endEv: TouchEvent) => {
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchend', handleTouchEnd);
+
+      if (dragStartRef.current) {
+        const lastTouch = endEv.changedTouches[0];
+        if (lastTouch) {
+          const dx = lastTouch.clientX - dragStartRef.current.startX;
+          const dy = lastTouch.clientY - dragStartRef.current.startY;
+
+          if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+            const finalX = dragStartRef.current.initX + dx;
+            const finalY = dragStartRef.current.initY + dy;
+
+            const vw = typeof window !== 'undefined' ? window.innerWidth : 1280;
+            let alignKey = 'align';
+            if (vw < 768) alignKey = 'alignMobile';
+            else if (vw < 1024) alignKey = 'alignTablet';
+
+            let newAlign = (isRich ? value[alignKey] : undefined) || 'left';
+            if (dx < -40) newAlign = 'left';
+            else if (dx > 40) newAlign = 'right';
+
+            const baseObj = isRich ? { ...value } : { text: displayValue };
+            baseObj[alignKey] = newAlign;
+            baseObj.offsetX = finalX;
+            baseObj.offsetY = finalY;
+
+            setValue(baseObj);
+          }
+        }
+      }
+
+      setIsDragging(false);
+      dragStartRef.current = null;
+    };
+
+    window.addEventListener('touchmove', handleTouchMove);
+    window.addEventListener('touchend', handleTouchEnd);
+  };
+
   const handleMouseDown = (e: React.MouseEvent) => {
     if (!editMode) return;
     e.stopPropagation();
@@ -244,6 +379,7 @@ export function EditableText({
         userSelect: 'none',
       }}
       onMouseDown={handleMouseDown}
+      onTouchStart={handleTouchStart}
       onClick={(e: React.MouseEvent) => {
         e.stopPropagation();
         e.preventDefault();
@@ -384,6 +520,7 @@ export function EditableText({
             boxShadow: '0 2px 6px rgba(0, 0, 0, 0.4)',
           }}
           onMouseDown={handleResizeMouseDown}
+          onTouchStart={handleTouchResizeStart}
           onClick={(e: React.MouseEvent) => {
             e.stopPropagation();
             e.preventDefault();
