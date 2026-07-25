@@ -15,48 +15,44 @@ function createMessage(type, websiteId, payload) {
 
 export const visualEditService = {
   enableEditMode(iframe, targetDomain, websiteId) {
-    if (!iframe || !targetDomain) return;
+    if (!iframe) return;
     try {
-      const origin = new URL(targetDomain).origin;
       const msg = createMessage(EVENT_TYPES["enter-edit-mode"], websiteId, {});
-      iframe.contentWindow.postMessage(msg, origin);
+      iframe.contentWindow.postMessage(msg, "*");
     } catch (err) {
       console.warn("Failed to enable Visual Edit Mode in frame:", err);
     }
   },
 
   disableEditMode(iframe, targetDomain, websiteId) {
-    if (!iframe || !targetDomain) return;
+    if (!iframe) return;
     try {
-      const origin = new URL(targetDomain).origin;
       const msg = createMessage(EVENT_TYPES["exit-edit-mode"], websiteId, {});
-      iframe.contentWindow.postMessage(msg, origin);
+      iframe.contentWindow.postMessage(msg, "*");
     } catch (err) {
       console.warn("Failed to disable Visual Edit Mode in frame:", err);
     }
   },
 
   sendFieldUpdate(iframe, targetDomain, websiteId, regionId, fieldKey, value) {
-    if (!iframe || !targetDomain) return;
+    if (!iframe) return;
     try {
-      const origin = new URL(targetDomain).origin;
       const msg = createMessage(EVENT_TYPES["field-update"], websiteId, {
         regionId,
         fieldKey,
         value
       });
-      iframe.contentWindow.postMessage(msg, origin);
+      iframe.contentWindow.postMessage(msg, "*");
     } catch (err) {
       console.warn("Failed to dispatch visual field update message to frame:", err);
     }
   },
 
   sendThemeUpdate(iframe, targetDomain, websiteId, themeTokens) {
-    if (!iframe || !targetDomain) return;
+    if (!iframe) return;
     try {
-      const origin = new URL(targetDomain).origin;
       const msg = createMessage(EVENT_TYPES["theme-update"], websiteId, themeTokens);
-      iframe.contentWindow.postMessage(msg, origin);
+      iframe.contentWindow.postMessage(msg, "*");
     } catch (err) {
       console.warn("Failed to dispatch live theme update to preview frame:", err);
     }

@@ -18,7 +18,7 @@ export class MessageBus {
         return;
       }
 
-      if (data.websiteId === websiteId) {
+      if (!data.websiteId || data.websiteId === websiteId) {
         if (data.type === 'rcms/v1/field-update' && data.payload && typeof data.payload === 'object') {
           const p = data.payload as { pageId?: string; regionId?: string; value?: unknown };
           if (p.regionId && p.value !== undefined) {
