@@ -44,14 +44,39 @@ export function EditableText({
   
   const textStyle: React.CSSProperties = {};
   if (isRich) {
-    if (value.fontSize) textStyle.fontSize = value.fontSize;
+    const vw = typeof window !== 'undefined' ? window.innerWidth : 1280;
+
+    // Responsive font size: pick breakpoint-specific value or scale desktop font size for small viewports
+    if (value.fontSize) {
+      if (vw < 768 && value.fontSizeMobile) {
+        textStyle.fontSize = value.fontSizeMobile;
+      } else if (vw < 1024 && value.fontSizeTablet) {
+        textStyle.fontSize = value.fontSizeTablet;
+      } else if (vw < 768) {
+        const parsed = parseInt(value.fontSize, 10);
+        if (!isNaN(parsed) && parsed > 32) {
+          textStyle.fontSize = `${Math.max(24, Math.round(parsed * 0.45))}px`;
+        } else {
+          textStyle.fontSize = value.fontSize;
+        }
+      } else if (vw < 1024) {
+        const parsed = parseInt(value.fontSize, 10);
+        if (!isNaN(parsed) && parsed > 40) {
+          textStyle.fontSize = `${Math.max(30, Math.round(parsed * 0.65))}px`;
+        } else {
+          textStyle.fontSize = value.fontSize;
+        }
+      } else {
+        textStyle.fontSize = value.fontSize;
+      }
+    }
+
     if (value.fontWeight) textStyle.fontWeight = value.fontWeight;
     if (value.color) textStyle.color = value.color;
     if (value.width) textStyle.width = value.width;
     if (value.maxWidth) textStyle.maxWidth = value.maxWidth;
 
     // Responsive alignment: pick breakpoint-specific value based on viewport width, defaulting to Desktop alignment
-    const vw = typeof window !== 'undefined' ? window.innerWidth : 1280;
     let resolvedAlign: string | undefined;
     if (vw < 768) {
       resolvedAlign = value.alignMobile || value.alignTablet || value.align;
