@@ -89,7 +89,7 @@ export function EditableText({
 
     const offX = isDragging ? dragOffset.x : (value.offsetX || 0);
     const offY = isDragging ? dragOffset.y : (value.offsetY || 0);
-    if (offX || offY) {
+    if ((offX || offY) && (isDragging || vw >= 768)) {
       textStyle.transform = `translate(${offX}px, ${offY}px)`;
     }
   } else if (isDragging && (dragOffset.x || dragOffset.y)) {
