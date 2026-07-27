@@ -54,9 +54,10 @@ export function EditableImage({
     if (value.width) imgStyle.width = value.width;
     if (value.height) imgStyle.height = value.height;
   }
+  const vw = typeof window !== 'undefined' ? window.innerWidth : 1280;
   const offX = isDragging ? dragOffset.x : ((isObj ? value.offsetX : 0) || dragOffset.x || 0);
   const offY = isDragging ? dragOffset.y : ((isObj ? value.offsetY : 0) || dragOffset.y || 0);
-  if (offX || offY) {
+  if ((offX || offY) && (isDragging || vw >= 1240)) {
     imgStyle.transform = `translate(${offX}px, ${offY}px)`;
   }
 
