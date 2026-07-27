@@ -242,7 +242,7 @@ export function RegionInspectorPanel({
 
             {/* Layout Dimensions */}
             <div className="space-y-2 pt-2 border-t border-slate-800">
-              <h5 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Dimensions</h5>
+              <h5 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Dimensions & Position</h5>
               <div className="grid grid-cols-2 gap-2">
                 <Input
                   label="Width"
@@ -257,6 +257,20 @@ export function RegionInspectorPanel({
                   placeholder="e.g. auto or 300px"
                 />
               </div>
+              {(imgObj.offsetX || imgObj.offsetY) ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const cleaned = { ...imgObj };
+                    delete cleaned.offsetX;
+                    delete cleaned.offsetY;
+                    handleFieldChange(cleaned);
+                  }}
+                  className="w-full text-xs font-semibold py-1.5 px-3 rounded-lg bg-rose-500/10 text-rose-400 border border-rose-500/30 hover:bg-rose-500/20 transition-colors cursor-pointer"
+                >
+                  ↺ Reset Drag Position
+                </button>
+              ) : null}
             </div>
           </div>
         );

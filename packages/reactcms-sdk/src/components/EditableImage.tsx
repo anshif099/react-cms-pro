@@ -49,17 +49,81 @@ export function EditableImage({
   const imgAlt = typeof value === 'string' ? (alt || '') : (value?.alt || alt || '');
 
   const imgStyle: React.CSSProperties = { ...style };
-  if (typeof value === 'object' && value !== null) {
+  const isObj = typeof value === 'object' && value !== null;
+  if (isObj) {
     if (value.width) imgStyle.width = value.width;
     if (value.height) imgStyle.height = value.height;
-    const offX = isDragging ? dragOffset.x : (value.offsetX || 0);
-    const offY = isDragging ? dragOffset.y : (value.offsetY || 0);
-    if (offX || offY) {
-      imgStyle.transform = `translate(${offX}px, ${offY}px)`;
-    }
-  } else if (isDragging && (dragOffset.x || dragOffset.y)) {
-    imgStyle.transform = `translate(${dragOffset.x}px, ${dragOffset.y}px)`;
   }
+  const offX = isDragging ? dragOffset.x : ((isObj ? value.offsetX : 0) || dragOffset.x || 0);
+  const offY = isDragging ? dragOffset.y : ((isObj ? value.offsetY : 0) || dragOffset.y || 0);
+  if (offX || offY) {
+    imgStyle.transform = `translate(${offX}px, ${offY}px)`;
+  }
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (!editMode) return;
+    e.stopPropagation();
+    const touch = e.touches[0];
+    if (!touch) return;
+
+    if (cms?.websiteId) {
+      MessageBus.send('rcms/v1/region-selected', cms.websiteId, {
+        regionId,
+        type: 'image',
+        pageId,
+        value,
+      });
+      MessageBus.send('rcms/v1/open-inspector', cms.websiteId, {
+        regionId,
+        type: 'image',
+        pageId,
+      });
+    }
+
+    const initX = (isObj ? value.offsetX : 0) || 0;
+    const initY = (isObj ? value.offsetY : 0) || 0;
+
+    dragStartRef.current = { startX: touch.clientX, startY: touch.clientY, initX, initY };
+
+    const handleTouchMove = (moveEv: TouchEvent) => {
+      if (!dragStartRef.current || !moveEv.touches[0]) return;
+      const t = moveEv.touches[0];
+      const dx = t.clientX - dragStartRef.current.startX;
+      const dy = t.clientY - dragStartRef.current.startY;
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+        setIsDragging(true);
+        setDragOffset({ x: dragStartRef.current.initX + dx, y: dragStartRef.current.initY + dy });
+      }
+    };
+
+    const handleTouchEnd = (endEv: TouchEvent) => {
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchend', handleTouchEnd);
+
+      if (dragStartRef.current) {
+        const lastTouch = endEv.changedTouches[0];
+        if (lastTouch) {
+          const dx = lastTouch.clientX - dragStartRef.current.startX;
+          const dy = lastTouch.clientY - dragStartRef.current.startY;
+          if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+            const finalX = dragStartRef.current.initX + dx;
+            const finalY = dragStartRef.current.initY + dy;
+            const baseObj = isObj ? { ...value } : { src: imgSrc, alt: imgAlt };
+            baseObj.offsetX = finalX;
+            baseObj.offsetY = finalY;
+            setDragOffset({ x: finalX, y: finalY });
+            setValue(baseObj);
+          }
+        }
+      }
+
+      setIsDragging(false);
+      dragStartRef.current = null;
+    };
+
+    window.addEventListener('touchmove', handleTouchMove);
+    window.addEventListener('touchend', handleTouchEnd);
+  };
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (!editMode) return;
@@ -79,7 +143,6 @@ export function EditableImage({
       });
     }
 
-    const isObj = typeof value === 'object' && value !== null;
     const initX = (isObj ? value.offsetX : 0) || 0;
     const initY = (isObj ? value.offsetY : 0) || 0;
 
@@ -105,9 +168,10 @@ export function EditableImage({
         if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
           const finalX = dragStartRef.current.initX + dx;
           const finalY = dragStartRef.current.initY + dy;
-          const baseObj = typeof value === 'object' ? { ...value } : { src: imgSrc, alt: imgAlt };
+          const baseObj = isObj ? { ...value } : { src: imgSrc, alt: imgAlt };
           baseObj.offsetX = finalX;
           baseObj.offsetY = finalY;
+          setDragOffset({ x: finalX, y: finalY });
           setValue(baseObj);
         }
       }
@@ -137,6 +201,7 @@ export function EditableImage({
         userSelect: 'none',
       }}
       onMouseDown={handleMouseDown}
+      onTouchStart={handleTouchStart}
       onClick={(e: React.MouseEvent) => {
         e.stopPropagation();
         e.preventDefault();

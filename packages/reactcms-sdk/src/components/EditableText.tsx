@@ -261,6 +261,7 @@ export function EditableText({
             baseObj.offsetX = finalX;
             baseObj.offsetY = finalY;
 
+            setDragOffset({ x: finalX, y: finalY });
             setValue(baseObj);
           }
         }
@@ -344,6 +345,7 @@ export function EditableText({
           baseObj.offsetX = finalX;
           baseObj.offsetY = finalY;
 
+          setDragOffset({ x: finalX, y: finalY });
           setValue(baseObj);
         }
       }

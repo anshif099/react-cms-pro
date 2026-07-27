@@ -516,6 +516,20 @@ export function VisualEditorPage() {
               computedStyle: payload.computedStyle || (isSameRegion ? prev.computedStyle : {})
             };
           });
+        } else if (data.type === "rcms/v1/field-update") {
+          const payload = data.payload || {};
+          if (payload.regionId) {
+            setDraftValues((prev) => {
+              const next = { ...prev, [payload.regionId]: payload.value };
+              triggerAutoSave(next);
+              return next;
+            });
+            setSelectedElement((prev) =>
+              prev && prev.regionId === payload.regionId
+                ? { ...prev, value: payload.value }
+                : prev
+            );
+          }
         }
       } catch (err) {
         // Silent catch
