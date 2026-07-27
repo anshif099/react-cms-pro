@@ -188,29 +188,62 @@ export function RegionInspectorPanel({
                 {/* Alignment Buttons for active breakpoint */}
                 {[{ id: "mobile", propKey: "alignMobile" }, { id: "tablet", propKey: "alignTablet" }, { id: "desktop", propKey: "align" }]
                   .filter(({ id }) => id === alignBreakpoint)
-                  .map(({ propKey }) => {
-                    const currentAlign = textObj[propKey] || "";
+                  .map(({ id, propKey }) => {
+                    const explicitAlign = textObj[propKey] || "";
+                    const desktopAlign = textObj.align || "";
+                    const tabletAlign = textObj.alignTablet || "";
+                    const effectiveAlign = explicitAlign || (id === "mobile" ? (tabletAlign || desktopAlign) : (id === "tablet" ? desktopAlign : explicitAlign));
+                    const isInherited = !explicitAlign && Boolean(effectiveAlign) && id !== "desktop";
+
                     return (
-                      <div key={propKey} className="flex gap-1">
-                        {[
-                          { val: "left",    Icon: AlignLeft,    tip: "Left" },
-                          { val: "center",  Icon: AlignCenter,  tip: "Center" },
-                          { val: "right",   Icon: AlignRight,   tip: "Right" },
-                          { val: "justify", Icon: AlignJustify, tip: "Justify" },
-                        ].map(({ val, Icon, tip }) => (
-                          <button
-                            key={val}
-                            title={tip}
-                            onClick={() => updateProp(propKey, currentAlign === val ? "" : val)}
-                            className={`flex-1 flex items-center justify-center py-1.5 rounded-lg border cursor-pointer transition-all ${
-                              currentAlign === val
-                                ? "bg-primary border-primary text-white"
-                                : "border-slate-750 bg-slate-850 text-slate-400 hover:text-white hover:border-slate-600"
-                            }`}
-                          >
-                            <Icon className="w-3.5 h-3.5" />
-                          </button>
-                        ))}
+                      <div key={propKey} className="space-y-1.5">
+                        <div className="flex gap-1">
+                          {[
+                            { val: "left",    Icon: AlignLeft,    tip: "Left" },
+                            { val: "center",  Icon: AlignCenter,  tip: "Center" },
+                            { val: "right",   Icon: AlignRight,   tip: "Right" },
+                            { val: "justify", Icon: AlignJustify, tip: "Justify" },
+                          ].map(({ val, Icon, tip }) => {
+                            const isExplicitlySelected = explicitAlign === val;
+                            const isInheritedSelected = isInherited && effectiveAlign === val;
+
+                            return (
+                              <button
+                                key={val}
+                                title={tip}
+                                onClick={() => {
+                                  updateProp(propKey, isExplicitlySelected ? "" : val);
+                                }}
+                                className={`flex-1 flex items-center justify-center py-1.5 rounded-lg border cursor-pointer transition-all ${
+                                  isExplicitlySelected
+                                    ? "bg-primary border-primary text-white font-bold"
+                                    : isInheritedSelected
+                                      ? "bg-primary/20 border-primary/40 text-primary ring-1 ring-primary/30"
+                                      : "border-slate-750 bg-slate-850 text-slate-400 hover:text-white hover:border-slate-600"
+                                }`}
+                              >
+                                <Icon className="w-3.5 h-3.5" />
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {isInherited ? (
+                          <div className="flex items-center justify-between text-[10px] text-slate-400 px-1">
+                            <span>Auto-responsive alignment</span>
+                            <span className="text-primary/90 font-medium italic">Inherited from Desktop ({effectiveAlign})</span>
+                          </div>
+                        ) : explicitAlign && id !== "desktop" ? (
+                          <div className="flex items-center justify-between text-[10px] text-slate-400 px-1">
+                            <span className="text-amber-400/90 font-medium">Device Override Active</span>
+                            <button
+                              type="button"
+                              onClick={() => updateProp(propKey, "")}
+                              className="text-slate-400 hover:text-white underline cursor-pointer"
+                            >
+                              Reset to Desktop
+                            </button>
+                          </div>
+                        ) : null}
                       </div>
                     );
                   })}

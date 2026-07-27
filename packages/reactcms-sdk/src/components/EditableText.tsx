@@ -50,14 +50,14 @@ export function EditableText({
     if (value.width) textStyle.width = value.width;
     if (value.maxWidth) textStyle.maxWidth = value.maxWidth;
 
-    // Responsive alignment: pick breakpoint-specific value based on viewport width
+    // Responsive alignment: pick breakpoint-specific value based on viewport width, defaulting to Desktop alignment
     const vw = typeof window !== 'undefined' ? window.innerWidth : 1280;
     let resolvedAlign: string | undefined;
-    if (vw < 768 && value.alignMobile) {
-      resolvedAlign = value.alignMobile;
-    } else if (vw < 1024 && value.alignTablet) {
-      resolvedAlign = value.alignTablet;
-    } else if (value.align) {
+    if (vw < 768) {
+      resolvedAlign = value.alignMobile || value.alignTablet || value.align;
+    } else if (vw < 1024) {
+      resolvedAlign = value.alignTablet || value.align;
+    } else {
       resolvedAlign = value.align;
     }
     if (resolvedAlign) textStyle.textAlign = resolvedAlign as React.CSSProperties['textAlign'];
