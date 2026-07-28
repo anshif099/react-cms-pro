@@ -34,6 +34,7 @@ import revisionService from "../../services/revisionService";
 import vercelDeployService from "../../services/vercelDeployService";
 import { websiteService } from "../../services/websiteService";
 import rocketAIEngine from "../../services/rocketAIEngine";
+import RocketAIAgentWorkspaceModal from "../../components/content/RocketAIAgentWorkspaceModal";
 import RegionTreePanel from "../../components/content/RegionTreePanel";
 import RegionInspectorPanel from "../../components/content/RegionInspectorPanel";
 import SEOPanel from "../../components/content/SEOPanel";
@@ -216,7 +217,8 @@ export function VisualEditorPage() {
   };
 
   // Right Side AI Assistant Chat State & Handlers
-  const [selectedAIModel, setSelectedAIModel] = useState("rocket-2.2");
+  const [selectedAIModel, setSelectedAIModel] = useState("rocket-2.4");
+  const [showAgentWorkspace, setShowAgentWorkspace] = useState(false);
   const [attachedImage, setAttachedImage] = useState(null);
   const fileInputRef = useRef(null);
 
@@ -224,7 +226,7 @@ export function VisualEditorPage() {
   const [aiChatMessages, setAiChatMessages] = useState([
     {
       sender: "assistant",
-      text: "👋 Hi! I'm Rocket AI 2.2. Powered by senior UI/UX design architecture, natural language intent reasoning, and multi-step full-page engine. Tell me what you'd like to build or modify (e.g. background color matching, section layouts, theme synchronization, typography, card grids, statistics carousels, or upload design reference images)."
+      text: "👋 Hi! I'm Rocket AI 2.4. Powered by autonomous agent mode, live reasoning timeline, theme/SEO analysis, screenshot intelligence, and full-screen workspace. Click 🚀 Rocket AI 2.4 at the top to launch Agent Workspace."
     }
   ]);
   const [aiChatInput, setAiChatInput] = useState("");
@@ -260,8 +262,8 @@ export function VisualEditorPage() {
         attachedImage,
         pageKey,
         pageTitle,
-        currentDrafts,
-        currentModules,
+        currentDrafts: draftValues,
+        currentModules: customModules,
         model: selectedAIModel
       });
 
@@ -1167,6 +1169,17 @@ export function VisualEditorPage() {
             Publish
           </Button>
 
+          {/* Rocket AI 2.4 Autonomous Agent Workspace Launcher */}
+          <Button
+            onClick={() => setShowAgentWorkspace(true)}
+            variant="primary"
+            className="text-xs py-1.5 px-3 font-bold gap-1.5 cursor-pointer bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-600/30 hover:brightness-110"
+            title="Launch Rocket AI 2.4 Autonomous Agent Workspace"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            🚀 Rocket AI 2.4
+          </Button>
+
           {/* Trigger Vercel Deployment */}
           <Button
             onClick={handleTriggerVercelDeploy}
@@ -2070,6 +2083,25 @@ export function VisualEditorPage() {
           </div>
         </Modal>
       )}
+
+      {/* Rocket AI 2.4 Autonomous Agent Workspace Modal */}
+      <RocketAIAgentWorkspaceModal
+        isOpen={showAgentWorkspace}
+        onClose={() => setShowAgentWorkspace(false)}
+        pageKey={cleanPath || "page"}
+        pageTitle={selectedPage?.title || "Page"}
+        draftValues={draftValues}
+        customModules={customModules}
+        targetDomain={targetDomain}
+        onUpdateRegions={(regionUpdates) => {
+          Object.entries(regionUpdates).forEach(([rId, val]) => {
+            handleRegionValueChange(rId, val);
+          });
+        }}
+        onUpdateModules={(newModules) => {
+          setCustomModules(newModules);
+        }}
+      />
     </div>
   );
 }
