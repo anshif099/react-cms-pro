@@ -19,7 +19,8 @@ import {
   Loader2,
   Settings,
   Link2,
-  AlertTriangle
+  AlertTriangle,
+  UploadCloud
 } from "lucide-react";
 import { usePages } from "../../hooks/usePages";
 import { useLocale } from "../../hooks/useLocale";
@@ -29,6 +30,7 @@ import visualEditService from "../../services/visualEditService";
 import registryService from "../../services/registryService";
 import contentSyncService from "../../services/contentSyncService";
 import revisionService from "../../services/revisionService";
+import vercelDeployService from "../../services/vercelDeployService";
 import { websiteService } from "../../services/websiteService";
 import RegionTreePanel from "../../components/content/RegionTreePanel";
 import RegionInspectorPanel from "../../components/content/RegionInspectorPanel";
@@ -83,6 +85,47 @@ export function VisualEditorPage() {
   // Modals
   const [showUnsavedModal, setShowUnsavedModal] = useState(false);
   const [showPublishModal, setShowPublishModal] = useState(false);
+
+  // Vercel deployment state
+  const [deployingVercel, setDeployingVercel] = useState(false);
+  const [showVercelModal, setShowVercelModal] = useState(false);
+  const [vercelHookInput, setVercelHookInput] = useState("");
+
+  const handleTriggerVercelDeploy = async () => {
+    setDeployingVercel(true);
+    try {
+      let hookUrl = await vercelDeployService.getDeployHook(websiteId);
+      if (!hookUrl) {
+        setShowVercelModal(true);
+        setDeployingVercel(false);
+        return;
+      }
+
+      await vercelDeployService.triggerDeploy(websiteId);
+      toast.success("🚀 Vercel deployment triggered! Site will update in ~30s.");
+    } catch (err) {
+      console.error(err);
+      toast.error(err.message || "Failed to trigger Vercel deployment.");
+    } finally {
+      setDeployingVercel(false);
+    }
+  };
+
+  const handleSaveVercelHook = async () => {
+    if (!vercelHookInput.trim()) return;
+    try {
+      await vercelDeployService.setDeployHook(websiteId, vercelHookInput.trim());
+      setShowVercelModal(false);
+      toast.success("Vercel Deploy Hook saved! Triggering build...");
+      setDeployingVercel(true);
+      await vercelDeployService.triggerDeploy(websiteId);
+      toast.success("🚀 Vercel deployment triggered! Site will update in ~30s.");
+    } catch (err) {
+      toast.error("Failed to save or trigger Vercel deploy hook.");
+    } finally {
+      setDeployingVercel(false);
+    }
+  };
 
   const iframeRef = useRef(null);
   const autoSaveTimerRef = useRef(null);
@@ -818,6 +861,18 @@ export function VisualEditorPage() {
             <Send className="w-3.5 h-3.5" />
             Publish
           </Button>
+
+          {/* Trigger Vercel Deployment */}
+          <Button
+            onClick={handleTriggerVercelDeploy}
+            variant="secondary"
+            loading={deployingVercel}
+            className="text-xs py-1.5 px-3 font-bold gap-1.5 cursor-pointer bg-purple-950/60 border-purple-500/40 text-purple-200 hover:bg-purple-900/80"
+            title="Trigger 1-click Vercel deployment directly from CMS without writing code or git commands"
+          >
+            <UploadCloud className="w-3.5 h-3.5 text-purple-400" />
+            Deploy Vercel
+          </Button>
         </div>
       </header>
 
@@ -1183,6 +1238,51 @@ export function VisualEditorPage() {
               >
                 <Save className="w-3.5 h-3.5" />
                 Save Page Settings
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Vercel Deploy Hook Setup Modal */}
+      {showVercelModal && (
+        <Modal
+          isOpen={showVercelModal}
+          onClose={() => setShowVercelModal(false)}
+          title="Configure 1-Click Vercel Deploy Hook"
+        >
+          <div className="space-y-4 text-left p-1">
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Enter your Vercel Deploy Hook URL once to enable 1-click deployments directly from the CMS header without editing code or running manual git commands.
+            </p>
+            <Input
+              label="Vercel Deploy Hook URL"
+              value={vercelHookInput}
+              onChange={(e) => setVercelHookInput(e.target.value)}
+              placeholder="e.g. https://api.vercel.com/v1/integrations/deploy/..."
+            />
+            <div className="text-[11px] text-slate-400 bg-slate-900 p-3 rounded-lg border border-slate-800 space-y-1.5">
+              <p className="font-bold text-white">How to get your Vercel Deploy Hook URL:</p>
+              <p>1. Go to your Vercel Dashboard project settings.</p>
+              <p>2. Navigate to <strong>Git -&gt; Deploy Hooks</strong>.</p>
+              <p>3. Click <strong>Create Hook</strong> (name: "ReactCMS", branch: "main") and copy the webhook URL.</p>
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <Button
+                variant="secondary"
+                onClick={() => setShowVercelModal(false)}
+                className="text-xs font-bold"
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handleSaveVercelHook}
+                disabled={!vercelHookInput.trim()}
+                className="text-xs font-bold gap-1.5"
+              >
+                <UploadCloud className="w-3.5 h-3.5" />
+                Save &amp; Deploy Now
               </Button>
             </div>
           </div>
