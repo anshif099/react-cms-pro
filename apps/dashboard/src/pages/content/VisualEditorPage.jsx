@@ -216,21 +216,27 @@ export function VisualEditorPage() {
     }
   };
 
-  // Keep target domain in sync with selected website
+  // Keep target domain in sync, prioritizing user's local override choice (e.g. http://localhost:5173)
   useEffect(() => {
-    if (selectedWebsite?.domain) {
+    if (!websiteId) return;
+    const localTarget = localStorage.getItem(`rcms_target_domain_${websiteId}`);
+    if (localTarget) {
+      setTargetDomain(localTarget);
+      setNewDomainInput(localTarget);
+    } else if (selectedWebsite?.domain) {
       setTargetDomain(selectedWebsite.domain);
       setNewDomainInput(selectedWebsite.domain);
     }
-  }, [selectedWebsite]);
+  }, [selectedWebsite, websiteId]);
 
   const handleSwitchTargetDomain = async (newDomain) => {
     try {
       setUpdatingDomain(true);
+      localStorage.setItem(`rcms_target_domain_${websiteId}`, newDomain);
       setTargetDomain(newDomain);
       setNewDomainInput(newDomain);
       await websiteService.updateDomain(websiteId, newDomain);
-      toast.success(`Preview target set to ${newDomain}`);
+      toast.success(`Preview target URL set to ${newDomain}`);
     } catch (err) {
       console.error("Failed to switch target domain:", err);
       toast.error("Failed to update target domain.");
