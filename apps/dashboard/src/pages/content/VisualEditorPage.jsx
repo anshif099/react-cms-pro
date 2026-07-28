@@ -215,7 +215,7 @@ export function VisualEditorPage() {
   };
 
   // Right Side AI Assistant Chat State & Handlers
-  const [selectedAIModel, setSelectedAIModel] = useState("rocket-2.0");
+  const [selectedAIModel, setSelectedAIModel] = useState("rocket-2.1");
   const [attachedImage, setAttachedImage] = useState(null);
   const fileInputRef = useRef(null);
 
@@ -223,7 +223,7 @@ export function VisualEditorPage() {
   const [aiChatMessages, setAiChatMessages] = useState([
     {
       sender: "assistant",
-      text: "👋 Hi! I'm Rocket AI 2.0 Max. Powered by super-intelligent GPT 5.6 & Opus 5 level component engine. Ask me to add moving statistics carousels, Why Choose Us grids, or upload images to build custom pages."
+      text: "👋 Hi! I'm Rocket AI 2.1 Ultra. Powered by super-intelligent CPU NLP engine. Ask me to add moving statistics carousels, Why Choose Us grids, synchronize background themes, or upload images to build custom pages."
     }
   ]);
   const [aiChatInput, setAiChatInput] = useState("");
@@ -253,72 +253,78 @@ export function VisualEditorPage() {
     setTimeout(() => {
       const pageKey = cleanPath || "page";
       const lower = userMsg.toLowerCase();
-      let replyText = "";
+      const actionsTaken = [];
 
-      // 1. Process attached image if present
+      // 1. Process Attached Image if Present
       if (attachedImage) {
         handleRegionValueChange(`${pageKey}.hero_image`, { src: attachedImage, alt: "AI Prompt Uploaded Visual" });
         setAttachedImage(null);
-        replyText = `🖼️ Applied attached image to Hero Visual banner! `;
+        actionsTaken.push("🖼️ Applied custom uploaded visual image to Hero Banner");
       }
 
-      const isAddSection = lower.includes("add") || lower.includes("create") || lower.includes("below") || lower.includes("above") || lower.includes("new section") || lower.includes("why choose us") || lower.includes("stats") || lower.includes("carousel") || lower.includes("carosil");
-
-      if (isAddSection) {
-        if (lower.includes("stats") || lower.includes("carousel") || lower.includes("carosil") || lower.includes("statistics")) {
-          handleRegionValueChange(`${pageKey}.stat1_text`, "500+ Successful Ad Campaigns");
-          handleRegionValueChange(`${pageKey}.stat2_text`, "98% Client Satisfaction Rate");
-          handleRegionValueChange(`${pageKey}.stat3_text`, "50M+ Ad Impressions");
-          handleRegionValueChange(`${pageKey}.stat4_text`, "250+ Global Brands");
-          replyText += `✨ Created and added "Client Success Statistics" moving carousel section directly above About Section!`;
-        } else if (lower.includes("why choose us") || lower.includes("cards") || lower.includes("feature")) {
-          handleRegionValueChange(`${pageKey}.why_choose_us_title`, "Why Industry Leaders Trust Triosis Digital");
-          handleRegionValueChange(`${pageKey}.why_choose_us_subtext`, "Delivering high-ROI campaigns, creative ad strategies, and dedicated account support.");
-          handleRegionValueChange(`${pageKey}.card1_title`, "Proven Advertising Results");
-          handleRegionValueChange(`${pageKey}.card1_desc`, "Tailored strategies that align with your business goals to maximize ROI.");
-          handleRegionValueChange(`${pageKey}.card2_title`, "Creative Campaigns");
-          handleRegionValueChange(`${pageKey}.card2_desc`, "Scroll-stopping ad designs, persuasive copywriting, and high-converting visual assets.");
-          handleRegionValueChange(`${pageKey}.card3_title`, "Data-Driven Strategy");
-          handleRegionValueChange(`${pageKey}.card3_desc`, "Continuous optimization powered by real-time campaign analytics.");
-          handleRegionValueChange(`${pageKey}.card4_title`, "Google & Meta Ads Experts");
-          handleRegionValueChange(`${pageKey}.card4_desc`, "Certified Specialists managing Google Search, Meta Instagram/Facebook, and display campaigns.");
-          handleRegionValueChange(`${pageKey}.card5_title`, "Transparent Reporting");
-          handleRegionValueChange(`${pageKey}.card5_desc`, "Clear performance metrics, live dashboard access, and actionable reporting.");
-          handleRegionValueChange(`${pageKey}.card6_title`, "Dedicated Account Managers");
-          handleRegionValueChange(`${pageKey}.card6_desc`, "Personalized support, strategic growth calls, and dedicated campaign specialists.");
-          
-          replyText += `✨ Successfully created and added "Why Choose Us" section with 6 feature cards and 4 statistics metrics directly below the CTA button!`;
-        } else {
-          const newMod = {
-            id: `mod-${Date.now()}`,
-            type: "cards",
-            heading: "New Custom Feature Section",
-            cards: [
-              { title: "Proven Growth", desc: "Measurable ROI and strategic digital efficiency." },
-              { title: "Targeted Campaigns", desc: "Audience insights and data-driven ad placement." },
-              { title: "Scalable Execution", desc: "Seamless end-to-end implementation from launch." }
-            ]
-          };
-          setCustomModules((prev) => [...prev, newMod]);
-          replyText += `✨ Dynamically created and inserted new custom section module into page layout!`;
+      // 2. Background Color / Theme Matching Intent
+      if (lower.includes("background") || lower.includes("bg") || lower.includes("same bg") || lower.includes("colour") || lower.includes("color")) {
+        if (lower.includes("same bg") || lower.includes("header and footer") || lower.includes("dark")) {
+          handleRegionValueChange(`${pageKey}.bg_theme`, "dark");
+          actionsTaken.push("🎨 Synchronized section background colors with Header & Footer theme (#0a0a0a)");
         }
-      } else if ((lower.startsWith("change button") || lower.startsWith("update button") || lower.startsWith("change cta")) && !lower.includes("below")) {
-        const quoteMatch = userMsg.match(/"([^"]+)"/);
-        const newCta = quoteMatch ? quoteMatch[1] : "Book Free Consultation";
-        handleRegionValueChange(`${pageKey}.cta_button`, newCta);
-        replyText = `✨ Updated CTA Button text to: "${newCta}"`;
-      } else if (lower.includes("title") || lower.includes("headline")) {
+      }
+
+      // 3. Statistics Ticker & Carousel Intent
+      if (lower.includes("stat") || lower.includes("carousel") || lower.includes("carosil") || lower.includes("metrics") || lower.includes("500+") || lower.includes("98%") || lower.includes("50m+")) {
+        const numbers = userMsg.match(/\d+[%+M\w]+/g) || ["500+", "98%", "50M+", "250+"];
+        handleRegionValueChange(`${pageKey}.stat1_text`, `${numbers[0] || '500+'} Successful Ad Campaigns`);
+        handleRegionValueChange(`${pageKey}.stat2_text`, `${numbers[1] || '98%'} Client Satisfaction Rate`);
+        handleRegionValueChange(`${pageKey}.stat3_text`, `${numbers[2] || '50M+'} Ad Impressions`);
+        handleRegionValueChange(`${pageKey}.stat4_text`, `${numbers[3] || '250+'} Global Brands`);
+        actionsTaken.push("📊 Created & activated Client Success Statistics moving carousel directly above About section");
+      }
+
+      // 4. Why Choose Us / Cards Grid Intent
+      if (lower.includes("why choose us") || lower.includes("cards") || lower.includes("feature")) {
+        handleRegionValueChange(`${pageKey}.why_choose_us_title`, "Why Industry Leaders Trust Triosis Digital");
+        handleRegionValueChange(`${pageKey}.why_choose_us_subtext`, "Delivering high-ROI campaigns, creative ad strategies, and dedicated account support.");
+        handleRegionValueChange(`${pageKey}.card1_title`, "Proven Advertising Results");
+        handleRegionValueChange(`${pageKey}.card1_desc`, "Tailored strategies that align with your business goals to maximize ROI.");
+        handleRegionValueChange(`${pageKey}.card2_title`, "Creative Campaigns");
+        handleRegionValueChange(`${pageKey}.card2_desc`, "Scroll-stopping ad designs, persuasive copywriting, and high-converting visual assets.");
+        handleRegionValueChange(`${pageKey}.card3_title`, "Data-Driven Strategy");
+        handleRegionValueChange(`${pageKey}.card3_desc`, "Continuous optimization powered by real-time campaign analytics.");
+        handleRegionValueChange(`${pageKey}.card4_title`, "Google & Meta Ads Experts");
+        handleRegionValueChange(`${pageKey}.card4_desc`, "Certified Specialists managing Google Search, Meta Instagram/Facebook, and display campaigns.");
+        handleRegionValueChange(`${pageKey}.card5_title`, "Transparent Reporting");
+        handleRegionValueChange(`${pageKey}.card5_desc`, "Clear performance metrics, live dashboard access, and actionable reporting.");
+        handleRegionValueChange(`${pageKey}.card6_title`, "Dedicated Account Managers");
+        handleRegionValueChange(`${pageKey}.card6_desc`, "Personalized support, strategic growth calls, and dedicated campaign specialists.");
+        actionsTaken.push("🌟 Created & activated Why Choose Us 6-card feature grid directly below CTA");
+      }
+
+      // 5. Headline / Title Intent
+      if ((lower.includes("title") || lower.includes("headline") || lower.includes("heading")) && !lower.includes("why choose us")) {
         const quoteMatch = userMsg.match(/"([^"]+)"/);
         const newTitle = quoteMatch ? quoteMatch[1] : userMsg.replace(/^change (the )?(title|headline) (to )?/i, "").replace(/"/g, "");
         handleRegionValueChange(`${pageKey}.title`, newTitle);
-        replyText = `✨ Updated Page Main Title to: "${newTitle}"`;
-      } else if (lower.includes("subtext") || lower.includes("subtitle") || lower.includes("description")) {
+        actionsTaken.push(`✍️ Updated Main Page Headline to: "${newTitle}"`);
+      }
+
+      // 6. Subtext / Description Intent
+      if (lower.includes("about") || lower.includes("description") || lower.includes("subtext")) {
+        const descMatch = userMsg.match(/about [^:]+:?\s*(.+)/i);
+        const descText = descMatch ? descMatch[1] : "We deliver innovative technology, creative marketing, and measurable digital strategies.";
+        handleRegionValueChange(`${pageKey}.description`, descText);
+        actionsTaken.push(`📝 Refined Section Description text`);
+      }
+
+      // 7. Button CTA Intent
+      if ((lower.startsWith("change button") || lower.startsWith("update button") || lower.startsWith("cta button")) && !lower.includes("below")) {
         const quoteMatch = userMsg.match(/"([^"]+)"/);
-        const newDesc = quoteMatch ? quoteMatch[1] : "We deliver innovative technology, creative marketing, and measurable digital strategies.";
-        handleRegionValueChange(`${pageKey}.subtext`, newDesc);
-        replyText = `✨ Updated Hero Subtitle description.`;
-      } else {
-        // Full page prompt builder
+        const newCta = quoteMatch ? quoteMatch[1] : "Book Free Consultation";
+        handleRegionValueChange(`${pageKey}.cta_button`, newCta);
+        actionsTaken.push(`🎯 Updated CTA Button text to: "${newCta}"`);
+      }
+
+      // Fallback: If prompt didn't match specific entities, run dynamic layout generator
+      if (actionsTaken.length === 0) {
         const { headline, subheadline, modules } = parsePromptToPageModules(userMsg, selectedPage?.title);
         setCustomModules(modules);
         handleRegionValueChange(`${pageKey}.title`, headline);
@@ -326,13 +332,15 @@ export function VisualEditorPage() {
         handleRegionValueChange(`${pageKey}.heading`, `About ${headline}`);
         handleRegionValueChange(`${pageKey}.cta_title`, `Ready to get started with ${headline}?`);
         handleRegionValueChange(`${pageKey}.cta_button`, "Book Free Consultation");
-        replyText = `✨ Generated and built AI landing page for: "${headline}". Connected live iframe updated!`;
+        actionsTaken.push(`⚡ Executed full Rocket AI landing page generation for "${headline}"`);
       }
+
+      const replyText = `🧠 Rocket AI 2.0 NLP Engine analyzed your prompt & executed ${actionsTaken.length} intelligent updates:\n` + actionsTaken.map((a) => `• ${a}`).join("\n");
 
       setAiChatMessages((prev) => [...prev, { sender: "assistant", text: replyText }]);
       setAiChatProcessing(false);
-      toast.success("✨ AI Assistant updated page!");
-    }, 500);
+      toast.success("🧠 Rocket AI NLP Engine updated page!");
+    }, 450);
   };
 
   const handleAILiveBuildPage = (e) => {
@@ -1701,9 +1709,10 @@ export function VisualEditorPage() {
                   onChange={(e) => setSelectedAIModel(e.target.value)}
                   className="bg-slate-950 text-purple-300 border border-purple-500/40 text-[10px] font-bold px-2 py-1 rounded outline-none cursor-pointer hover:border-purple-400 transition-colors"
                 >
-                  <option value="rocket-2.0">🚀 Rocket AI 2.0 Max</option>
-                  <option value="rocket-1.3">⚡ Rocket AI 1.3 Flash</option>
-                  <option value="rocket-deep">🧠 Rocket AI DeepReason</option>
+                  <option value="rocket-2.1">🚀 Rocket AI 2.1 Ultra</option>
+                  <option value="rocket-2.0">🧠 Rocket AI 2 Pro</option>
+                  <option value="rocket-1.5">⚡ Rocket AI 1.5 Instant</option>
+                  <option value="rocket-1.0">💥 Rocket AI 1 Flash</option>
                 </select>
               </div>
 
@@ -1729,7 +1738,11 @@ export function VisualEditorPage() {
                 ))}
                 {aiChatProcessing && (
                   <div className="flex items-center gap-2 text-purple-400 text-xs font-bold p-2 bg-slate-900/60 rounded-lg border border-purple-500/20">
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> {selectedAIModel === "rocket-deep" ? "Rocket AI DeepReason" : selectedAIModel === "rocket-1.3" ? "Rocket AI 1.3 Flash" : "Rocket AI 2.0 Max"} executing prompt...
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> {
+                      selectedAIModel === "rocket-2.1" ? "Rocket AI 2.1 Ultra" :
+                      selectedAIModel === "rocket-2.0" ? "Rocket AI 2 Pro" :
+                      selectedAIModel === "rocket-1.5" ? "Rocket AI 1.5 Instant" : "Rocket AI 1 Flash"
+                    } processing prompt...
                   </div>
                 )}
               </div>
