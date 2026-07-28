@@ -1665,6 +1665,7 @@ export function VisualEditorPage() {
                   onChange={(e) => setSelectedAIModel(e.target.value)}
                   className="bg-slate-950 text-purple-300 border border-purple-500/40 text-[10px] font-bold px-2 py-1 rounded outline-none cursor-pointer hover:border-purple-400 transition-colors"
                 >
+                  <option value="rocket-2.4">🚀 Rocket AI 2.4 (Autonomous Agent)</option>
                   <option value="rocket-2.2">🚀 Rocket AI 2.2 (Architect & Engine)</option>
                   <option value="rocket-2.1">🚀 Rocket AI 2.1 Ultra</option>
                   <option value="rocket-2.0">🧠 Rocket AI 2 Pro</option>
@@ -1696,6 +1697,7 @@ export function VisualEditorPage() {
                 {aiChatProcessing && (
                   <div className="flex items-center gap-2 text-purple-400 text-xs font-bold p-2 bg-slate-900/60 rounded-lg border border-purple-500/20">
                     <Loader2 className="w-3.5 h-3.5 animate-spin" /> {
+                      selectedAIModel === "rocket-2.4" ? "Rocket AI 2.4 (Autonomous Agent)" :
                       selectedAIModel === "rocket-2.2" ? "Rocket AI 2.2 (Architect & Engine)" :
                       selectedAIModel === "rocket-2.1" ? "Rocket AI 2.1 Ultra" :
                       selectedAIModel === "rocket-2.0" ? "Rocket AI 2 Pro" :
