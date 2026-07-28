@@ -123,56 +123,123 @@ export function VisualEditorPage() {
     }
   ]);
 
+  // AI Prompt Parser & Full Page Builder Engine
+  const parsePromptToPageModules = (promptText, pageTitle) => {
+    // 1. Extract clean main headline (search for quoted text like "Generate High-Converting...")
+    const quoteMatch = promptText.match(/"([^"]+)"/);
+    const headline = quoteMatch 
+      ? quoteMatch[1] 
+      : (pageTitle && pageTitle !== "New Created Page" ? pageTitle : "Generate High-Converting AI Landing Pages in Seconds");
+
+    const subheadline = "Create AI-driven, high-converting advertisement pages with automated SEO, real-time analytics, and instant 1-click publishing.";
+
+    const modules = [];
+
+    // 2. Trust Badges
+    modules.push({
+      id: "mod-trust",
+      type: "trust_badges",
+      badges: ["⚡ AI Powered", "🚀 SEO Optimized", "📱 Mobile Responsive", "⚡ Fast Performance", "🔒 Enterprise Security"]
+    });
+
+    // 3. 6 Feature Cards
+    modules.push({
+      id: "mod-features",
+      type: "features_6",
+      heading: "Comprehensive AI Capabilities",
+      subheading: "Everything you need to launch, optimize, and scale high-converting landing pages.",
+      cards: [
+        { icon: "🤖", title: "Automated AI Content", desc: "Generate SEO-optimized copy, headlines, and calls-to-action tailored to your target niche." },
+        { icon: "📈", title: "Smart SEO Optimization", desc: "Built-in meta tags, structured data, and keyword integration for top Google rankings." },
+        { icon: "🎨", title: "High-Converting Layouts", desc: "Proven design patterns engineered for maximum visitor engagement and lead conversion." },
+        { icon: "⚡", title: "1-Click Publishing", desc: "Deploy changes directly to live Vercel servers without touching code or git workflows." },
+        { icon: "📊", title: "Real-Time Analytics", desc: "Track visitor traffic, conversion rates, and region performance in real time." },
+        { icon: "⚙️", title: "Custom Component Integration", desc: "Seamlessly connect with your existing CMS components, React hooks, and APIs." }
+      ]
+    });
+
+    // 4. How It Works (3 Steps)
+    modules.push({
+      id: "mod-steps",
+      type: "how_it_works",
+      heading: "How It Works in 3 Simple Steps",
+      steps: [
+        { step: "01", title: "Input Your Prompt", desc: "Describe your page goals, key features, target keywords, and visual layout preferences." },
+        { step: "02", title: "AI Generates Layout", desc: "Our engine crafts high-converting copy, visual modules, and responsive layout structure." },
+        { step: "03", title: "Publish Live to Vercel", desc: "Click Publish to instantly deploy your new page to live production servers." }
+      ]
+    });
+
+    // 5. Dashboard Live Preview Mockup
+    modules.push({
+      id: "mod-mockup",
+      type: "mockup",
+      heading: "Interactive AI Builder Dashboard",
+      subheading: "Full visual control over every region, text block, and image asset.",
+      src: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=1200&q=80"
+    });
+
+    // 6. Testimonials Quotes
+    modules.push({
+      id: "mod-testimonials",
+      type: "testimonials",
+      heading: "Trusted by Leading Digital Agencies",
+      items: [
+        { quote: "ReactCMS AI Builder saved our team over 40 hours of development time. Pages launch visually in seconds!", author: "Sarah Jenkins", role: "Head of Marketing at CloudScale" },
+        { quote: "The AI page generator creates layout shells that match our site theme perfectly. Unbelievable productivity boost.", author: "David Vance", role: "Creative Director at Nexus Studio" }
+      ]
+    });
+
+    // 7. FAQ Accordion
+    modules.push({
+      id: "mod-faq",
+      type: "faq",
+      heading: "Frequently Asked Questions",
+      faqs: [
+        { q: "Does the AI page builder preserve my site's Header & Footer?", a: "Yes! Every AI-generated page inherits your site's exact Header, Logo, Navigation menu, and Footer structure." },
+        { q: "Can I edit the generated text and images manually?", a: "Definitely. Click any element on the preview canvas to edit its text, replace images, or add/delete custom sections." },
+        { q: "How do I publish the AI generated page to live Vercel?", a: "Click the 🚀 Publish Live or Deploy Vercel button in the top toolbar to publish updates in ~30 seconds." }
+      ]
+    });
+
+    // 8. Final Conversion CTA
+    modules.push({
+      id: "mod-final-cta",
+      type: "cta",
+      title: "Ready to Build High-Converting AI Pages?",
+      buttonText: "Book Free Consultation"
+    });
+
+    return { headline, subheadline, modules };
+  };
+
   const handleAILiveBuildPage = (e) => {
     if (e) e.preventDefault();
     if (!aiPromptInput.trim()) return;
     setBuildingAI(true);
 
-    const generatedTitle = selectedPage?.title || "New Created Page";
     const promptText = aiPromptInput.trim();
+    const pageTitle = selectedPage?.title || "AI Advertisement Page";
 
-    const newModules = [
-      {
-        id: `mod-${Date.now()}-1`,
-        type: "cards",
-        heading: "Core Strategy & Modules",
-        cards: [
-          { title: "AI Strategy & Execution", desc: "Data-driven strategies tailored for high-growth business objectives." },
-          { title: "Process Automation", desc: "Automate core workflows to increase operational productivity." },
-          { title: "Scalable Measurable Growth", desc: "Continuous performance optimization to maximize long-term ROI." }
-        ]
-      },
-      {
-        id: `mod-${Date.now()}-2`,
-        type: "content",
-        heading: `About ${generatedTitle}`,
-        text: `Our ${generatedTitle} platform delivers cutting-edge tools, advanced analytics, and strategic execution tailored for your business needs: ${promptText}`
-      },
-      {
-        id: `mod-${Date.now()}-3`,
-        type: "cta",
-        title: `Ready to get started with ${generatedTitle}?`,
-        buttonText: "Book Free Consultation"
-      }
-    ];
+    const { headline, subheadline, modules } = parsePromptToPageModules(promptText, pageTitle);
 
-    setCustomModules(newModules);
+    setCustomModules(modules);
 
     const pageKey = cleanPath || "page";
     setDraftValues((prev) => ({
       ...prev,
-      [`${pageKey}.title`]: generatedTitle,
-      [`${pageKey}.subtext`]: promptText,
-      [`${pageKey}.heading`]: `About ${generatedTitle}`,
-      [`${pageKey}.description`]: promptText,
-      [`${pageKey}.cta_title`]: `Ready to get started with ${generatedTitle}?`,
+      [`${pageKey}.title`]: headline,
+      [`${pageKey}.subtext`]: subheadline,
+      [`${pageKey}.heading`]: "Comprehensive AI Capabilities",
+      [`${pageKey}.description`]: "Everything you need to launch, optimize, and scale high-converting landing pages.",
+      [`${pageKey}.cta_title`]: "Ready to Build High-Converting AI Pages?",
       [`${pageKey}.cta_button`]: "Book Free Consultation"
     }));
 
     setHasUnsavedChanges(true);
     setSaveStatus("unsaved");
     setBuildingAI(false);
-    toast.success("✨ AI Live Page built successfully!");
+    toast.success("✨ AI Live Landing Page generated successfully!");
   };
 
   const handleAddModule = (type) => {
@@ -1184,6 +1251,98 @@ export function VisualEditorPage() {
                   >
                     Remove Section
                   </button>
+
+                  {mod.type === "trust_badges" && (
+                    <div className="py-6 px-8 bg-slate-900 text-white border-y border-slate-800">
+                      <div className="max-w-5xl mx-auto flex flex-wrap items-center justify-center gap-6 text-xs font-bold uppercase tracking-wider text-slate-300">
+                        {mod.badges.map((b, idx) => (
+                          <span key={idx} className="bg-slate-800 px-3.5 py-1.5 rounded-full border border-slate-700 shadow-sm flex items-center gap-1.5">
+                            {b}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {mod.type === "features_6" && (
+                    <div className="py-16 px-8 bg-white border-b border-slate-100">
+                      <div className="max-w-6xl mx-auto text-center">
+                        <h3 className="text-3xl font-extrabold text-slate-900 mb-2">{mod.heading}</h3>
+                        <p className="text-sm text-slate-500 mb-12 max-w-2xl mx-auto">{mod.subheading}</p>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-left">
+                          {mod.cards.map((c, idx) => (
+                            <div key={idx} className="bg-slate-50 p-6 rounded-2xl border border-slate-200 hover:shadow-md transition-all">
+                              <div className="text-3xl mb-3">{c.icon}</div>
+                              <h4 className="text-lg font-bold text-slate-900 mb-2">{c.title}</h4>
+                              <p className="text-xs text-slate-600 leading-relaxed">{c.desc}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {mod.type === "how_it_works" && (
+                    <div className="py-16 px-8 bg-slate-950 text-white border-b border-slate-900">
+                      <div className="max-w-5xl mx-auto text-center">
+                        <h3 className="text-3xl font-extrabold mb-12">{mod.heading}</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                          {mod.steps.map((s, idx) => (
+                            <div key={idx} className="bg-slate-900 p-8 rounded-2xl border border-slate-800 relative text-left">
+                              <span className="text-4xl font-black text-[#ff4d4d] opacity-90 mb-4 block font-mono">{s.step}</span>
+                              <h4 className="text-lg font-bold mb-2 text-white">{s.title}</h4>
+                              <p className="text-xs text-slate-400 leading-relaxed">{s.desc}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {mod.type === "mockup" && (
+                    <div className="py-16 px-8 bg-white border-b border-slate-100 text-center">
+                      <div className="max-w-5xl mx-auto">
+                        <h3 className="text-3xl font-extrabold text-slate-900 mb-2">{mod.heading}</h3>
+                        <p className="text-sm text-slate-500 mb-8">{mod.subheading}</p>
+                        <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-2xl">
+                          <img src={mod.src} alt={mod.heading} className="w-full max-h-[500px] object-cover" />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {mod.type === "testimonials" && (
+                    <div className="py-16 px-8 bg-slate-50 border-b border-slate-200">
+                      <div className="max-w-5xl mx-auto text-center">
+                        <h3 className="text-2xl font-bold text-slate-900 mb-8">{mod.heading}</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
+                          {mod.items.map((t, idx) => (
+                            <div key={idx} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                              <p className="text-xs text-slate-700 italic leading-relaxed mb-4">"{t.quote}"</p>
+                              <div className="font-bold text-xs text-[#ff4d4d]">{t.author}</div>
+                              <div className="text-[11px] text-slate-400">{t.role}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {mod.type === "faq" && (
+                    <div className="py-16 px-8 bg-white border-b border-slate-100">
+                      <div className="max-w-3xl mx-auto">
+                        <h3 className="text-2xl font-bold text-slate-900 mb-8 text-center">{mod.heading}</h3>
+                        <div className="space-y-4">
+                          {mod.faqs.map((f, idx) => (
+                            <div key={idx} className="bg-slate-50 p-5 rounded-xl border border-slate-200">
+                              <h4 className="font-bold text-sm text-slate-900 mb-2">Q: {f.q}</h4>
+                              <p className="text-xs text-slate-600 leading-relaxed">{f.a}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {mod.type === "content" && (
                     <div className="py-12 px-8 max-w-4xl mx-auto">
