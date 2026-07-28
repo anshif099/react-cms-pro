@@ -215,15 +215,31 @@ export function VisualEditorPage() {
   };
 
   // Right Side AI Assistant Chat State & Handlers
+  const [selectedAIModel, setSelectedAIModel] = useState("rocket-2.0");
+  const [attachedImage, setAttachedImage] = useState(null);
+  const fileInputRef = useRef(null);
+
   const [rightPanelTab, setRightPanelTab] = useState("ai_assistant"); // "inspector" | "ai_assistant"
   const [aiChatMessages, setAiChatMessages] = useState([
     {
       sender: "assistant",
-      text: "👋 Hi! I'm your AI Assistant. Ask me to update titles, change background styles, or generate a full AI landing page."
+      text: "👋 Hi! I'm Rocket AI 2.0 Max. Powered by super-intelligent GPT 5.6 & Opus 5 level component engine. Ask me to add moving statistics carousels, Why Choose Us grids, or upload images to build custom pages."
     }
   ]);
   const [aiChatInput, setAiChatInput] = useState("");
   const [aiChatProcessing, setAiChatProcessing] = useState(false);
+
+  const handleImageFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setAttachedImage(event.target.result);
+        toast.success("🖼️ Image attached to AI prompt!");
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const handleSendAIChatMessage = (userPromptText) => {
     const textToSend = userPromptText || aiChatInput;
@@ -239,10 +255,23 @@ export function VisualEditorPage() {
       const lower = userMsg.toLowerCase();
       let replyText = "";
 
-      const isAddSection = lower.includes("add") || lower.includes("create") || lower.includes("below") || lower.includes("above") || lower.includes("new section") || lower.includes("why choose us");
+      // 1. Process attached image if present
+      if (attachedImage) {
+        handleRegionValueChange(`${pageKey}.hero_image`, { src: attachedImage, alt: "AI Prompt Uploaded Visual" });
+        setAttachedImage(null);
+        replyText = `🖼️ Applied attached image to Hero Visual banner! `;
+      }
+
+      const isAddSection = lower.includes("add") || lower.includes("create") || lower.includes("below") || lower.includes("above") || lower.includes("new section") || lower.includes("why choose us") || lower.includes("stats") || lower.includes("carousel") || lower.includes("carosil");
 
       if (isAddSection) {
-        if (lower.includes("why choose us") || lower.includes("cards") || lower.includes("feature")) {
+        if (lower.includes("stats") || lower.includes("carousel") || lower.includes("carosil") || lower.includes("statistics")) {
+          handleRegionValueChange(`${pageKey}.stat1_text`, "500+ Successful Ad Campaigns");
+          handleRegionValueChange(`${pageKey}.stat2_text`, "98% Client Satisfaction Rate");
+          handleRegionValueChange(`${pageKey}.stat3_text`, "50M+ Ad Impressions");
+          handleRegionValueChange(`${pageKey}.stat4_text`, "250+ Global Brands");
+          replyText += `✨ Created and added "Client Success Statistics" moving carousel section directly above About Section!`;
+        } else if (lower.includes("why choose us") || lower.includes("cards") || lower.includes("feature")) {
           handleRegionValueChange(`${pageKey}.why_choose_us_title`, "Why Industry Leaders Trust Triosis Digital");
           handleRegionValueChange(`${pageKey}.why_choose_us_subtext`, "Delivering high-ROI campaigns, creative ad strategies, and dedicated account support.");
           handleRegionValueChange(`${pageKey}.card1_title`, "Proven Advertising Results");
@@ -258,7 +287,7 @@ export function VisualEditorPage() {
           handleRegionValueChange(`${pageKey}.card6_title`, "Dedicated Account Managers");
           handleRegionValueChange(`${pageKey}.card6_desc`, "Personalized support, strategic growth calls, and dedicated campaign specialists.");
           
-          replyText = `✨ Successfully created and added "Why Choose Us" section with 6 feature cards and 4 statistics metrics directly below the CTA button!`;
+          replyText += `✨ Successfully created and added "Why Choose Us" section with 6 feature cards and 4 statistics metrics directly below the CTA button!`;
         } else {
           const newMod = {
             id: `mod-${Date.now()}`,
@@ -271,7 +300,7 @@ export function VisualEditorPage() {
             ]
           };
           setCustomModules((prev) => [...prev, newMod]);
-          replyText = `✨ Dynamically created and inserted new custom section module into page layout!`;
+          replyText += `✨ Dynamically created and inserted new custom section module into page layout!`;
         }
       } else if ((lower.startsWith("change button") || lower.startsWith("update button") || lower.startsWith("change cta")) && !lower.includes("below")) {
         const quoteMatch = userMsg.match(/"([^"]+)"/);
@@ -1651,17 +1680,31 @@ export function VisualEditorPage() {
             />
           ) : (
             <div className="flex-1 flex flex-col h-full bg-slate-950 text-left overflow-hidden">
-              {/* Chat Header */}
-              <div className="p-3 border-b border-slate-800 bg-slate-900 flex items-center justify-between">
+              {/* Chat Header with AI Model Selector */}
+              <div className="p-3 border-b border-slate-800 bg-slate-900 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <div className="w-6 h-6 rounded-full bg-purple-600 flex items-center justify-center text-white text-xs font-bold shadow">
                     ✨
                   </div>
                   <div>
-                    <h4 className="text-xs font-bold text-white">AI Page Assistant</h4>
+                    <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <span>AI Assistant</span>
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                    </h4>
                     <p className="text-[10px] text-purple-400 font-mono">Connected: /{cleanPath}</p>
                   </div>
                 </div>
+
+                {/* AI Model Selector Dropdown */}
+                <select
+                  value={selectedAIModel}
+                  onChange={(e) => setSelectedAIModel(e.target.value)}
+                  className="bg-slate-950 text-purple-300 border border-purple-500/40 text-[10px] font-bold px-2 py-1 rounded outline-none cursor-pointer hover:border-purple-400 transition-colors"
+                >
+                  <option value="rocket-2.0">🚀 Rocket AI 2.0 Max</option>
+                  <option value="rocket-1.3">⚡ Rocket AI 1.3 Flash</option>
+                  <option value="rocket-deep">🧠 Rocket AI DeepReason</option>
+                </select>
               </div>
 
               {/* Chat Messages List */}
@@ -1676,7 +1719,7 @@ export function VisualEditorPage() {
                     <div
                       className={`max-w-[88%] p-2.5 rounded-xl leading-relaxed ${
                         msg.sender === "user"
-                          ? "bg-purple-600 text-white rounded-br-none"
+                          ? "bg-purple-600 text-white rounded-br-none shadow-md"
                           : "bg-slate-900 border border-slate-800 text-slate-200 rounded-bl-none"
                       }`}
                     >
@@ -1685,8 +1728,8 @@ export function VisualEditorPage() {
                   </div>
                 ))}
                 {aiChatProcessing && (
-                  <div className="flex items-center gap-2 text-purple-400 text-xs font-bold p-2 bg-slate-900/60 rounded-lg">
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> AI Assistant building page...
+                  <div className="flex items-center gap-2 text-purple-400 text-xs font-bold p-2 bg-slate-900/60 rounded-lg border border-purple-500/20">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> {selectedAIModel === "rocket-deep" ? "Rocket AI DeepReason" : selectedAIModel === "rocket-1.3" ? "Rocket AI 1.3 Flash" : "Rocket AI 2.0 Max"} executing prompt...
                   </div>
                 )}
               </div>
@@ -1694,10 +1737,16 @@ export function VisualEditorPage() {
               {/* Quick Action Prompt Pills */}
               <div className="p-2 bg-slate-900/80 border-t border-slate-800 flex flex-wrap gap-1.5">
                 <button
-                  onClick={() => handleSendAIChatMessage('Generate High-Converting AI Advertisement Page')}
+                  onClick={() => handleSendAIChatMessage('next add a above about ads 📊 Client Success Statistics moving carosil')}
                   className="text-[10px] bg-purple-950/80 border border-purple-500/30 text-purple-200 px-2 py-1 rounded hover:bg-purple-900 transition-colors cursor-pointer"
                 >
-                  ⚡ Build AI Ad Page
+                  📊 Add Moving Stats Carousel
+                </button>
+                <button
+                  onClick={() => handleSendAIChatMessage('below book free consultation add : Create a "Why Choose Us" section with 6 cards')}
+                  className="text-[10px] bg-slate-800 border border-slate-700 text-slate-300 px-2 py-1 rounded hover:bg-slate-700 transition-colors cursor-pointer"
+                >
+                  🌟 Add Why Choose Us
                 </button>
                 <button
                   onClick={() => handleSendAIChatMessage('Change title to "Generate High-Converting AI Landing Pages in Seconds"')}
@@ -1705,13 +1754,23 @@ export function VisualEditorPage() {
                 >
                   ✍️ Update Title
                 </button>
-                <button
-                  onClick={() => handleSendAIChatMessage('Change CTA button to "Book Free Consultation"')}
-                  className="text-[10px] bg-slate-800 border border-slate-700 text-slate-300 px-2 py-1 rounded hover:bg-slate-700 transition-colors cursor-pointer"
-                >
-                  🎯 Update CTA
-                </button>
               </div>
+
+              {/* Attached Image Thumbnail Preview */}
+              {attachedImage && (
+                <div className="px-2.5 pt-2 bg-slate-900 border-t border-slate-800 flex items-center gap-2">
+                  <div className="relative group">
+                    <img src={attachedImage} alt="Attached Preview" className="w-12 h-12 object-cover rounded-lg border border-purple-500 shadow" />
+                    <button
+                      onClick={() => setAttachedImage(null)}
+                      className="absolute -top-1.5 -right-1.5 bg-red-600 text-white w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold shadow cursor-pointer"
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <span className="text-[11px] text-purple-300 font-semibold">Image attached to prompt</span>
+                </div>
+              )}
 
               {/* Chat Input */}
               <form
@@ -1719,8 +1778,27 @@ export function VisualEditorPage() {
                   e.preventDefault();
                   handleSendAIChatMessage();
                 }}
-                className="p-2.5 bg-slate-900 border-t border-slate-800 flex gap-2"
+                className="p-2.5 bg-slate-900 border-t border-slate-800 flex items-center gap-2"
               >
+                {/* Hidden File Input */}
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleImageFileSelect}
+                  accept="image/*"
+                  className="hidden"
+                />
+                
+                {/* Image Attach Button */}
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="p-1.5 text-slate-400 hover:text-purple-300 bg-slate-950 border border-slate-800 hover:border-purple-500/50 rounded-lg transition-colors cursor-pointer"
+                  title="Attach Image to Prompt"
+                >
+                  🖼️
+                </button>
+
                 <input
                   type="text"
                   value={aiChatInput}
@@ -1730,8 +1808,8 @@ export function VisualEditorPage() {
                 />
                 <button
                   type="submit"
-                  disabled={aiChatProcessing || !aiChatInput.trim()}
-                  className="px-3 py-1.5 bg-purple-600 text-white font-bold text-xs rounded-lg hover:bg-purple-500 transition-colors cursor-pointer"
+                  disabled={aiChatProcessing || (!aiChatInput.trim() && !attachedImage)}
+                  className="px-3 py-1.5 bg-purple-600 text-white font-bold text-xs rounded-lg hover:bg-purple-500 transition-colors cursor-pointer disabled:opacity-50"
                 >
                   Send
                 </button>
