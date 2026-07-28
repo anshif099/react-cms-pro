@@ -217,7 +217,7 @@ export function VisualEditorPage() {
   };
 
   // Right Side AI Assistant Chat State & Handlers
-  const [selectedAIModel, setSelectedAIModel] = useState("rocket-2.5");
+  const [selectedAIModel, setSelectedAIModel] = useState("rocket-2.6");
   const [showAgentWorkspace, setShowAgentWorkspace] = useState(false);
   const [attachedImage, setAttachedImage] = useState(null);
   const fileInputRef = useRef(null);
@@ -226,7 +226,7 @@ export function VisualEditorPage() {
   const [aiChatMessages, setAiChatMessages] = useState([
     {
       sender: "assistant",
-      text: "👋 Hi! I'm Rocket AI 2.5. Powered by end-to-end real editor API execution, instant live preview synchronization, and draft auto-saving. Click 🚀 Rocket AI 2.5 at the top to launch Workspace."
+      text: "👋 Hi! I'm Rocket AI 2.6. Powered by live DOM inspection, computedStyle verification loops, multi-element target search, and verified execution reports. Click 🚀 Rocket AI 2.6 at the top to launch Workspace."
     }
   ]);
   const [aiChatInput, setAiChatInput] = useState("");
@@ -254,8 +254,20 @@ export function VisualEditorPage() {
     setAiChatProcessing(true);
 
     setTimeout(() => {
-      const pageKey = cleanPath || "page";
-      const pageTitle = selectedPage?.title || "Page";
+      // Inspect live iframe DOM computed style for Header background color if accessible
+      let domContext = null;
+      try {
+        if (iframeRef.current?.contentDocument) {
+          const doc = iframeRef.current.contentDocument;
+          const headerEl = doc.querySelector("header") || doc.querySelector(".header") || doc.querySelector("[data-rcms-region*='header']");
+          if (headerEl) {
+            const bg = window.getComputedStyle(headerEl).backgroundColor;
+            domContext = { headerBgColor: bg };
+          }
+        }
+      } catch (e) {
+        // Cross-origin fallback handled safely inside engine
+      }
 
       const engineResult = rocketAIEngine.processPrompt({
         promptText: userMsg,
@@ -264,7 +276,8 @@ export function VisualEditorPage() {
         pageTitle,
         currentDrafts: draftValues,
         currentModules: customModules,
-        model: selectedAIModel
+        model: selectedAIModel,
+        domContext
       });
 
       // Clear attached image after processing
@@ -1169,15 +1182,15 @@ export function VisualEditorPage() {
             Publish
           </Button>
 
-          {/* Rocket AI 2.5 Real Execution Agent Workspace Launcher */}
+          {/* Rocket AI 2.6 DOM Verification Agent Workspace Launcher */}
           <Button
             onClick={() => setShowAgentWorkspace(true)}
             variant="primary"
             className="text-xs py-1.5 px-3 font-bold gap-1.5 cursor-pointer bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-600/30 hover:brightness-110"
-            title="Launch Rocket AI 2.5 Real Execution Agent Workspace"
+            title="Launch Rocket AI 2.6 DOM Verification Agent Workspace"
           >
             <Sparkles className="w-3.5 h-3.5" />
-            🚀 Rocket AI 2.5
+            🚀 Rocket AI 2.6
           </Button>
 
           {/* Trigger Vercel Deployment */}
@@ -1659,19 +1672,13 @@ export function VisualEditorPage() {
                   </div>
                 </div>
 
-                {/* AI Model Selector Dropdown */}
+                {/* AI Model Selector */}
                 <select
                   value={selectedAIModel}
                   onChange={(e) => setSelectedAIModel(e.target.value)}
                   className="bg-slate-950 text-purple-300 border border-purple-500/40 text-[10px] font-bold px-2 py-1 rounded outline-none cursor-pointer hover:border-purple-400 transition-colors"
                 >
-                  <option value="rocket-2.5">🚀 Rocket AI 2.5 (Real Execution Agent)</option>
-                  <option value="rocket-2.4">🚀 Rocket AI 2.4 (Autonomous Agent)</option>
-                  <option value="rocket-2.2">🚀 Rocket AI 2.2 (Architect & Engine)</option>
-                  <option value="rocket-2.1">🚀 Rocket AI 2.1 Ultra</option>
-                  <option value="rocket-2.0">🧠 Rocket AI 2.0 Pro</option>
-                  <option value="rocket-1.8">⚡ Rocket AI 1.8 Instant</option>
-                  <option value="rocket-1.6">💥 Rocket AI 1.6 Flash</option>
+                  <option value="rocket-2.6">🚀 Rocket AI 2.6 (DOM Verification Agent)</option>
                 </select>
               </div>
 
@@ -1697,14 +1704,7 @@ export function VisualEditorPage() {
                 ))}
                 {aiChatProcessing && (
                   <div className="flex items-center gap-2 text-purple-400 text-xs font-bold p-2 bg-slate-900/60 rounded-lg border border-purple-500/20">
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> {
-                      selectedAIModel === "rocket-2.5" ? "Rocket AI 2.5 (Real Execution Agent)" :
-                      selectedAIModel === "rocket-2.4" ? "Rocket AI 2.4 (Autonomous Agent)" :
-                      selectedAIModel === "rocket-2.2" ? "Rocket AI 2.2 (Architect & Engine)" :
-                      selectedAIModel === "rocket-2.1" ? "Rocket AI 2.1 Ultra" :
-                      selectedAIModel === "rocket-2.0" ? "Rocket AI 2.0 Pro" :
-                      selectedAIModel === "rocket-1.8" ? "Rocket AI 1.8 Instant" : "Rocket AI 1.6 Flash"
-                    } processing prompt...
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Rocket AI 2.6 (DOM Verification Agent) processing prompt...
                   </div>
                 )}
               </div>
