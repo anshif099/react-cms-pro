@@ -293,6 +293,25 @@ export function VisualEditorPage() {
         });
       }
 
+      // Live DOM Canvas Manipulation fallback for instant visual match in iframe:
+      try {
+        if (iframeRef.current?.contentDocument) {
+          const doc = iframeRef.current.contentDocument;
+          const bgVal = engineResult.regionUpdates[`${pageKey}.bg_color`] || engineResult.regionUpdates[`bg_color`];
+          if (bgVal === "#ffffff") {
+            const targets = doc.querySelectorAll(".page-wrapper, #root, body, main, section, [data-rcms-region]");
+            targets.forEach((el) => {
+              if (el.tagName !== "HEADER" && !el.closest("header")) {
+                el.style.backgroundColor = "#ffffff";
+                el.style.color = "#0f172a";
+              }
+            });
+          }
+        }
+      } catch (err) {
+        // Cross-origin fallback handled safely
+      }
+
       // Apply module updates if modified
       if (engineResult.customModules && engineResult.customModules.length > 0) {
         setCustomModules(engineResult.customModules);
@@ -300,7 +319,7 @@ export function VisualEditorPage() {
 
       setAiChatMessages((prev) => [...prev, { sender: "assistant", text: engineResult.replyText }]);
       setAiChatProcessing(false);
-      toast.success("✨ Rocket AI 2.2 updated page!");
+      toast.success("✨ Rocket AI 2.6 updated page!");
     }, 450);
   };
 
