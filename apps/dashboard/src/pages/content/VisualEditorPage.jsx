@@ -213,6 +213,64 @@ export function VisualEditorPage() {
     return { headline, subheadline, modules };
   };
 
+  // Right Side AI Assistant Chat State & Handlers
+  const [rightPanelTab, setRightPanelTab] = useState("ai_assistant"); // "inspector" | "ai_assistant"
+  const [aiChatMessages, setAiChatMessages] = useState([
+    {
+      sender: "assistant",
+      text: "👋 Hi! I'm your AI Assistant. Ask me to update titles, change background styles, or generate a full AI landing page."
+    }
+  ]);
+  const [aiChatInput, setAiChatInput] = useState("");
+  const [aiChatProcessing, setAiChatProcessing] = useState(false);
+
+  const handleSendAIChatMessage = (userPromptText) => {
+    const textToSend = userPromptText || aiChatInput;
+    if (!textToSend || !textToSend.trim()) return;
+
+    const userMsg = textToSend.trim();
+    setAiChatMessages((prev) => [...prev, { sender: "user", text: userMsg }]);
+    if (!userPromptText) setAiChatInput("");
+    setAiChatProcessing(true);
+
+    setTimeout(() => {
+      const pageKey = cleanPath || "page";
+      const lower = userMsg.toLowerCase();
+      let replyText = "";
+
+      if (lower.includes("title") || lower.includes("headline")) {
+        const quoteMatch = userMsg.match(/"([^"]+)"/);
+        const newTitle = quoteMatch ? quoteMatch[1] : userMsg.replace(/^change (the )?(title|headline) (to )?/i, "").replace(/"/g, "");
+        handleRegionValueChange(`${pageKey}.title`, newTitle);
+        replyText = `✨ Updated Page Main Title to: "${newTitle}"`;
+      } else if (lower.includes("subtext") || lower.includes("subtitle") || lower.includes("description")) {
+        const quoteMatch = userMsg.match(/"([^"]+)"/);
+        const newDesc = quoteMatch ? quoteMatch[1] : "We deliver innovative technology, creative marketing, and measurable digital strategies.";
+        handleRegionValueChange(`${pageKey}.subtext`, newDesc);
+        replyText = `✨ Updated Hero Subtitle description.`;
+      } else if (lower.includes("cta") || lower.includes("button")) {
+        const quoteMatch = userMsg.match(/"([^"]+)"/);
+        const newCta = quoteMatch ? quoteMatch[1] : "Book Free Consultation";
+        handleRegionValueChange(`${pageKey}.cta_button`, newCta);
+        replyText = `✨ Updated CTA Button text to: "${newCta}"`;
+      } else {
+        // Full page prompt builder
+        const { headline, subheadline, modules } = parsePromptToPageModules(userMsg, selectedPage?.title);
+        setCustomModules(modules);
+        handleRegionValueChange(`${pageKey}.title`, headline);
+        handleRegionValueChange(`${pageKey}.subtext`, subheadline);
+        handleRegionValueChange(`${pageKey}.heading`, `About ${headline}`);
+        handleRegionValueChange(`${pageKey}.cta_title`, `Ready to get started with ${headline}?`);
+        handleRegionValueChange(`${pageKey}.cta_button`, "Book Free Consultation");
+        replyText = `✨ Generated and built AI landing page for: "${headline}". Connected live iframe updated!`;
+      }
+
+      setAiChatMessages((prev) => [...prev, { sender: "assistant", text: replyText }]);
+      setAiChatProcessing(false);
+      toast.success("✨ AI Assistant updated page!");
+    }, 500);
+  };
+
   const handleAILiveBuildPage = (e) => {
     if (e) e.preventDefault();
     if (!aiPromptInput.trim()) return;
@@ -317,11 +375,11 @@ export function VisualEditorPage() {
       setPageSeo(localeData.seo || {});
       setPageBlocks(localeData.blocks || []);
 
-      // Auto-set preview mode based on whether route was imported from code or created in CMS
+      // Default preview mode to shell so real connected client iframe with real Header & Footer loads
       if (selectedPage.isImported) {
         setPreviewModeType("direct");
       } else {
-        setPreviewModeType("visual");
+        setPreviewModeType("shell");
       }
     }
   }, [selectedPage, activeLocale]);
@@ -1493,17 +1551,128 @@ export function VisualEditorPage() {
           )}
         </div>
 
-        {/* Right Pane: Inspector Panel */}
-        <div className="w-80 flex-shrink-0">
-          <RegionInspectorPanel
-            selectedElement={selectedElement}
-            onChangeRegion={handleRegionValueChange}
-            activePageId={pageId}
-            onSwitchDevice={(bp) => {
-              const deviceMap = { mobile: "mobile", tablet: "tablet", desktop: "desktop" };
-              setActiveDevice(deviceMap[bp] || "full");
-            }}
-          />
+        {/* Right Pane: Inspector & AI Assistant Tabs */}
+        <div className="w-80 flex-shrink-0 bg-slate-900 border-l border-slate-800 flex flex-col h-full overflow-hidden text-left">
+          {/* Tab Switcher */}
+          <div className="flex border-b border-slate-800 bg-slate-950 p-1">
+            <button
+              onClick={() => setRightPanelTab("inspector")}
+              className={`flex-1 py-1.5 text-xs font-bold rounded transition-all cursor-pointer ${
+                rightPanelTab === "inspector" ? "bg-slate-800 text-white shadow" : "text-slate-400 hover:text-white"
+              }`}
+            >
+              Inspector
+            </button>
+            <button
+              onClick={() => setRightPanelTab("ai_assistant")}
+              className={`flex-1 py-1.5 text-xs font-bold rounded transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                rightPanelTab === "ai_assistant" ? "bg-purple-600 text-white shadow" : "text-slate-400 hover:text-white"
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-purple-300" />
+              AI Assistant
+            </button>
+          </div>
+
+          {rightPanelTab === "inspector" ? (
+            <RegionInspectorPanel
+              selectedElement={selectedElement}
+              onChangeRegion={handleRegionValueChange}
+              activePageId={pageId}
+              onSwitchDevice={(bp) => {
+                const deviceMap = { mobile: "mobile", tablet: "tablet", desktop: "desktop" };
+                setActiveDevice(deviceMap[bp] || "full");
+              }}
+            />
+          ) : (
+            <div className="flex-1 flex flex-col h-full bg-slate-950 text-left overflow-hidden">
+              {/* Chat Header */}
+              <div className="p-3 border-b border-slate-800 bg-slate-900 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-full bg-purple-600 flex items-center justify-center text-white text-xs font-bold shadow">
+                    ✨
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-white">AI Page Assistant</h4>
+                    <p className="text-[10px] text-purple-400 font-mono">Connected: /{cleanPath}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Chat Messages List */}
+              <div className="flex-1 p-3 overflow-y-auto space-y-3 text-xs">
+                {aiChatMessages.map((msg, idx) => (
+                  <div
+                    key={idx}
+                    className={`flex flex-col ${
+                      msg.sender === "user" ? "items-end" : "items-start"
+                    }`}
+                  >
+                    <div
+                      className={`max-w-[88%] p-2.5 rounded-xl leading-relaxed ${
+                        msg.sender === "user"
+                          ? "bg-purple-600 text-white rounded-br-none"
+                          : "bg-slate-900 border border-slate-800 text-slate-200 rounded-bl-none"
+                      }`}
+                    >
+                      {msg.text}
+                    </div>
+                  </div>
+                ))}
+                {aiChatProcessing && (
+                  <div className="flex items-center gap-2 text-purple-400 text-xs font-bold p-2 bg-slate-900/60 rounded-lg">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> AI Assistant building page...
+                  </div>
+                )}
+              </div>
+
+              {/* Quick Action Prompt Pills */}
+              <div className="p-2 bg-slate-900/80 border-t border-slate-800 flex flex-wrap gap-1.5">
+                <button
+                  onClick={() => handleSendAIChatMessage('Generate High-Converting AI Advertisement Page')}
+                  className="text-[10px] bg-purple-950/80 border border-purple-500/30 text-purple-200 px-2 py-1 rounded hover:bg-purple-900 transition-colors cursor-pointer"
+                >
+                  ⚡ Build AI Ad Page
+                </button>
+                <button
+                  onClick={() => handleSendAIChatMessage('Change title to "Generate High-Converting AI Landing Pages in Seconds"')}
+                  className="text-[10px] bg-slate-800 border border-slate-700 text-slate-300 px-2 py-1 rounded hover:bg-slate-700 transition-colors cursor-pointer"
+                >
+                  ✍️ Update Title
+                </button>
+                <button
+                  onClick={() => handleSendAIChatMessage('Change CTA button to "Book Free Consultation"')}
+                  className="text-[10px] bg-slate-800 border border-slate-700 text-slate-300 px-2 py-1 rounded hover:bg-slate-700 transition-colors cursor-pointer"
+                >
+                  🎯 Update CTA
+                </button>
+              </div>
+
+              {/* Chat Input */}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleSendAIChatMessage();
+                }}
+                className="p-2.5 bg-slate-900 border-t border-slate-800 flex gap-2"
+              >
+                <input
+                  type="text"
+                  value={aiChatInput}
+                  onChange={(e) => setAiChatInput(e.target.value)}
+                  placeholder="Ask AI Assistant to edit page..."
+                  className="flex-1 bg-slate-950 border border-slate-800 text-xs text-white px-3 py-1.5 rounded-lg focus:border-purple-500 outline-none"
+                />
+                <button
+                  type="submit"
+                  disabled={aiChatProcessing || !aiChatInput.trim()}
+                  className="px-3 py-1.5 bg-purple-600 text-white font-bold text-xs rounded-lg hover:bg-purple-500 transition-colors cursor-pointer"
+                >
+                  Send
+                </button>
+              </form>
+            </div>
+          )}
         </div>
       </div>
 
