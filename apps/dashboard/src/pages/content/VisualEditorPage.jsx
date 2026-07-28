@@ -153,7 +153,7 @@ export function VisualEditorPage() {
       if (selectedPage.isImported) {
         setPreviewModeType("direct");
       } else {
-        setPreviewModeType("shell");
+        setPreviewModeType("visual");
       }
     }
   }, [selectedPage, activeLocale]);
@@ -545,6 +545,21 @@ export function VisualEditorPage() {
     }
   };
 
+  // Virtual Live Preview Region Selector (WordPress Mode)
+  const handleSelectVirtualRegion = (regionId, label, type = "text") => {
+    const val = draftValues[regionId] !== undefined 
+      ? draftValues[regionId] 
+      : (regionsMap[regionId]?.defaultValue || "");
+
+    setSelectedElement({
+      regionId,
+      type,
+      label,
+      pageId,
+      value: val
+    });
+  };
+
   // Handle iframe load sequence
   const handleIframeLoad = () => {
     if (editModeActive) {
@@ -800,35 +815,35 @@ export function VisualEditorPage() {
             })}
           </div>
 
-          {/* Layout Shell vs Direct Route Selector */}
+          {/* View Mode Selector: Visual Live (WordPress) vs Site Shell Frame vs Page Canvas */}
           {cleanPath && cleanPath !== "home" && (
             <div className="hidden lg:flex bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
               <button
-                onClick={() => setPreviewModeType("canvas")}
+                onClick={() => setPreviewModeType("visual")}
                 className={`px-2.5 py-0.5 rounded font-bold text-[11px] transition-all cursor-pointer ${
-                  previewModeType === "canvas" ? "bg-purple-600 text-white shadow" : "text-slate-400 hover:text-white"
+                  previewModeType === "visual" ? "bg-purple-600 text-white shadow" : "text-slate-400 hover:text-white"
                 }`}
-                title="Renders clean page canvas with section blocks editor for this page"
+                title="Renders WordPress-style visual live preview directly inside dashboard with Header, Footer, and page content"
               >
-                Page Canvas
+                Visual Live (WordPress)
               </button>
               <button
                 onClick={() => setPreviewModeType("shell")}
                 className={`px-2.5 py-0.5 rounded font-bold text-[11px] transition-all cursor-pointer ${
                   previewModeType === "shell" ? "bg-purple-600 text-white shadow" : "text-slate-400 hover:text-white"
                 }`}
-                title="Renders using live site layout shell (?page=slug)"
+                title="Renders using connected live site iframe frame (?page=slug)"
               >
                 Site Shell Frame
               </button>
               <button
-                onClick={() => setPreviewModeType("direct")}
+                onClick={() => setPreviewModeType("canvas")}
                 className={`px-2.5 py-0.5 rounded font-bold text-[11px] transition-all cursor-pointer ${
-                  previewModeType === "direct" ? "bg-purple-600 text-white shadow" : "text-slate-400 hover:text-white"
+                  previewModeType === "canvas" ? "bg-purple-600 text-white shadow" : "text-slate-400 hover:text-white"
                 }`}
-                title="Renders using direct URL route (/slug)"
+                title="Renders drag-and-drop block editor canvas"
               >
-                Direct Route
+                Page Canvas
               </button>
             </div>
           )}
@@ -973,7 +988,135 @@ export function VisualEditorPage() {
             </div>
           )}
 
-          {previewModeType === "canvas" ? (
+          {previewModeType === "visual" ? (
+            <div
+              style={{ width: getDeviceWidth(), transform: 'translateZ(0)' }}
+              className="h-full w-full bg-[#080808] text-white rounded-xl overflow-y-auto shadow-2xl border border-slate-800 relative text-left"
+            >
+              {/* WordPress Style Site Header with Logo & Navigation */}
+              <header className="py-4 px-8 flex items-center justify-between border-b border-white/10 bg-[#0d0d0d] sticky top-0 z-20 shadow-md">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center font-bold text-white text-lg shadow-md">
+                    T
+                  </div>
+                  <span className="text-xl font-bold tracking-tight text-white">Triosis <span className="text-red-500 font-normal">Digital</span></span>
+                </div>
+                <div className="hidden md:flex items-center gap-6 text-xs text-slate-300 font-semibold">
+                  <span className="cursor-pointer hover:text-white">Home</span>
+                  <span className="cursor-pointer hover:text-white">About Us</span>
+                  <span className="cursor-pointer hover:text-white">Services</span>
+                  <span className="cursor-pointer hover:text-white">Portfolio</span>
+                  <span className="cursor-pointer hover:text-white text-red-400 font-bold border-b-2 border-red-500 pb-0.5">{selectedPage?.title || "Page"}</span>
+                  <span className="cursor-pointer hover:text-white">Contact Us</span>
+                </div>
+              </header>
+
+              {/* Selected Page Visual Hero Banner */}
+              <div 
+                onClick={() => handleSelectVirtualRegion(`${cleanPath || "page"}.title`, "Page Main Title")}
+                className={`p-10 text-center relative border-2 border-dashed transition-all cursor-pointer ${
+                  selectedElement?.regionId === `${cleanPath || "page"}.title` ? "border-purple-500 bg-purple-500/10 ring-2 ring-purple-500/50" : "border-transparent hover:border-purple-500/40"
+                }`}
+              >
+                <div className="inline-flex items-center gap-2 bg-red-500/10 border border-red-500/30 px-4 py-1 rounded-full mb-6">
+                  <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                  <span className="text-xs font-bold uppercase tracking-wider text-red-400">Dynamic Solution</span>
+                </div>
+
+                <h1 className="text-4xl md:text-5xl font-extrabold text-white mb-5 tracking-tight max-w-4xl mx-auto leading-tight">
+                  {draftValues[`${cleanPath || "page"}.title`] || selectedPage?.title || "AI Courses"}
+                </h1>
+
+                <p className="text-base md:text-lg text-slate-300 max-w-3xl mx-auto mb-8 leading-relaxed">
+                  {draftValues[`${cleanPath || "page"}.subtext`] || selectedPage?.prompt || "Strategic Digital Solutions for Businesses That Want to Lead. Explore our comprehensive courses and solutions."}
+                </p>
+
+                <div className="max-w-3xl mx-auto bg-slate-950/90 border border-slate-800 rounded-2xl p-8 shadow-2xl text-left space-y-4">
+                  <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Main Content Section</span>
+                    <span className="text-[11px] font-mono text-purple-400">Region: {cleanPath || "page"}.heading</span>
+                  </div>
+                  <h3 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSelectVirtualRegion(`${cleanPath || "page"}.heading`, "Section Heading");
+                    }}
+                    className={`text-xl font-bold text-white p-2 rounded transition-all cursor-pointer ${
+                      selectedElement?.regionId === `${cleanPath || "page"}.heading` ? "bg-purple-600/30 ring-2 ring-purple-500" : "hover:bg-slate-800/60"
+                    }`}
+                  >
+                    {draftValues[`${cleanPath || "page"}.heading`] || `About ${selectedPage?.title || "Page"}`}
+                  </h3>
+                  <p 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSelectVirtualRegion(`${cleanPath || "page"}.description`, "Section Description");
+                    }}
+                    className={`text-sm text-slate-300 leading-relaxed p-2 rounded transition-all cursor-pointer ${
+                      selectedElement?.regionId === `${cleanPath || "page"}.description` ? "bg-purple-600/30 ring-2 ring-purple-500" : "hover:bg-slate-800/60"
+                    }`}
+                  >
+                    {draftValues[`${cleanPath || "page"}.description`] || "We deliver innovative technology, creative marketing, and measurable digital strategies to help ambitious businesses grow and achieve long-term success."}
+                  </p>
+                </div>
+              </div>
+
+              {/* 3 Feature Highlights Grid */}
+              <div className="py-12 px-8 bg-[#0d0d0d] border-t border-white/10">
+                <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="bg-[#141414] border border-white/10 p-6 rounded-2xl">
+                    <div className="text-red-400 font-bold text-lg mb-3">⚡ High Performance</div>
+                    <h4 className="font-bold text-white mb-2">Strategic Planning &amp; Execution</h4>
+                    <p className="text-xs text-slate-400 leading-relaxed">Tailored strategies that align with core business objectives to maximize ROI.</p>
+                  </div>
+                  <div className="bg-[#141414] border border-white/10 p-6 rounded-2xl">
+                    <div className="text-red-400 font-bold text-lg mb-3">🎯 Targeted Outreach</div>
+                    <h4 className="font-bold text-white mb-2">Data-Driven Optimization</h4>
+                    <p className="text-xs text-slate-400 leading-relaxed">Leveraging advanced analytics and AI-powered insights to refine your market position.</p>
+                  </div>
+                  <div className="bg-[#141414] border border-white/10 p-6 rounded-2xl">
+                    <div className="text-red-400 font-bold text-lg mb-3">🚀 Scalable Growth</div>
+                    <h4 className="font-bold text-white mb-2">End-to-End Implementation</h4>
+                    <p className="text-xs text-slate-400 leading-relaxed">From concept to launch, ensuring seamless execution and continuous support.</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Call to Action Section */}
+              <div 
+                onClick={() => handleSelectVirtualRegion(`${cleanPath || "page"}.cta_title`, "CTA Title")}
+                className={`py-12 px-8 text-center bg-[#111111] border-t border-white/10 cursor-pointer ${
+                  selectedElement?.regionId === `${cleanPath || "page"}.cta_title` ? "bg-purple-950/40 ring-2 ring-purple-500" : ""
+                }`}
+              >
+                <h3 className="text-2xl font-bold text-white mb-3">
+                  {draftValues[`${cleanPath || "page"}.cta_title`] || `Ready to transform your business with ${selectedPage?.title || "our services"}?`}
+                </h3>
+                <p className="text-sm text-slate-400 mb-6">Get in touch with our expert team to schedule a free consultation.</p>
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleSelectVirtualRegion(`${cleanPath || "page"}.cta_button`, "CTA Button Text");
+                  }}
+                  className="px-8 py-3 bg-red-500 hover:bg-red-600 text-white font-bold rounded-full text-sm shadow-lg transition-all cursor-pointer"
+                >
+                  {draftValues[`${cleanPath || "page"}.cta_button`] || "Book Free Consultation"}
+                </button>
+              </div>
+
+              {/* WordPress Style Footer */}
+              <footer className="py-8 px-8 border-t border-white/10 bg-[#050505] text-xs text-slate-500 flex flex-col md:flex-row justify-between items-center gap-4">
+                <div>
+                  <span className="font-bold text-white">Triosis Digital</span> © 2026. All rights reserved.
+                </div>
+                <div className="flex gap-4">
+                  <span>Privacy Policy</span>
+                  <span>Terms of Service</span>
+                  <span>Contact</span>
+                </div>
+              </footer>
+            </div>
+          ) : previewModeType === "canvas" ? (
             <div className="h-full w-full bg-slate-900/60 p-6 overflow-y-auto rounded-xl border border-slate-800 text-left space-y-6 max-w-5xl">
               <div className="flex items-center justify-between pb-4 border-b border-slate-800">
                 <div>
