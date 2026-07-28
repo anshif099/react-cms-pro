@@ -269,6 +269,9 @@ export function VisualEditorPage() {
         // Cross-origin fallback handled safely inside engine
       }
 
+      const pageKey = cleanPath || "page";
+      const pageTitle = selectedPage?.title || "Page";
+
       const engineResult = rocketAIEngine.processPrompt({
         promptText: userMsg,
         attachedImage,
