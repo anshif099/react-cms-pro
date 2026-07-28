@@ -318,10 +318,18 @@ export function VisualEditorPage() {
       cleanInput = `https://${cleanInput}`;
     }
 
+    try {
+      const parsed = new URL(cleanInput);
+      cleanInput = parsed.origin;
+    } catch {
+      cleanInput = cleanInput.replace(/\/$/, "");
+    }
+
     setUpdatingDomain(true);
     try {
       await websiteService.update(websiteId, { domain: cleanInput });
       setTargetDomain(cleanInput);
+      setNewDomainInput(cleanInput);
       setShowDomainModal(false);
     } catch (err) {
       console.error("Failed to update website domain:", err);
@@ -580,7 +588,18 @@ export function VisualEditorPage() {
     cleanPath = rawPath.replace(/^\/+/, "");
   }
 
-  const cleanDomain = targetDomain.replace(/\/$/, "");
+  // Always sanitize cleanDomain to base origin (e.g. https://triosis.vercel.app without subpaths)
+  let cleanDomain = "";
+  if (targetDomain) {
+    try {
+      let raw = targetDomain.trim();
+      if (!/^https?:\/\//i.test(raw)) raw = `https://${raw}`;
+      cleanDomain = new URL(raw).origin;
+    } catch {
+      cleanDomain = targetDomain.replace(/\/$/, "");
+    }
+  }
+
   let previewUrl = "";
   if (cleanDomain) {
     if (previewModeType === "shell" && cleanPath && cleanPath !== "home") {
