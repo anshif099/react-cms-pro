@@ -217,7 +217,7 @@ export function VisualEditorPage() {
   };
 
   // Right Side AI Assistant Chat State & Handlers
-  const [selectedAIModel, setSelectedAIModel] = useState("rocket-2.4");
+  const [selectedAIModel, setSelectedAIModel] = useState("rocket-2.5");
   const [showAgentWorkspace, setShowAgentWorkspace] = useState(false);
   const [attachedImage, setAttachedImage] = useState(null);
   const fileInputRef = useRef(null);
@@ -226,7 +226,7 @@ export function VisualEditorPage() {
   const [aiChatMessages, setAiChatMessages] = useState([
     {
       sender: "assistant",
-      text: "👋 Hi! I'm Rocket AI 2.4. Powered by autonomous agent mode, live reasoning timeline, theme/SEO analysis, screenshot intelligence, and full-screen workspace. Click 🚀 Rocket AI 2.4 at the top to launch Agent Workspace."
+      text: "👋 Hi! I'm Rocket AI 2.5. Powered by end-to-end real editor API execution, instant live preview synchronization, and draft auto-saving. Click 🚀 Rocket AI 2.5 at the top to launch Workspace."
     }
   ]);
   const [aiChatInput, setAiChatInput] = useState("");
@@ -1169,15 +1169,15 @@ export function VisualEditorPage() {
             Publish
           </Button>
 
-          {/* Rocket AI 2.4 Autonomous Agent Workspace Launcher */}
+          {/* Rocket AI 2.5 Real Execution Agent Workspace Launcher */}
           <Button
             onClick={() => setShowAgentWorkspace(true)}
             variant="primary"
             className="text-xs py-1.5 px-3 font-bold gap-1.5 cursor-pointer bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-600/30 hover:brightness-110"
-            title="Launch Rocket AI 2.4 Autonomous Agent Workspace"
+            title="Launch Rocket AI 2.5 Real Execution Agent Workspace"
           >
             <Sparkles className="w-3.5 h-3.5" />
-            🚀 Rocket AI 2.4
+            🚀 Rocket AI 2.5
           </Button>
 
           {/* Trigger Vercel Deployment */}
@@ -1665,6 +1665,7 @@ export function VisualEditorPage() {
                   onChange={(e) => setSelectedAIModel(e.target.value)}
                   className="bg-slate-950 text-purple-300 border border-purple-500/40 text-[10px] font-bold px-2 py-1 rounded outline-none cursor-pointer hover:border-purple-400 transition-colors"
                 >
+                  <option value="rocket-2.5">🚀 Rocket AI 2.5 (Real Execution Agent)</option>
                   <option value="rocket-2.4">🚀 Rocket AI 2.4 (Autonomous Agent)</option>
                   <option value="rocket-2.2">🚀 Rocket AI 2.2 (Architect & Engine)</option>
                   <option value="rocket-2.1">🚀 Rocket AI 2.1 Ultra</option>
@@ -1697,6 +1698,7 @@ export function VisualEditorPage() {
                 {aiChatProcessing && (
                   <div className="flex items-center gap-2 text-purple-400 text-xs font-bold p-2 bg-slate-900/60 rounded-lg border border-purple-500/20">
                     <Loader2 className="w-3.5 h-3.5 animate-spin" /> {
+                      selectedAIModel === "rocket-2.5" ? "Rocket AI 2.5 (Real Execution Agent)" :
                       selectedAIModel === "rocket-2.4" ? "Rocket AI 2.4 (Autonomous Agent)" :
                       selectedAIModel === "rocket-2.2" ? "Rocket AI 2.2 (Architect & Engine)" :
                       selectedAIModel === "rocket-2.1" ? "Rocket AI 2.1 Ultra" :

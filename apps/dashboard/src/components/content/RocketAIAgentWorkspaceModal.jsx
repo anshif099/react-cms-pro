@@ -51,7 +51,7 @@ export default function RocketAIAgentWorkspaceModal({
   if (!isOpen) return null;
 
   // Agent State & History
-  const [selectedModel, setSelectedModel] = useState("rocket-2.4");
+  const [selectedModel, setSelectedModel] = useState("rocket-2.5");
   const [isAgentMode, setIsAgentMode] = useState(true);
   const [agentStatus, setAgentStatus] = useState("idle"); // "idle" | "running" | "paused" | "completed"
   
@@ -59,7 +59,7 @@ export default function RocketAIAgentWorkspaceModal({
   const [messages, setMessages] = useState([
     {
       sender: "assistant",
-      text: `👋 Hi! I'm **Rocket AI 2.4 Autonomous Development Agent**.\n\nI automatically inspect page layouts, theme contrast, Tailwind tokens, SEO, and accessibility to build, refactor, and polish ReactCMS Pro pages. Type a prompt or select a quick task to start.`
+      text: `👋 Hi! I'm **Rocket AI 2.5 Real Execution Agent**.\n\nI automatically inspect page layouts, locate affected CMS regions, execute editor function updates, refresh the preview frame, and auto-save draft snapshots in real time. Type a prompt or select a quick task to start.`
     }
   ]);
 
@@ -197,9 +197,9 @@ export default function RocketAIAgentWorkspaceModal({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="text-sm font-extrabold text-white tracking-wide">Rocket AI 2.4 Workspace</h3>
+              <h3 className="text-sm font-extrabold text-white tracking-wide">Rocket AI 2.5 Workspace</h3>
               <span className="bg-purple-950 text-purple-300 border border-purple-500/40 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                Autonomous Agent
+                Real Execution Agent
               </span>
             </div>
             <p className="text-[11px] text-slate-400 font-mono">Connected: /{pageKey} ({pageTitle})</p>
@@ -213,6 +213,7 @@ export default function RocketAIAgentWorkspaceModal({
             onChange={(e) => setSelectedModel(e.target.value)}
             className="bg-slate-950 text-purple-300 border border-purple-500/40 text-xs font-bold px-3 py-1.5 rounded-lg outline-none cursor-pointer hover:border-purple-400 transition-all"
           >
+            <option value="rocket-2.5">🚀 Rocket AI 2.5 (Real Execution Agent)</option>
             <option value="rocket-2.4">🚀 Rocket AI 2.4 (Autonomous Agent)</option>
             <option value="rocket-2.2">🚀 Rocket AI 2.2 (Architect & Engine)</option>
             <option value="rocket-2.1">🚀 Rocket AI 2.1 Ultra</option>
