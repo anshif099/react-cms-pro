@@ -20,7 +20,8 @@ import {
   Settings,
   Link2,
   AlertTriangle,
-  UploadCloud
+  UploadCloud,
+  Sparkles
 } from "lucide-react";
 import { usePages } from "../../hooks/usePages";
 import { useLocale } from "../../hooks/useLocale";

@@ -66,7 +66,7 @@ export function PagesListPage() {
 
     setCreating(true);
     try {
-      await createPage(websiteId, {
+      const created = await createPage(websiteId, {
         title: newPageTitle,
         slug: newPageSlug || "untitled",
         template: selectedTemplate,
@@ -85,6 +85,10 @@ export function PagesListPage() {
       setNewPageMetaDesc("");
       setSelectedTemplate("blank");
       setWizardStep(1);
+
+      if (created?.id) {
+        navigate(`/content/${websiteId}/pages/${created.id}/editor`);
+      }
     } catch (err) {
       console.error(err);
     } finally {
