@@ -4,7 +4,8 @@ export interface RouteEntry {
   title: string;
   layout?: string;
   contentModel?: string;
-  source: 'registered' | 'cms-generated';
+  source: 'registered' | 'cms-generated' | 'cms' | 'generated' | 'imported';
   published: boolean;
   createdAt?: number;
+  slug?: string;
 }
