@@ -1198,12 +1198,42 @@ export function VisualEditorPage() {
             </div>
           )}
 
+          {window.location.protocol === 'https:' && targetDomain?.startsWith('http://') && (
+            <div className="mb-3 w-full max-w-2xl bg-amber-950/90 border border-amber-500/50 p-3 rounded-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-xs text-amber-200 shadow-xl">
+              <div className="flex items-start gap-2.5">
+                <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold text-amber-300">Browser Security Notice (Mixed Content):</span>
+                  <p className="text-[11px] text-amber-200/90 mt-0.5 leading-relaxed">
+                    Chrome &amp; Edge block loading HTTP (<code>{targetDomain}</code>) inside an HTTPS dashboard (<code>react-cms-pro.vercel.app</code>).
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0 self-end md:self-center">
+                <button
+                  onClick={() => handleSwitchTargetDomain("https://triosis.vercel.app")}
+                  className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded text-xs transition-colors cursor-pointer shadow"
+                >
+                  Switch to Live Vercel
+                </button>
+                <a
+                  href={`${targetDomain}/?page=${cleanPath}&rcms_preview=1`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded text-xs transition-colors cursor-pointer flex items-center gap-1"
+                >
+                  Open Local Tab <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+            </div>
+          )}
+
           {previewModeType === "shell" && cleanPath && cleanPath !== "home" && !isSelfDashboardOrigin && (
             <div className="mb-2 w-full max-w-2xl bg-purple-950/70 border border-purple-500/30 p-2.5 rounded-xl flex items-center justify-between text-xs text-purple-200">
               <div className="flex items-center gap-2">
                 <Globe className="w-4 h-4 text-purple-400 flex-shrink-0" />
                 <span>
-                  ✨ Previewing page <strong>/{cleanPath}</strong> using <strong>Site Layout Shell</strong>. Header, Footer & existing site structure are automatically inherited.
+                  ✨ Previewing page <strong>/{cleanPath}</strong> using <strong>Site Layout Shell</strong>. Header, Footer &amp; existing site structure are automatically inherited.
                 </span>
               </div>
               <button
