@@ -224,6 +224,21 @@ export function VisualEditorPage() {
     }
   }, [selectedWebsite]);
 
+  const handleSwitchTargetDomain = async (newDomain) => {
+    try {
+      setUpdatingDomain(true);
+      setTargetDomain(newDomain);
+      setNewDomainInput(newDomain);
+      await websiteService.updateDomain(websiteId, newDomain);
+      toast.success(`Preview target set to ${newDomain}`);
+    } catch (err) {
+      console.error("Failed to switch target domain:", err);
+      toast.error("Failed to update target domain.");
+    } finally {
+      setUpdatingDomain(false);
+    }
+  };
+
   // Subscribe to registered editable regions schema metadata from Firebase registry
   useEffect(() => {
     if (!websiteId || !pageId) return;
@@ -694,20 +709,48 @@ export function VisualEditorPage() {
 
         {/* Middle: Target App Domain & Auto-Save Status */}
         <div className="flex items-center gap-4">
-          {/* Target App Domain Badge / Selector */}
-          <button
-            onClick={() => setShowDomainModal(true)}
-            className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg border font-mono transition-colors cursor-pointer ${
-              isSelfDashboardOrigin
-                ? "bg-amber-500/10 text-amber-400 border-amber-500/30 hover:bg-amber-500/20"
-                : "bg-slate-950 text-slate-300 border-slate-800 hover:border-slate-700"
-            }`}
-            title="Click to change connected client app preview URL"
-          >
-            <Link2 className="w-3.5 h-3.5" />
-            <span className="truncate max-w-[160px]">{targetDomain || "Set Target App Domain"}</span>
-            <Settings className="w-3 h-3 text-slate-500" />
-          </button>
+          {/* Target App Domain Badge & Quick Selector */}
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setShowDomainModal(true)}
+              className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg border font-mono transition-colors cursor-pointer ${
+                isSelfDashboardOrigin
+                  ? "bg-amber-500/10 text-amber-400 border-amber-500/30 hover:bg-amber-500/20"
+                  : "bg-slate-950 text-slate-300 border-slate-800 hover:border-slate-700"
+              }`}
+              title="Click to enter custom client app preview URL"
+            >
+              <Link2 className="w-3.5 h-3.5 text-primary" />
+              <span className="truncate max-w-[140px]">{targetDomain || "Set Target App Domain"}</span>
+              <Settings className="w-3 h-3 text-slate-500" />
+            </button>
+
+            {/* Quick 1-Click Local Dev (5173) vs Live Vercel Toggle */}
+            <div className="hidden sm:flex bg-slate-950 p-0.5 rounded-lg border border-slate-800 text-[11px]">
+              <button
+                onClick={() => handleSwitchTargetDomain("http://localhost:5173")}
+                className={`px-2 py-0.5 rounded font-bold transition-all cursor-pointer ${
+                  cleanDomain.includes("localhost")
+                    ? "bg-emerald-600 text-white shadow"
+                    : "text-slate-400 hover:text-white"
+                }`}
+                title="Switch preview to local dev server (http://localhost:5173)"
+              >
+                Local Dev (5173)
+              </button>
+              <button
+                onClick={() => handleSwitchTargetDomain("https://triosis.vercel.app")}
+                className={`px-2 py-0.5 rounded font-bold transition-all cursor-pointer ${
+                  cleanDomain.includes("triosis.vercel.app")
+                    ? "bg-purple-600 text-white shadow"
+                    : "text-slate-400 hover:text-white"
+                }`}
+                title="Switch preview to live Vercel site (https://triosis.vercel.app)"
+              >
+                Live Vercel
+              </button>
+            </div>
+          </div>
 
           {/* Auto-save Status Indicator */}
           <div className="flex items-center gap-1.5 text-[11px] font-mono">
