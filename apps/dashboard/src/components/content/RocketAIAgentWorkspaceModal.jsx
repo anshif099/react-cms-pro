@@ -216,6 +216,9 @@ export default function RocketAIAgentWorkspaceModal({
             <option value="rocket-2.4">🚀 Rocket AI 2.4 (Autonomous Agent)</option>
             <option value="rocket-2.2">🚀 Rocket AI 2.2 (Architect & Engine)</option>
             <option value="rocket-2.1">🚀 Rocket AI 2.1 Ultra</option>
+            <option value="rocket-2.0">🧠 Rocket AI 2.0 Pro</option>
+            <option value="rocket-1.8">⚡ Rocket AI 1.8 Instant</option>
+            <option value="rocket-1.6">💥 Rocket AI 1.6 Flash</option>
           </select>
 
           {/* Agent Mode Toggle */}

@@ -1668,9 +1668,9 @@ export function VisualEditorPage() {
                   <option value="rocket-2.4">🚀 Rocket AI 2.4 (Autonomous Agent)</option>
                   <option value="rocket-2.2">🚀 Rocket AI 2.2 (Architect & Engine)</option>
                   <option value="rocket-2.1">🚀 Rocket AI 2.1 Ultra</option>
-                  <option value="rocket-2.0">🧠 Rocket AI 2 Pro</option>
-                  <option value="rocket-1.5">⚡ Rocket AI 1.5 Instant</option>
-                  <option value="rocket-1.0">💥 Rocket AI 1 Flash</option>
+                  <option value="rocket-2.0">🧠 Rocket AI 2.0 Pro</option>
+                  <option value="rocket-1.8">⚡ Rocket AI 1.8 Instant</option>
+                  <option value="rocket-1.6">💥 Rocket AI 1.6 Flash</option>
                 </select>
               </div>
 
@@ -1700,8 +1700,8 @@ export function VisualEditorPage() {
                       selectedAIModel === "rocket-2.4" ? "Rocket AI 2.4 (Autonomous Agent)" :
                       selectedAIModel === "rocket-2.2" ? "Rocket AI 2.2 (Architect & Engine)" :
                       selectedAIModel === "rocket-2.1" ? "Rocket AI 2.1 Ultra" :
-                      selectedAIModel === "rocket-2.0" ? "Rocket AI 2 Pro" :
-                      selectedAIModel === "rocket-1.5" ? "Rocket AI 1.5 Instant" : "Rocket AI 1 Flash"
+                      selectedAIModel === "rocket-2.0" ? "Rocket AI 2.0 Pro" :
+                      selectedAIModel === "rocket-1.8" ? "Rocket AI 1.8 Instant" : "Rocket AI 1.6 Flash"
                     } processing prompt...
                   </div>
                 )}
