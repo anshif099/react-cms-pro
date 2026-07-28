@@ -33,6 +33,7 @@ import contentSyncService from "../../services/contentSyncService";
 import revisionService from "../../services/revisionService";
 import vercelDeployService from "../../services/vercelDeployService";
 import { websiteService } from "../../services/websiteService";
+import rocketAIEngine from "../../services/rocketAIEngine";
 import RegionTreePanel from "../../components/content/RegionTreePanel";
 import RegionInspectorPanel from "../../components/content/RegionInspectorPanel";
 import SEOPanel from "../../components/content/SEOPanel";
@@ -215,7 +216,7 @@ export function VisualEditorPage() {
   };
 
   // Right Side AI Assistant Chat State & Handlers
-  const [selectedAIModel, setSelectedAIModel] = useState("rocket-2.1");
+  const [selectedAIModel, setSelectedAIModel] = useState("rocket-2.2");
   const [attachedImage, setAttachedImage] = useState(null);
   const fileInputRef = useRef(null);
 
@@ -223,7 +224,7 @@ export function VisualEditorPage() {
   const [aiChatMessages, setAiChatMessages] = useState([
     {
       sender: "assistant",
-      text: "👋 Hi! I'm Rocket AI 2.1 Ultra. Powered by super-intelligent CPU NLP engine. Ask me to add moving statistics carousels, Why Choose Us grids, synchronize background themes, or upload images to build custom pages."
+      text: "👋 Hi! I'm Rocket AI 2.2. Powered by senior UI/UX design architecture, natural language intent reasoning, and multi-step full-page engine. Tell me what you'd like to build or modify (e.g. background color matching, section layouts, theme synchronization, typography, card grids, statistics carousels, or upload design reference images)."
     }
   ]);
   const [aiChatInput, setAiChatInput] = useState("");
@@ -252,94 +253,36 @@ export function VisualEditorPage() {
 
     setTimeout(() => {
       const pageKey = cleanPath || "page";
-      const lower = userMsg.toLowerCase();
-      const actionsTaken = [];
+      const pageTitle = selectedPage?.title || "Page";
 
-      // 1. Process Attached Image if Present
-      if (attachedImage) {
-        handleRegionValueChange(`${pageKey}.hero_image`, { src: attachedImage, alt: "AI Prompt Uploaded Visual" });
-        setAttachedImage(null);
-        actionsTaken.push("🖼️ Applied custom uploaded visual image to Hero Banner");
+      const engineResult = rocketAIEngine.processPrompt({
+        promptText: userMsg,
+        attachedImage,
+        pageKey,
+        pageTitle,
+        currentDrafts,
+        currentModules,
+        model: selectedAIModel
+      });
+
+      // Clear attached image after processing
+      if (attachedImage) setAttachedImage(null);
+
+      // Apply region updates
+      if (engineResult.regionUpdates && Object.keys(engineResult.regionUpdates).length > 0) {
+        Object.entries(engineResult.regionUpdates).forEach(([rId, val]) => {
+          handleRegionValueChange(rId, val);
+        });
       }
 
-      // 2. Background Color / Theme Matching Intent
-      if (lower.includes("background") || lower.includes("bg") || lower.includes("same bg") || lower.includes("colour") || lower.includes("color")) {
-        if (lower.includes("same bg") || lower.includes("header and footer") || lower.includes("dark")) {
-          handleRegionValueChange(`${pageKey}.bg_theme`, "dark");
-          actionsTaken.push("🎨 Synchronized section background colors with Header & Footer theme (#0a0a0a)");
-        }
+      // Apply module updates if modified
+      if (engineResult.customModules && engineResult.customModules.length > 0) {
+        setCustomModules(engineResult.customModules);
       }
 
-      // 3. Statistics Ticker & Carousel Intent
-      if (lower.includes("stat") || lower.includes("carousel") || lower.includes("carosil") || lower.includes("metrics") || lower.includes("500+") || lower.includes("98%") || lower.includes("50m+")) {
-        const numbers = userMsg.match(/\d+[%+M\w]+/g) || ["500+", "98%", "50M+", "250+"];
-        handleRegionValueChange(`${pageKey}.stat1_text`, `${numbers[0] || '500+'} Successful Ad Campaigns`);
-        handleRegionValueChange(`${pageKey}.stat2_text`, `${numbers[1] || '98%'} Client Satisfaction Rate`);
-        handleRegionValueChange(`${pageKey}.stat3_text`, `${numbers[2] || '50M+'} Ad Impressions`);
-        handleRegionValueChange(`${pageKey}.stat4_text`, `${numbers[3] || '250+'} Global Brands`);
-        actionsTaken.push("📊 Created & activated Client Success Statistics moving carousel directly above About section");
-      }
-
-      // 4. Why Choose Us / Cards Grid Intent
-      if (lower.includes("why choose us") || lower.includes("cards") || lower.includes("feature")) {
-        handleRegionValueChange(`${pageKey}.why_choose_us_title`, "Why Industry Leaders Trust Triosis Digital");
-        handleRegionValueChange(`${pageKey}.why_choose_us_subtext`, "Delivering high-ROI campaigns, creative ad strategies, and dedicated account support.");
-        handleRegionValueChange(`${pageKey}.card1_title`, "Proven Advertising Results");
-        handleRegionValueChange(`${pageKey}.card1_desc`, "Tailored strategies that align with your business goals to maximize ROI.");
-        handleRegionValueChange(`${pageKey}.card2_title`, "Creative Campaigns");
-        handleRegionValueChange(`${pageKey}.card2_desc`, "Scroll-stopping ad designs, persuasive copywriting, and high-converting visual assets.");
-        handleRegionValueChange(`${pageKey}.card3_title`, "Data-Driven Strategy");
-        handleRegionValueChange(`${pageKey}.card3_desc`, "Continuous optimization powered by real-time campaign analytics.");
-        handleRegionValueChange(`${pageKey}.card4_title`, "Google & Meta Ads Experts");
-        handleRegionValueChange(`${pageKey}.card4_desc`, "Certified Specialists managing Google Search, Meta Instagram/Facebook, and display campaigns.");
-        handleRegionValueChange(`${pageKey}.card5_title`, "Transparent Reporting");
-        handleRegionValueChange(`${pageKey}.card5_desc`, "Clear performance metrics, live dashboard access, and actionable reporting.");
-        handleRegionValueChange(`${pageKey}.card6_title`, "Dedicated Account Managers");
-        handleRegionValueChange(`${pageKey}.card6_desc`, "Personalized support, strategic growth calls, and dedicated campaign specialists.");
-        actionsTaken.push("🌟 Created & activated Why Choose Us 6-card feature grid directly below CTA");
-      }
-
-      // 5. Headline / Title Intent
-      if ((lower.includes("title") || lower.includes("headline") || lower.includes("heading")) && !lower.includes("why choose us")) {
-        const quoteMatch = userMsg.match(/"([^"]+)"/);
-        const newTitle = quoteMatch ? quoteMatch[1] : userMsg.replace(/^change (the )?(title|headline) (to )?/i, "").replace(/"/g, "");
-        handleRegionValueChange(`${pageKey}.title`, newTitle);
-        actionsTaken.push(`✍️ Updated Main Page Headline to: "${newTitle}"`);
-      }
-
-      // 6. Subtext / Description Intent
-      if (lower.includes("about") || lower.includes("description") || lower.includes("subtext")) {
-        const descMatch = userMsg.match(/about [^:]+:?\s*(.+)/i);
-        const descText = descMatch ? descMatch[1] : "We deliver innovative technology, creative marketing, and measurable digital strategies.";
-        handleRegionValueChange(`${pageKey}.description`, descText);
-        actionsTaken.push(`📝 Refined Section Description text`);
-      }
-
-      // 7. Button CTA Intent
-      if ((lower.startsWith("change button") || lower.startsWith("update button") || lower.startsWith("cta button")) && !lower.includes("below")) {
-        const quoteMatch = userMsg.match(/"([^"]+)"/);
-        const newCta = quoteMatch ? quoteMatch[1] : "Book Free Consultation";
-        handleRegionValueChange(`${pageKey}.cta_button`, newCta);
-        actionsTaken.push(`🎯 Updated CTA Button text to: "${newCta}"`);
-      }
-
-      // Fallback: If prompt didn't match specific entities, run dynamic layout generator
-      if (actionsTaken.length === 0) {
-        const { headline, subheadline, modules } = parsePromptToPageModules(userMsg, selectedPage?.title);
-        setCustomModules(modules);
-        handleRegionValueChange(`${pageKey}.title`, headline);
-        handleRegionValueChange(`${pageKey}.subtext`, subheadline);
-        handleRegionValueChange(`${pageKey}.heading`, `About ${headline}`);
-        handleRegionValueChange(`${pageKey}.cta_title`, `Ready to get started with ${headline}?`);
-        handleRegionValueChange(`${pageKey}.cta_button`, "Book Free Consultation");
-        actionsTaken.push(`⚡ Executed full Rocket AI landing page generation for "${headline}"`);
-      }
-
-      const replyText = `🧠 Rocket AI 2.0 NLP Engine analyzed your prompt & executed ${actionsTaken.length} intelligent updates:\n` + actionsTaken.map((a) => `• ${a}`).join("\n");
-
-      setAiChatMessages((prev) => [...prev, { sender: "assistant", text: replyText }]);
+      setAiChatMessages((prev) => [...prev, { sender: "assistant", text: engineResult.replyText }]);
       setAiChatProcessing(false);
-      toast.success("🧠 Rocket AI NLP Engine updated page!");
+      toast.success("✨ Rocket AI 2.2 updated page!");
     }, 450);
   };
 
@@ -1709,6 +1652,7 @@ export function VisualEditorPage() {
                   onChange={(e) => setSelectedAIModel(e.target.value)}
                   className="bg-slate-950 text-purple-300 border border-purple-500/40 text-[10px] font-bold px-2 py-1 rounded outline-none cursor-pointer hover:border-purple-400 transition-colors"
                 >
+                  <option value="rocket-2.2">🚀 Rocket AI 2.2 (Architect & Engine)</option>
                   <option value="rocket-2.1">🚀 Rocket AI 2.1 Ultra</option>
                   <option value="rocket-2.0">🧠 Rocket AI 2 Pro</option>
                   <option value="rocket-1.5">⚡ Rocket AI 1.5 Instant</option>
@@ -1726,7 +1670,7 @@ export function VisualEditorPage() {
                     }`}
                   >
                     <div
-                      className={`max-w-[88%] p-2.5 rounded-xl leading-relaxed ${
+                      className={`max-w-[88%] p-2.5 rounded-xl leading-relaxed whitespace-pre-wrap ${
                         msg.sender === "user"
                           ? "bg-purple-600 text-white rounded-br-none shadow-md"
                           : "bg-slate-900 border border-slate-800 text-slate-200 rounded-bl-none"
@@ -1739,6 +1683,7 @@ export function VisualEditorPage() {
                 {aiChatProcessing && (
                   <div className="flex items-center gap-2 text-purple-400 text-xs font-bold p-2 bg-slate-900/60 rounded-lg border border-purple-500/20">
                     <Loader2 className="w-3.5 h-3.5 animate-spin" /> {
+                      selectedAIModel === "rocket-2.2" ? "Rocket AI 2.2 (Architect & Engine)" :
                       selectedAIModel === "rocket-2.1" ? "Rocket AI 2.1 Ultra" :
                       selectedAIModel === "rocket-2.0" ? "Rocket AI 2 Pro" :
                       selectedAIModel === "rocket-1.5" ? "Rocket AI 1.5 Instant" : "Rocket AI 1 Flash"
@@ -1750,8 +1695,14 @@ export function VisualEditorPage() {
               {/* Quick Action Prompt Pills */}
               <div className="p-2 bg-slate-900/80 border-t border-slate-800 flex flex-wrap gap-1.5">
                 <button
-                  onClick={() => handleSendAIChatMessage('next add a above about ads 📊 Client Success Statistics moving carosil')}
+                  onClick={() => handleSendAIChatMessage('i want bg colour header same as this colour on this entire page now black that i dont want -, this not white check it')}
                   className="text-[10px] bg-purple-950/80 border border-purple-500/30 text-purple-200 px-2 py-1 rounded hover:bg-purple-900 transition-colors cursor-pointer"
+                >
+                  🎨 Match Header & Page Theme
+                </button>
+                <button
+                  onClick={() => handleSendAIChatMessage('next add a above about ads 📊 Client Success Statistics moving carosil')}
+                  className="text-[10px] bg-slate-800 border border-slate-700 text-slate-300 px-2 py-1 rounded hover:bg-slate-700 transition-colors cursor-pointer"
                 >
                   📊 Add Moving Stats Carousel
                 </button>
