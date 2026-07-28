@@ -52,14 +52,17 @@ export const pageService = {
         ? pageConversionService.getTemplateBlocks(data.template)
         : [];
 
+      const routeId = data.routeId || data.id || data.slug || "";
+      const routePath = data.route || data.path || (data.slug === "home" ? "/" : `/${data.slug}`);
+
       const pageData = {
         title: data.title,
         slug: data.slug || "",
-        routeId: data.routeId || data.id || data.slug || "",
-        route: data.route || data.path || (data.slug === "home" ? "/" : `/${data.slug}`),
+        routeId: routeId,
+        route: routePath,
         layout: data.layout || "default",
         status: data.status || "draft",
-        source: data.source || (data.template ? "generated" : "cms"),
+        source: data.source || (data.template && data.template !== "blank" ? "generated" : "cms"),
         isImported: data.isImported || false,
         locales: data.locales || {
           en: {
@@ -78,6 +81,32 @@ export const pageService = {
       };
 
       await set(newPageRef, pageData);
+
+      // Register route entry in registry so dynamic route discovery & runtime route registry know this page
+      if (routeId) {
+        const routeRegistryRef = ref(database, `registry/${websiteId}/routes/${routeId}`);
+        await set(routeRegistryRef, {
+          id: routeId,
+          path: routePath,
+          title: data.title,
+          slug: data.slug || "",
+          layout: data.layout || "default",
+          source: pageData.source,
+          published: data.status === "published",
+          createdAt: Date.now()
+        });
+      }
+
+      // Initialize content draft in Firebase for this page slug
+      const pageSlug = data.slug || routeId || "home";
+      if (pageSlug) {
+        await contentSyncService.syncDraft(websiteId, pageSlug, {
+          id: pageSlug,
+          title: data.title,
+          regions: {},
+          updatedAt: Date.now()
+        });
+      }
 
       // Save initial revision
       await revisionService.save(websiteId, "page", pageId, pageData, data.userId);

@@ -55,6 +55,7 @@ export function VisualEditorPage() {
   const [activeDevice, setActiveDevice] = useState("full");
   const [selectedElement, setSelectedElement] = useState(null);
   const [regionsMap, setRegionsMap] = useState({});
+  const [previewModeType, setPreviewModeType] = useState("shell"); // "shell" | "direct"
 
   // Target domain state & modal
   const [targetDomain, setTargetDomain] = useState("");
@@ -104,6 +105,13 @@ export function VisualEditorPage() {
       setPageRoute(selectedPage.route || `/${localeData.slug || selectedPage.slug || ""}`);
       setPageSeo(localeData.seo || {});
       setPageBlocks(localeData.blocks || []);
+
+      // Auto-set preview mode based on whether route was imported from code or created in CMS
+      if (selectedPage.isImported) {
+        setPreviewModeType("direct");
+      } else {
+        setPreviewModeType("shell");
+      }
     }
   }, [selectedPage, activeLocale]);
 
@@ -573,7 +581,16 @@ export function VisualEditorPage() {
   }
 
   const cleanDomain = targetDomain.replace(/\/$/, "");
-  const previewUrl = cleanDomain ? `${cleanDomain}/${cleanPath}?rcms_preview=1` : "";
+  let previewUrl = "";
+  if (cleanDomain) {
+    if (previewModeType === "shell" && cleanPath && cleanPath !== "home") {
+      previewUrl = `${cleanDomain}/?page=${encodeURIComponent(cleanPath)}&rcms_preview=1`;
+    } else if (cleanPath && cleanPath !== "home") {
+      previewUrl = `${cleanDomain}/${cleanPath}?rcms_preview=1`;
+    } else {
+      previewUrl = `${cleanDomain}/?rcms_preview=1`;
+    }
+  }
 
   // Check if targetDomain points to Dashboard Vercel origin itself
   const isSelfDashboardOrigin = cleanDomain && (
@@ -671,6 +688,30 @@ export function VisualEditorPage() {
               );
             })}
           </div>
+
+          {/* Layout Shell vs Direct Route Selector */}
+          {cleanPath && cleanPath !== "home" && (
+            <div className="hidden xl:flex bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
+              <button
+                onClick={() => setPreviewModeType("shell")}
+                className={`px-2 py-0.5 rounded font-bold text-[11px] transition-all cursor-pointer ${
+                  previewModeType === "shell" ? "bg-purple-600 text-white shadow" : "text-slate-400 hover:text-white"
+                }`}
+                title="Renders using site layout shell (?page=slug) to automatically inherit Header, Footer, and site structure without 404 errors"
+              >
+                Layout Shell
+              </button>
+              <button
+                onClick={() => setPreviewModeType("direct")}
+                className={`px-2 py-0.5 rounded font-bold text-[11px] transition-all cursor-pointer ${
+                  previewModeType === "direct" ? "bg-purple-600 text-white shadow" : "text-slate-400 hover:text-white"
+                }`}
+                title="Renders using direct URL route (/slug). Use if route is deployed on target server"
+              >
+                Direct Route
+              </button>
+            </div>
+          )}
 
           {/* Edit vs Preview Toggle */}
           <div className="flex bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
@@ -779,6 +820,23 @@ export function VisualEditorPage() {
                 className="px-2.5 py-1 bg-amber-500 text-slate-950 font-bold rounded hover:bg-amber-400 transition-colors ml-3 flex-shrink-0 cursor-pointer"
               >
                 Change URL
+              </button>
+            </div>
+          )}
+
+          {previewModeType === "shell" && cleanPath && cleanPath !== "home" && !isSelfDashboardOrigin && (
+            <div className="mb-2 w-full max-w-2xl bg-purple-950/70 border border-purple-500/30 p-2.5 rounded-xl flex items-center justify-between text-xs text-purple-200">
+              <div className="flex items-center gap-2">
+                <Globe className="w-4 h-4 text-purple-400 flex-shrink-0" />
+                <span>
+                  ✨ Previewing page <strong>/{cleanPath}</strong> using <strong>Site Layout Shell</strong>. Header, Footer & existing site structure are automatically inherited.
+                </span>
+              </div>
+              <button
+                onClick={() => setPreviewModeType("direct")}
+                className="text-[11px] underline text-purple-300 hover:text-white font-semibold flex-shrink-0 cursor-pointer ml-3"
+              >
+                Try Direct Route
               </button>
             </div>
           )}
