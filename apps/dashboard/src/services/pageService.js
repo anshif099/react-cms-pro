@@ -100,10 +100,17 @@ export const pageService = {
       // Initialize content draft in Firebase for this page slug
       const pageSlug = data.slug || routeId || "home";
       if (pageSlug) {
+        const initialRegions = {
+          [`${pageSlug}.title`]: data.title,
+          [`${pageSlug}.subtext`]: "Strategic Digital Solutions for Businesses That Want to Lead.",
+          [`${pageSlug}.heading`]: `About ${data.title}`,
+          [`${pageSlug}.description`]: "We deliver innovative technology, creative marketing, and measurable digital strategies to help ambitious businesses grow."
+        };
+
         await contentSyncService.syncDraft(websiteId, pageSlug, {
           id: pageSlug,
           title: data.title,
-          regions: {},
+          regions: initialRegions,
           updatedAt: Date.now()
         });
       }

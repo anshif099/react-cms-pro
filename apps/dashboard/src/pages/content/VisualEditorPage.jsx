@@ -110,7 +110,7 @@ export function VisualEditorPage() {
       if (selectedPage.isImported) {
         setPreviewModeType("direct");
       } else {
-        setPreviewModeType("shell");
+        setPreviewModeType("canvas");
       }
     }
   }, [selectedPage, activeLocale]);
@@ -710,22 +710,31 @@ export function VisualEditorPage() {
 
           {/* Layout Shell vs Direct Route Selector */}
           {cleanPath && cleanPath !== "home" && (
-            <div className="hidden xl:flex bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
+            <div className="hidden lg:flex bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
+              <button
+                onClick={() => setPreviewModeType("canvas")}
+                className={`px-2.5 py-0.5 rounded font-bold text-[11px] transition-all cursor-pointer ${
+                  previewModeType === "canvas" ? "bg-purple-600 text-white shadow" : "text-slate-400 hover:text-white"
+                }`}
+                title="Renders clean page canvas with section blocks editor for this page"
+              >
+                Page Canvas
+              </button>
               <button
                 onClick={() => setPreviewModeType("shell")}
-                className={`px-2 py-0.5 rounded font-bold text-[11px] transition-all cursor-pointer ${
+                className={`px-2.5 py-0.5 rounded font-bold text-[11px] transition-all cursor-pointer ${
                   previewModeType === "shell" ? "bg-purple-600 text-white shadow" : "text-slate-400 hover:text-white"
                 }`}
-                title="Renders using site layout shell (?page=slug) to automatically inherit Header, Footer, and site structure without 404 errors"
+                title="Renders using live site layout shell (?page=slug)"
               >
-                Layout Shell
+                Site Shell Frame
               </button>
               <button
                 onClick={() => setPreviewModeType("direct")}
-                className={`px-2 py-0.5 rounded font-bold text-[11px] transition-all cursor-pointer ${
+                className={`px-2.5 py-0.5 rounded font-bold text-[11px] transition-all cursor-pointer ${
                   previewModeType === "direct" ? "bg-purple-600 text-white shadow" : "text-slate-400 hover:text-white"
                 }`}
-                title="Renders using direct URL route (/slug). Use if route is deployed on target server"
+                title="Renders using direct URL route (/slug)"
               >
                 Direct Route
               </button>
@@ -860,34 +869,67 @@ export function VisualEditorPage() {
             </div>
           )}
 
-          <div
-            style={{ width: getDeviceWidth(), transform: 'translateZ(0)', backfaceVisibility: 'hidden' }}
-            className="h-full bg-white rounded-xl overflow-hidden shadow-2xl transition-[width] duration-300 border border-slate-800 relative will-change-transform"
-          >
-            {previewUrl ? (
-              <iframe
-                ref={iframeRef}
-                src={previewUrl}
-                onLoad={handleIframeLoad}
-                className="w-full h-full border-0"
-                title="Visual Site Preview"
-              />
-            ) : (
-              <div className="h-full flex flex-col items-center justify-center p-8 text-center text-slate-500">
-                <Globe className="w-10 h-10 mb-3 text-slate-400" />
-                <h4 className="font-bold text-slate-700">No Target App URL Configured</h4>
-                <p className="text-xs text-slate-500 mt-1 max-w-sm">
-                  Please configure the domain URL of your connected client React application to display the live preview.
-                </p>
+          {previewModeType === "canvas" ? (
+            <div className="h-full w-full bg-slate-900/60 p-6 overflow-y-auto rounded-xl border border-slate-800 text-left space-y-6 max-w-5xl">
+              <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+                <div>
+                  <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                    <span>{selectedPage?.title || "Page Content Canvas"}</span>
+                    <code className="text-xs text-purple-400 font-mono">/{cleanPath}</code>
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Build sections, customize content, and edit drag-and-drop blocks for this page.
+                  </p>
+                </div>
                 <button
-                  onClick={() => setShowDomainModal(true)}
-                  className="mt-4 px-4 py-2 bg-primary text-white font-bold rounded-lg text-xs hover:bg-primary/90"
+                  onClick={() => setPreviewModeType("shell")}
+                  className="px-3 py-1.5 bg-purple-600/20 text-purple-300 border border-purple-500/30 rounded-lg text-xs font-bold hover:bg-purple-600 hover:text-white transition-all cursor-pointer"
                 >
-                  Set App Domain URL
+                  View Live Frame Preview
                 </button>
               </div>
-            )}
-          </div>
+
+              {/* Section Block Editor */}
+              <BlockEditor
+                blocks={pageBlocks}
+                onChange={(updatedBlocks) => {
+                  setPageBlocks(updatedBlocks);
+                  setHasUnsavedChanges(true);
+                  setSaveStatus("unsaved");
+                }}
+                activeLocale={activeLocale}
+              />
+            </div>
+          ) : (
+            <div
+              style={{ width: getDeviceWidth(), transform: 'translateZ(0)', backfaceVisibility: 'hidden' }}
+              className="h-full bg-white rounded-xl overflow-hidden shadow-2xl transition-[width] duration-300 border border-slate-800 relative will-change-transform"
+            >
+              {previewUrl ? (
+                <iframe
+                  ref={iframeRef}
+                  src={previewUrl}
+                  onLoad={handleIframeLoad}
+                  className="w-full h-full border-0"
+                  title="Visual Site Preview"
+                />
+              ) : (
+                <div className="h-full flex flex-col items-center justify-center p-8 text-center text-slate-500">
+                  <Globe className="w-10 h-10 mb-3 text-slate-400" />
+                  <h4 className="font-bold text-slate-700">No Target App URL Configured</h4>
+                  <p className="text-xs text-slate-500 mt-1 max-w-sm">
+                    Please configure the domain URL of your connected client React application to display the live preview.
+                  </p>
+                  <button
+                    onClick={() => setShowDomainModal(true)}
+                    className="mt-4 px-4 py-2 bg-primary text-white font-bold rounded-lg text-xs hover:bg-primary/90"
+                  >
+                    Set App Domain URL
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Right Pane: Inspector Panel */}
