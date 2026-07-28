@@ -110,7 +110,7 @@ export function VisualEditorPage() {
       if (selectedPage.isImported) {
         setPreviewModeType("direct");
       } else {
-        setPreviewModeType("canvas");
+        setPreviewModeType("shell");
       }
     }
   }, [selectedPage, activeLocale]);

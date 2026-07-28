@@ -55,6 +55,10 @@ export const pageService = {
       const routeId = data.routeId || data.id || data.slug || "";
       const routePath = data.route || data.path || (data.slug === "home" ? "/" : `/${data.slug}`);
 
+      const metaTitle = data.metaTitle || data.title;
+      const metaDesc = data.metaDescription || data.prompt || `Learn more about ${data.title}. Expert solutions and services.`;
+      const keywords = data.keywords || `${data.title.toLowerCase()}, services, digital solutions`;
+
       const pageData = {
         title: data.title,
         slug: data.slug || "",
@@ -62,15 +66,18 @@ export const pageService = {
         route: routePath,
         layout: data.layout || "default",
         status: data.status || "draft",
-        source: data.source || (data.template && data.template !== "blank" ? "generated" : "cms"),
+        source: data.source || (data.prompt ? "generated" : "cms"),
         isImported: data.isImported || false,
+        prompt: data.prompt || "",
+        keywords: keywords,
         locales: data.locales || {
           en: {
             title: data.title,
             slug: data.slug || "",
             seo: {
-              metaTitle: data.title,
-              metaDescription: ""
+              metaTitle: metaTitle,
+              metaDescription: metaDesc,
+              keywords: keywords
             },
             blocks: templateBlocks
           }
@@ -100,11 +107,21 @@ export const pageService = {
       // Initialize content draft in Firebase for this page slug
       const pageSlug = data.slug || routeId || "home";
       if (pageSlug) {
+        const generatedHeroSubtext = data.prompt 
+          ? data.prompt 
+          : `Explore comprehensive ${data.title} solutions designed for modern business growth and success.`;
+
+        const generatedDescription = data.prompt
+          ? `Our ${data.title} services deliver end-to-end strategies, tools, and digital solutions. Key focus areas include: ${keywords}. Built to help ambitious organizations scale efficiently.`
+          : `We deliver innovative technology, creative marketing, and measurable digital strategies for ${data.title}.`;
+
         const initialRegions = {
           [`${pageSlug}.title`]: data.title,
-          [`${pageSlug}.subtext`]: "Strategic Digital Solutions for Businesses That Want to Lead.",
+          [`${pageSlug}.subtext`]: generatedHeroSubtext,
           [`${pageSlug}.heading`]: `About ${data.title}`,
-          [`${pageSlug}.description`]: "We deliver innovative technology, creative marketing, and measurable digital strategies to help ambitious businesses grow."
+          [`${pageSlug}.description`]: generatedDescription,
+          [`${pageSlug}.cta_title`]: `Ready to get started with ${data.title}?`,
+          [`${pageSlug}.cta_button`]: "Book Free Consultation"
         };
 
         await contentSyncService.syncDraft(websiteId, pageSlug, {

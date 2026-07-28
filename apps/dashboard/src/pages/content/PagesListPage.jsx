@@ -29,6 +29,10 @@ export function PagesListPage() {
   const [selectedTemplate, setSelectedTemplate] = useState("blank");
   const [newPageTitle, setNewPageTitle] = useState("");
   const [newPageSlug, setNewPageSlug] = useState("");
+  const [newPagePrompt, setNewPagePrompt] = useState("");
+  const [newPageKeywords, setNewPageKeywords] = useState("");
+  const [newPageMetaTitle, setNewPageMetaTitle] = useState("");
+  const [newPageMetaDesc, setNewPageMetaDesc] = useState("");
   const [creating, setCreating] = useState(false);
 
   const { sync, importManual, syncLoading } = useWebsiteSync(websiteId);
@@ -53,6 +57,7 @@ export function PagesListPage() {
     const val = e.target.value;
     setNewPageTitle(val);
     setNewPageSlug(val.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""));
+    setNewPageMetaTitle(val);
   };
 
   const handleCreatePage = async (e) => {
@@ -65,11 +70,19 @@ export function PagesListPage() {
         title: newPageTitle,
         slug: newPageSlug || "untitled",
         template: selectedTemplate,
-        source: selectedTemplate === "blank" ? "cms" : "generated"
+        prompt: newPagePrompt,
+        keywords: newPageKeywords,
+        metaTitle: newPageMetaTitle || newPageTitle,
+        metaDescription: newPageMetaDesc || newPagePrompt,
+        source: newPagePrompt ? "generated" : (selectedTemplate === "blank" ? "cms" : "generated")
       });
       setIsCreateOpen(false);
       setNewPageTitle("");
       setNewPageSlug("");
+      setNewPagePrompt("");
+      setNewPageKeywords("");
+      setNewPageMetaTitle("");
+      setNewPageMetaDesc("");
       setSelectedTemplate("blank");
       setWizardStep(1);
     } catch (err) {
@@ -397,22 +410,72 @@ export function PagesListPage() {
             }} 
             className="space-y-4 text-left"
           >
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Input
+                label="Page Display Title"
+                placeholder="e.g. AI Courses"
+                value={newPageTitle}
+                onChange={handleTitleChange}
+                required
+                autoFocus
+              />
+              <Input
+                label="Route Path Slug"
+                placeholder="e.g. ai-courses"
+                value={newPageSlug}
+                onChange={(e) => setNewPageSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, "-"))}
+                helperText={`Resolves to /${newPageSlug || "..."}`}
+                required
+              />
+            </div>
+
+            {/* AI Page Generation Prompt */}
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider block">
+                ✨ AI Page Generator Prompt
+              </label>
+              <textarea
+                rows={2}
+                value={newPagePrompt}
+                onChange={(e) => setNewPagePrompt(e.target.value)}
+                placeholder="Describe what this page is about... (e.g. Comprehensive AI and Machine Learning courses for developers, including certification and practical projects)"
+                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2.5 text-xs text-white placeholder-slate-500 focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+              />
+            </div>
+
+            {/* Keywords Section */}
             <Input
-              label="Page Display Title"
-              placeholder="e.g. Portfolio Gallery"
-              value={newPageTitle}
-              onChange={handleTitleChange}
-              required
-              autoFocus
+              label="🔑 Target SEO Keywords"
+              placeholder="e.g. ai courses, artificial intelligence training, machine learning certification"
+              value={newPageKeywords}
+              onChange={(e) => setNewPageKeywords(e.target.value)}
+              helperText="Comma-separated keywords used for search optimization and content generation."
             />
-            <Input
-              label="Route Path Slug"
-              placeholder="e.g. portfolio"
-              value={newPageSlug}
-              onChange={(e) => setNewPageSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, "-"))}
-              helperText={`Slug will resolve to /${newPageSlug || "..."}`}
-              required
-            />
+
+            {/* SEO Meta Tags Section */}
+            <div className="p-3 bg-slate-950/60 border border-slate-800 rounded-xl space-y-3">
+              <span className="text-[11px] font-bold text-purple-400 uppercase tracking-wider block">
+                🏷️ SEO Meta Tags
+              </span>
+              <Input
+                label="Meta Title"
+                placeholder="e.g. AI Courses & Certification | Triosis Digital"
+                value={newPageMetaTitle}
+                onChange={(e) => setNewPageMetaTitle(e.target.value)}
+              />
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider block">
+                  Meta Description
+                </label>
+                <textarea
+                  rows={2}
+                  value={newPageMetaDesc}
+                  onChange={(e) => setNewPageMetaDesc(e.target.value)}
+                  placeholder="e.g. Master AI with hands-on training, industry certifications, and real-world projects."
+                  className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2.5 text-xs text-white placeholder-slate-500 focus:border-primary outline-none"
+                />
+              </div>
+            </div>
             
             <div className="flex justify-between pt-3 border-t border-slate-800">
               <Button
@@ -453,16 +516,24 @@ export function PagesListPage() {
                 <span className="text-white font-bold">{newPageTitle}</span>
               </div>
               <div className="flex justify-between border-b border-slate-800/60 pb-2">
-                <span className="text-slate-400 font-semibold">Route slug path:</span>
+                <span className="text-slate-400 font-semibold">Route Slug:</span>
                 <span className="text-purple-400 font-mono">/{newPageSlug}</span>
               </div>
-              <div className="flex justify-between border-b border-slate-800/60 pb-2">
-                <span className="text-slate-400 font-semibold">Creation Source:</span>
-                <span className="text-emerald-400 font-bold capitalize">{selectedTemplate === "blank" ? "cms" : "generated"}</span>
-              </div>
+              {newPagePrompt && (
+                <div className="border-b border-slate-800/60 pb-2">
+                  <span className="text-slate-400 font-semibold block mb-0.5">AI Prompt:</span>
+                  <span className="text-slate-200 italic">{newPagePrompt}</span>
+                </div>
+              )}
+              {newPageKeywords && (
+                <div className="border-b border-slate-800/60 pb-2">
+                  <span className="text-slate-400 font-semibold block mb-0.5">Keywords:</span>
+                  <span className="text-purple-300 font-mono">{newPageKeywords}</span>
+                </div>
+              )}
               <div className="flex justify-between pb-1">
-                <span className="text-slate-400 font-semibold">Layout Template:</span>
-                <span className="text-blue-400 font-bold capitalize">{selectedTemplate} template</span>
+                <span className="text-slate-400 font-semibold">Creation Source:</span>
+                <span className="text-emerald-400 font-bold capitalize">{newPagePrompt ? "AI Generator" : "CMS Page"}</span>
               </div>
             </div>
 
