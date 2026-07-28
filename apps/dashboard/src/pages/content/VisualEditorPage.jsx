@@ -44,6 +44,7 @@ import { useRevisions } from "../../hooks/useRevisions";
 import Modal from "../../components/ui/Modal";
 import Button from "../../components/ui/Button";
 import Input from "../../components/ui/Input";
+import { useToast } from "../../hooks/useToast";
 
 export function VisualEditorPage() {
   const { websiteId, pageId } = useParams();
@@ -53,6 +54,7 @@ export function VisualEditorPage() {
   const { selectedWebsite, selectWebsite } = useWebsites();
   const { activeLocales, activeLocale, setLocale } = useLocale(websiteId);
   const { user } = useAuth();
+  const toast = useToast();
   const { revisions, loadRevisions, restoreRevision } = useRevisions();
 
   // Mode and view states
