@@ -239,7 +239,46 @@ export function VisualEditorPage() {
       const lower = userMsg.toLowerCase();
       let replyText = "";
 
-      if (lower.includes("title") || lower.includes("headline")) {
+      const isAddSection = lower.includes("add") || lower.includes("create") || lower.includes("below") || lower.includes("above") || lower.includes("new section") || lower.includes("why choose us");
+
+      if (isAddSection) {
+        if (lower.includes("why choose us") || lower.includes("cards") || lower.includes("feature")) {
+          handleRegionValueChange(`${pageKey}.why_choose_us_title`, "Why Industry Leaders Trust Triosis Digital");
+          handleRegionValueChange(`${pageKey}.why_choose_us_subtext`, "Delivering high-ROI campaigns, creative ad strategies, and dedicated account support.");
+          handleRegionValueChange(`${pageKey}.card1_title`, "Proven Advertising Results");
+          handleRegionValueChange(`${pageKey}.card1_desc`, "Tailored strategies that align with your business goals to maximize ROI.");
+          handleRegionValueChange(`${pageKey}.card2_title`, "Creative Campaigns");
+          handleRegionValueChange(`${pageKey}.card2_desc`, "Scroll-stopping ad designs, persuasive copywriting, and high-converting visual assets.");
+          handleRegionValueChange(`${pageKey}.card3_title`, "Data-Driven Strategy");
+          handleRegionValueChange(`${pageKey}.card3_desc`, "Continuous optimization powered by real-time campaign analytics.");
+          handleRegionValueChange(`${pageKey}.card4_title`, "Google & Meta Ads Experts");
+          handleRegionValueChange(`${pageKey}.card4_desc`, "Certified Specialists managing Google Search, Meta Instagram/Facebook, and display campaigns.");
+          handleRegionValueChange(`${pageKey}.card5_title`, "Transparent Reporting");
+          handleRegionValueChange(`${pageKey}.card5_desc`, "Clear performance metrics, live dashboard access, and actionable reporting.");
+          handleRegionValueChange(`${pageKey}.card6_title`, "Dedicated Account Managers");
+          handleRegionValueChange(`${pageKey}.card6_desc`, "Personalized support, strategic growth calls, and dedicated campaign specialists.");
+          
+          replyText = `✨ Successfully created and added "Why Choose Us" section with 6 feature cards and 4 statistics metrics directly below the CTA button!`;
+        } else {
+          const newMod = {
+            id: `mod-${Date.now()}`,
+            type: "cards",
+            heading: "New Custom Feature Section",
+            cards: [
+              { title: "Proven Growth", desc: "Measurable ROI and strategic digital efficiency." },
+              { title: "Targeted Campaigns", desc: "Audience insights and data-driven ad placement." },
+              { title: "Scalable Execution", desc: "Seamless end-to-end implementation from launch." }
+            ]
+          };
+          setCustomModules((prev) => [...prev, newMod]);
+          replyText = `✨ Dynamically created and inserted new custom section module into page layout!`;
+        }
+      } else if ((lower.startsWith("change button") || lower.startsWith("update button") || lower.startsWith("change cta")) && !lower.includes("below")) {
+        const quoteMatch = userMsg.match(/"([^"]+)"/);
+        const newCta = quoteMatch ? quoteMatch[1] : "Book Free Consultation";
+        handleRegionValueChange(`${pageKey}.cta_button`, newCta);
+        replyText = `✨ Updated CTA Button text to: "${newCta}"`;
+      } else if (lower.includes("title") || lower.includes("headline")) {
         const quoteMatch = userMsg.match(/"([^"]+)"/);
         const newTitle = quoteMatch ? quoteMatch[1] : userMsg.replace(/^change (the )?(title|headline) (to )?/i, "").replace(/"/g, "");
         handleRegionValueChange(`${pageKey}.title`, newTitle);
@@ -249,11 +288,6 @@ export function VisualEditorPage() {
         const newDesc = quoteMatch ? quoteMatch[1] : "We deliver innovative technology, creative marketing, and measurable digital strategies.";
         handleRegionValueChange(`${pageKey}.subtext`, newDesc);
         replyText = `✨ Updated Hero Subtitle description.`;
-      } else if (lower.includes("cta") || lower.includes("button")) {
-        const quoteMatch = userMsg.match(/"([^"]+)"/);
-        const newCta = quoteMatch ? quoteMatch[1] : "Book Free Consultation";
-        handleRegionValueChange(`${pageKey}.cta_button`, newCta);
-        replyText = `✨ Updated CTA Button text to: "${newCta}"`;
       } else {
         // Full page prompt builder
         const { headline, subheadline, modules } = parsePromptToPageModules(userMsg, selectedPage?.title);
