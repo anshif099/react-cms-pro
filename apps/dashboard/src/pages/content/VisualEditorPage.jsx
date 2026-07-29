@@ -1235,30 +1235,35 @@ export function VisualEditorPage() {
           )}
 
           {window.location.protocol === 'https:' && targetDomain?.startsWith('http://') && (
-            <div className="mb-3 w-full max-w-2xl bg-amber-950/90 border border-amber-500/50 p-3 rounded-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-xs text-amber-200 shadow-xl">
+            <div className="mb-3 w-full max-w-3xl bg-amber-950/90 border border-amber-500/50 p-3.5 rounded-xl flex flex-col gap-2.5 text-xs text-amber-200 shadow-2xl">
               <div className="flex items-start gap-2.5">
                 <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
-                <div>
-                  <span className="font-bold text-amber-300">Browser Security Notice (Mixed Content):</span>
-                  <p className="text-[11px] text-amber-200/90 mt-0.5 leading-relaxed">
-                    Chrome &amp; Edge block loading HTTP (<code>{targetDomain}</code>) inside an HTTPS dashboard (<code>react-cms-pro.vercel.app</code>).
+                <div className="flex-1">
+                  <span className="font-bold text-amber-300 text-sm">Chrome / Edge Security Blocking `http://localhost:5173` inside HTTPS:</span>
+                  <p className="text-xs text-amber-200/90 mt-1 leading-relaxed">
+                    Modern browsers block <code>http://localhost:5173</code> inside an <code>https://</code> dashboard due to Mixed Content policies.
                   </p>
+                  
+                  {/* Step-by-step fix */}
+                  <div className="mt-2.5 bg-amber-900/60 p-2.5 rounded-lg border border-amber-500/30 text-[11px] space-y-1">
+                    <p className="font-bold text-amber-200">To enable automatic loading in Chrome / Edge (takes 5 seconds):</p>
+                    <ol className="list-decimal list-inside space-y-1 text-amber-100">
+                      <li>Click the <strong>🔒 Padlock / Tune icon</strong> on the left side of your browser URL address bar.</li>
+                      <li>Click <strong>Site settings</strong> → scroll down to <strong>Insecure content</strong> → change to <strong className="text-emerald-400">Allow</strong>.</li>
+                      <li>Refresh this browser tab — <strong>localhost:5173 will load automatically</strong> inside the editor frame!</li>
+                    </ol>
+                  </div>
                 </div>
               </div>
-              <div className="flex items-center gap-2 flex-shrink-0 self-end md:self-center">
-                <button
-                  onClick={() => handleSwitchTargetDomain("https://triosis.vercel.app")}
-                  className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded text-xs transition-colors cursor-pointer shadow"
-                >
-                  Switch to Live Vercel
-                </button>
+
+              <div className="flex items-center justify-end gap-2 pt-1 border-t border-amber-500/20">
                 <a
                   href={`${targetDomain}/?page=${cleanPath}&rcms_preview=1`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded text-xs transition-colors cursor-pointer flex items-center gap-1"
+                  className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg text-xs transition-colors cursor-pointer flex items-center gap-1.5 shadow"
                 >
-                  Open Local Tab <ExternalLink className="w-3 h-3" />
+                  <span>Open Local Tab</span> <ExternalLink className="w-3.5 h-3.5" />
                 </a>
               </div>
             </div>
