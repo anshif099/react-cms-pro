@@ -63,6 +63,9 @@ export function VisualEditorPage() {
   const [selectedElement, setSelectedElement] = useState(null);
   const [regionsMap, setRegionsMap] = useState({});
   const [previewModeType, setPreviewModeType] = useState("visual"); // "visual" | "shell" | "direct"
+  const [includeHeader, setIncludeHeader] = useState(true);
+  const [includeHero, setIncludeHero] = useState(true);
+  const [includeFooter, setIncludeFooter] = useState(true);
 
   // Target domain state & modal
   const [targetDomain, setTargetDomain] = useState("");
@@ -1321,33 +1324,100 @@ export function VisualEditorPage() {
               style={{ width: getDeviceWidth(), transform: 'translateZ(0)' }}
               className="h-full w-full bg-white text-slate-900 rounded-xl overflow-y-auto shadow-2xl border border-slate-300 relative text-left"
             >
-
-
-              {/* Selected Page Visual Hero Banner */}
-              <div className="py-16 px-8 bg-white text-center relative border-b border-slate-100">
-                <div 
-                  onClick={() => handleSelectVirtualRegion(`${cleanPath || "page"}.title`, "Page Hero Heading")}
-                  className={`p-6 max-w-4xl mx-auto rounded-2xl border-2 border-dashed transition-all cursor-pointer ${
-                    selectedElement?.regionId === `${cleanPath || "page"}.title` ? "border-purple-500 bg-purple-50/50 ring-2 ring-purple-400" : "border-transparent hover:border-purple-300"
-                  }`}
-                >
-                  <h1 className="text-4xl md:text-5xl font-black text-purple-600 tracking-tight leading-tight mb-4 capitalize">
-                    {draftValues[`${cleanPath || "page"}.title`] || selectedPage?.title || cleanPath || "New Created Page"}
-                  </h1>
+              {/* Layout Common Section Selection Control Bar */}
+              <div className="bg-slate-950 px-4 py-2 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs text-white sticky top-0 z-30 shadow-md">
+                <div className="flex items-center gap-2 font-bold text-slate-300">
+                  <Sliders className="w-3.5 h-3.5 text-purple-400" />
+                  <span>Include Common Home Page Layout Sections:</span>
                 </div>
-
-                {/* Subtext */}
-                <div 
-                  onClick={() => handleSelectVirtualRegion(`${cleanPath || "page"}.subtext`, "Page Hero Subtext")}
-                  className={`mt-4 max-w-2xl mx-auto p-4 rounded-xl border border-dashed transition-all cursor-pointer ${
-                    selectedElement?.regionId === `${cleanPath || "page"}.subtext` ? "border-purple-500 bg-purple-50/50" : "border-transparent hover:border-slate-200"
-                  }`}
-                >
-                  <p className="text-sm text-slate-600 text-center leading-relaxed">
-                    {draftValues[`${cleanPath || "page"}.subtext`] || selectedPage?.prompt || `Welcome to the custom ${cleanPath || "page"} page. Customize copy, add sections, and edit blocks.`}
-                  </p>
+                <div className="flex items-center gap-4">
+                  <label className="flex items-center gap-1.5 cursor-pointer hover:text-purple-300">
+                    <input
+                      type="checkbox"
+                      checked={includeHeader}
+                      onChange={(e) => setIncludeHeader(e.target.checked)}
+                      className="rounded text-purple-600 focus:ring-0 accent-purple-600 cursor-pointer"
+                    />
+                    <span className="font-bold">Header</span>
+                  </label>
+                  <label className="flex items-center gap-1.5 cursor-pointer hover:text-purple-300">
+                    <input
+                      type="checkbox"
+                      checked={includeHero}
+                      onChange={(e) => setIncludeHero(e.target.checked)}
+                      className="rounded text-purple-600 focus:ring-0 accent-purple-600 cursor-pointer"
+                    />
+                    <span className="font-bold">Hero Section</span>
+                  </label>
+                  <label className="flex items-center gap-1.5 cursor-pointer hover:text-purple-300">
+                    <input
+                      type="checkbox"
+                      checked={includeFooter}
+                      onChange={(e) => setIncludeFooter(e.target.checked)}
+                      className="rounded text-purple-600 focus:ring-0 accent-purple-600 cursor-pointer"
+                    />
+                    <span className="font-bold">Footer</span>
+                  </label>
                 </div>
               </div>
+
+              {/* Site Header (Inherited from Common Home Page Layout) */}
+              {includeHeader && (
+                <header className="bg-slate-950 text-white py-4 px-8 border-b border-slate-800 flex items-center justify-between relative z-20 shadow-md">
+                  <div className="flex items-center gap-3 cursor-pointer" onClick={() => handleSelectVirtualRegion("header.logo", "Site Header Logo")}>
+                    <div className="w-8 h-8 rounded-xl bg-purple-600 flex items-center justify-center font-black text-white text-base shadow">
+                      T
+                    </div>
+                    <span className="font-extrabold text-lg tracking-tight text-white">
+                      {draftValues["header.logo"] || selectedWebsite?.name || "Triosis Digital"}
+                    </span>
+                  </div>
+
+                  <nav className="hidden md:flex items-center gap-6 text-xs font-semibold text-slate-300">
+                    <a href="#" className="hover:text-purple-400 transition-colors">Home</a>
+                    <a href="#" className="hover:text-purple-400 transition-colors">About Us</a>
+                    <a href="#" className="hover:text-purple-400 transition-colors">Services</a>
+                    <a href="#" className="hover:text-purple-400 transition-colors">Portfolio</a>
+                    <a href="#" className="text-purple-400 font-bold border-b-2 border-purple-500 pb-0.5 capitalize">{cleanPath || "Page"}</a>
+                    <a href="#" className="hover:text-purple-400 transition-colors">Contact Us</a>
+                  </nav>
+
+                  <button 
+                    onClick={() => handleSelectVirtualRegion("header.cta", "Header Call To Action")}
+                    className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl shadow transition-all cursor-pointer"
+                  >
+                    {draftValues["header.cta"] || "Get Started"}
+                  </button>
+                </header>
+              )}
+
+              {/* Selected Page Visual Hero Banner */}
+              {includeHero && (
+                <div className="py-16 px-8 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white text-center relative border-b border-slate-800">
+                  <div 
+                    onClick={() => handleSelectVirtualRegion(`${cleanPath || "page"}.title`, "Page Hero Heading")}
+                    className={`p-6 max-w-4xl mx-auto rounded-2xl border-2 border-dashed transition-all cursor-pointer ${
+                      selectedElement?.regionId === `${cleanPath || "page"}.title` ? "border-purple-500 bg-purple-900/30 ring-2 ring-purple-400" : "border-transparent hover:border-purple-400/50"
+                    }`}
+                  >
+                    <h1 className="text-4xl md:text-5xl font-black text-white tracking-tight leading-tight mb-4 capitalize">
+                      {draftValues[`${cleanPath || "page"}.title`] || selectedPage?.title || cleanPath || "New Created Page"}
+                    </h1>
+                  </div>
+
+                  {/* Subtext */}
+                  <div 
+                    onClick={() => handleSelectVirtualRegion(`${cleanPath || "page"}.subtext`, "Page Hero Subtext")}
+                    className={`mt-2 max-w-2xl mx-auto p-4 rounded-xl border border-dashed transition-all cursor-pointer ${
+                      selectedElement?.regionId === `${cleanPath || "page"}.subtext` ? "border-purple-500 bg-purple-900/30" : "border-transparent hover:border-slate-700"
+                    }`}
+                  >
+                    <p className="text-sm text-slate-300 text-center leading-relaxed">
+                      {draftValues[`${cleanPath || "page"}.subtext`] || selectedPage?.prompt || `Welcome to the custom ${cleanPath || "page"} page. Customize copy, add sections, and edit blocks.`}
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* Render Dynamic Custom Modules */}
               {customModules.map((mod) => (
@@ -1447,35 +1517,110 @@ export function VisualEditorPage() {
                 </div>
               ))}
 
+              {/* Site Footer (Inherited from Common Home Page Layout) */}
+              {includeFooter && (
+                <footer className="bg-slate-950 text-slate-400 py-12 px-8 border-t border-slate-800 text-left">
+                  <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-8 mb-12">
+                    <div>
+                      <div className="flex items-center gap-2 mb-4 cursor-pointer" onClick={() => handleSelectVirtualRegion("footer.title", "Footer Title")}>
+                        <div className="w-7 h-7 rounded-lg bg-purple-600 flex items-center justify-center font-bold text-white text-xs">
+                          T
+                        </div>
+                        <span className="font-bold text-white text-base">
+                          {selectedWebsite?.name || "Triosis Digital"}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400 leading-relaxed">
+                        {draftValues["footer.description"] || "Building scalable digital solutions and visual content management systems for enterprise growth."}
+                      </p>
+                    </div>
+
+                    <div>
+                      <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-3">Quick Links</h4>
+                      <ul className="space-y-2 text-xs">
+                        <li><a href="#" className="hover:text-white transition-colors">Home</a></li>
+                        <li><a href="#" className="hover:text-white transition-colors">About Us</a></li>
+                        <li><a href="#" className="hover:text-white transition-colors">Services</a></li>
+                        <li><a href="#" className="hover:text-white transition-colors">Blog Insights</a></li>
+                      </ul>
+                    </div>
+
+                    <div>
+                      <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-3">Legal &amp; Policy</h4>
+                      <ul className="space-y-2 text-xs">
+                        <li><a href="#" className="hover:text-white transition-colors">Privacy Policy</a></li>
+                        <li><a href="#" className="hover:text-white transition-colors">Terms of Service</a></li>
+                        <li><a href="#" className="hover:text-white transition-colors">Cookie Settings</a></li>
+                      </ul>
+                    </div>
+
+                    <div>
+                      <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-3">Contact Support</h4>
+                      <p className="text-xs text-slate-400 mb-2">support@triosisdigital.com</p>
+                      <p className="text-xs text-slate-400">+1 (800) 555-0199</p>
+                    </div>
+                  </div>
+
+                  <div className="max-w-6xl mx-auto border-t border-slate-900 pt-6 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500">
+                    <span>© 2026 {selectedWebsite?.name || "Triosis Digital"}. All rights reserved.</span>
+                    <span className="text-[11px] text-purple-400 font-mono">Common Home Layout Shell</span>
+                  </div>
+                </footer>
+              )}
+
               {/* Manual Module Inserter Toolbar */}
               <div className="py-8 px-8 bg-slate-900 text-white text-center border-t border-slate-800">
                 <p className="text-xs font-bold text-purple-400 uppercase tracking-wider mb-3">
-                  + Add Sections &amp; Modules Manually to /{cleanPath || "page"}
+                  + Add Layout Sections &amp; Custom Modules to /{cleanPath || "page"}
                 </p>
                 <div className="flex flex-wrap items-center justify-center gap-2">
                   <button
+                    onClick={() => setIncludeHeader(!includeHeader)}
+                    className={`px-3 py-1.5 font-bold text-xs rounded-xl border transition-all cursor-pointer flex items-center gap-1.5 ${
+                      includeHeader ? "bg-purple-900/60 border-purple-500 text-purple-200" : "bg-slate-800 border-slate-700 text-slate-400"
+                    }`}
+                  >
+                    {includeHeader ? "✓ Header Included" : "+ Add Header"}
+                  </button>
+                  <button
+                    onClick={() => setIncludeHero(!includeHero)}
+                    className={`px-3 py-1.5 font-bold text-xs rounded-xl border transition-all cursor-pointer flex items-center gap-1.5 ${
+                      includeHero ? "bg-purple-900/60 border-purple-500 text-purple-200" : "bg-slate-800 border-slate-700 text-slate-400"
+                    }`}
+                  >
+                    {includeHero ? "✓ Hero Included" : "+ Add Hero"}
+                  </button>
+                  <button
                     onClick={() => handleAddModule("text")}
-                    className="px-3.5 py-2 bg-slate-800 hover:bg-purple-900 text-white font-bold text-xs rounded-xl border border-slate-700 transition-all cursor-pointer flex items-center gap-1.5"
+                    className="px-3.5 py-1.5 bg-slate-800 hover:bg-purple-900 text-white font-bold text-xs rounded-xl border border-slate-700 transition-all cursor-pointer flex items-center gap-1.5"
                   >
                     + Add Text Module
                   </button>
                   <button
                     onClick={() => handleAddModule("image")}
-                    className="px-3.5 py-2 bg-slate-800 hover:bg-purple-900 text-white font-bold text-xs rounded-xl border border-slate-700 transition-all cursor-pointer flex items-center gap-1.5"
+                    className="px-3.5 py-1.5 bg-slate-800 hover:bg-purple-900 text-white font-bold text-xs rounded-xl border border-slate-700 transition-all cursor-pointer flex items-center gap-1.5"
                   >
                     + Add Image Module
                   </button>
                   <button
                     onClick={() => handleAddModule("cards")}
-                    className="px-3.5 py-2 bg-slate-800 hover:bg-purple-900 text-white font-bold text-xs rounded-xl border border-slate-700 transition-all cursor-pointer flex items-center gap-1.5"
+                    className="px-3.5 py-1.5 bg-slate-800 hover:bg-purple-900 text-white font-bold text-xs rounded-xl border border-slate-700 transition-all cursor-pointer flex items-center gap-1.5"
                   >
                     + Add Service Cards
                   </button>
                   <button
                     onClick={() => handleAddModule("cta")}
-                    className="px-3.5 py-2 bg-slate-800 hover:bg-purple-900 text-white font-bold text-xs rounded-xl border border-slate-700 transition-all cursor-pointer flex items-center gap-1.5"
+                    className="px-3.5 py-1.5 bg-slate-800 hover:bg-purple-900 text-white font-bold text-xs rounded-xl border border-slate-700 transition-all cursor-pointer flex items-center gap-1.5"
                   >
                     + Add CTA Banner
+                  </button>
+                  <button
+                    onClick={() => setIncludeFooter(!includeFooter)}
+                    className={`px-3 py-1.5 font-bold text-xs rounded-xl border transition-all cursor-pointer flex items-center gap-1.5 ${
+                      includeFooter ? "bg-purple-900/60 border-purple-500 text-purple-200" : "bg-slate-800 border-slate-700 text-slate-400"
+                    }`}
+                  >
+                    {includeFooter ? "✓ Footer Included" : "+ Add Footer"}
                   </button>
                 </div>
               </div>
