@@ -21,7 +21,8 @@ import {
   Link2,
   AlertTriangle,
   UploadCloud,
-  Sparkles
+  Sparkles,
+  Sliders
 } from "lucide-react";
 import { usePages } from "../../hooks/usePages";
 import { useLocale } from "../../hooks/useLocale";
