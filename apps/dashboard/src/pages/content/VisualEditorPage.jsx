@@ -1032,8 +1032,12 @@ export function VisualEditorPage() {
 
   let previewUrl = "";
   if (cleanDomain) {
-    // Always load connected live site root URL with preview mode parameter to guarantee clean rendering without 404
-    previewUrl = `${cleanDomain}/?rcms_preview=1`;
+    if (cleanPath && cleanPath !== "home" && cleanPath !== "home/") {
+      const routePath = cleanPath.startsWith("/") ? cleanPath : `/${cleanPath}`;
+      previewUrl = `${cleanDomain}${routePath}?rcms_preview=1`;
+    } else {
+      previewUrl = `${cleanDomain}/?rcms_preview=1`;
+    }
   }
 
   // Check if targetDomain points to Dashboard Vercel origin itself
