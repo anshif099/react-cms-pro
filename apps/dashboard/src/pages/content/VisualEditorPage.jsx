@@ -1026,11 +1026,11 @@ export function VisualEditorPage() {
               <Settings className="w-3 h-3 text-slate-500" />
             </button>
 
-            {/* Quick 1-Click Local Dev (5173) vs Live Vercel Toggle */}
+            {/* Quick 1-Click Environment Toggle: Local Dev (5173) vs Live Vercel */}
             <div className="hidden sm:flex bg-slate-950 p-0.5 rounded-lg border border-slate-800 text-[11px]">
               <button
                 onClick={() => handleSwitchTargetDomain("http://localhost:5173")}
-                className={`px-2 py-0.5 rounded font-bold transition-all cursor-pointer ${
+                className={`px-3 py-1 rounded font-bold transition-all cursor-pointer ${
                   cleanDomain.includes("localhost")
                     ? "bg-emerald-600 text-white shadow"
                     : "text-slate-400 hover:text-white"
@@ -1040,13 +1040,18 @@ export function VisualEditorPage() {
                 Local Dev (5173)
               </button>
               <button
-                onClick={() => handleSwitchTargetDomain("https://triosis.vercel.app")}
-                className={`px-2 py-0.5 rounded font-bold transition-all cursor-pointer ${
-                  cleanDomain.includes("triosis.vercel.app")
+                onClick={() => {
+                  const liveUrl = (selectedWebsite?.domain && !selectedWebsite.domain.includes("localhost"))
+                    ? selectedWebsite.domain
+                    : "https://triosis.vercel.app";
+                  handleSwitchTargetDomain(liveUrl);
+                }}
+                className={`px-3 py-1 rounded font-bold transition-all cursor-pointer ${
+                  !cleanDomain.includes("localhost")
                     ? "bg-purple-600 text-white shadow"
                     : "text-slate-400 hover:text-white"
                 }`}
-                title="Switch preview to live Vercel site (https://triosis.vercel.app)"
+                title="Switch preview to live Vercel site"
               >
                 Live Vercel
               </button>
@@ -1094,39 +1099,6 @@ export function VisualEditorPage() {
               );
             })}
           </div>
-
-          {/* View Mode Selector: Visual Live (WordPress) vs Site Shell Frame vs Page Canvas */}
-          {cleanPath && cleanPath !== "home" && (
-            <div className="hidden lg:flex bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
-              <button
-                onClick={() => setPreviewModeType("visual")}
-                className={`px-2.5 py-0.5 rounded font-bold text-[11px] transition-all cursor-pointer ${
-                  previewModeType === "visual" ? "bg-purple-600 text-white shadow" : "text-slate-400 hover:text-white"
-                }`}
-                title="Renders WordPress-style visual live preview directly inside dashboard with Header, Footer, and page content"
-              >
-                Visual Live (WordPress)
-              </button>
-              <button
-                onClick={() => setPreviewModeType("shell")}
-                className={`px-2.5 py-0.5 rounded font-bold text-[11px] transition-all cursor-pointer ${
-                  previewModeType === "shell" ? "bg-purple-600 text-white shadow" : "text-slate-400 hover:text-white"
-                }`}
-                title="Renders using connected live site iframe frame (?page=slug)"
-              >
-                Site Shell Frame
-              </button>
-              <button
-                onClick={() => setPreviewModeType("canvas")}
-                className={`px-2.5 py-0.5 rounded font-bold text-[11px] transition-all cursor-pointer ${
-                  previewModeType === "canvas" ? "bg-purple-600 text-white shadow" : "text-slate-400 hover:text-white"
-                }`}
-                title="Renders drag-and-drop block editor canvas"
-              >
-                Page Canvas
-              </button>
-            </div>
-          )}
 
           {/* Edit vs Preview Toggle */}
           <div className="flex bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
@@ -1309,316 +1281,10 @@ export function VisualEditorPage() {
             </div>
           )}
 
-          {previewModeType === "visual" ? (
-            <div
-              style={{ width: getDeviceWidth(), transform: 'translateZ(0)' }}
-              className="h-full w-full bg-white text-slate-900 rounded-xl overflow-y-auto shadow-2xl border border-slate-300 relative text-left"
-            >
-              {/* AI Live Prompt Page Builder Bar Header */}
-              <div className="bg-slate-950 p-3 border-b border-slate-800 flex items-center justify-between gap-3 sticky top-0 z-30">
-                <form onSubmit={handleAILiveBuildPage} className="flex-1 flex items-center gap-2">
-                  <span className="text-xs font-bold text-purple-400 whitespace-nowrap hidden sm:inline">✨ AI Live Page Builder:</span>
-                  <input
-                    type="text"
-                    value={aiPromptInput}
-                    onChange={(e) => setAiPromptInput(e.target.value)}
-                    placeholder="Type prompt to live build page (e.g. 'Build AI Integrated Marketing page with 3 feature cards and CTA')"
-                    className="flex-1 bg-slate-900 border border-slate-800 text-xs text-white px-3 py-1.5 rounded-lg focus:border-purple-500 outline-none"
-                  />
-                  <button
-                    type="submit"
-                    disabled={buildingAI || !aiPromptInput.trim()}
-                    className="px-3.5 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-xs rounded-lg hover:from-purple-500 hover:to-indigo-500 transition-all cursor-pointer whitespace-nowrap shadow"
-                  >
-                    {buildingAI ? "Building..." : "✨ Live Build Page"}
-                  </button>
-                </form>
-              </div>
-
-              {/* Exact Site Header Matching User Screenshot */}
-              <header className="py-4 px-8 flex items-center justify-between border-b border-slate-200 bg-white sticky top-[49px] z-20 shadow-sm">
-                <div className="flex items-center gap-3">
-                  <div className="text-[#ff4d4d] font-extrabold text-2xl tracking-tighter flex items-center gap-1.5">
-                    <span className="w-7 h-7 rounded bg-[#ff4d4d] text-white flex items-center justify-center font-serif text-lg">T</span>
-                    <span className="text-[#ff4d4d]">Triosis</span>
-                    <span className="text-slate-400 font-normal text-sm ml-1">Digital</span>
-                  </div>
-                </div>
-                <div className="hidden lg:flex items-center gap-7 text-xs font-bold uppercase tracking-wider text-[#ff4d4d]">
-                  <span className="cursor-pointer hover:opacity-80">HOME</span>
-                  <span className="cursor-pointer hover:opacity-80">ABOUT US</span>
-                  <span className="cursor-pointer hover:opacity-80">SERVICES</span>
-                  <span className="cursor-pointer hover:opacity-80">PORTFOLIO</span>
-                  <span className="cursor-pointer hover:opacity-80">BLOG</span>
-                  <span className="cursor-pointer hover:opacity-80">CONTACT US</span>
-                </div>
-                <div>
-                  <button className="px-5 py-2.5 bg-[#ff4d4d] text-white font-bold rounded text-xs hover:bg-[#ff3333] transition-colors shadow cursor-pointer">
-                    Book Free Consultation
-                  </button>
-                </div>
-              </header>
-
-              {/* Selected Page Visual Hero Banner (Exact Pink Headline Theme as Screenshot) */}
-              <div className="py-16 px-8 bg-white text-center relative border-b border-slate-100">
-                <div 
-                  onClick={() => handleSelectVirtualRegion(`${cleanPath || "page"}.title`, "Page Hero Heading")}
-                  className={`p-6 max-w-4xl mx-auto rounded-2xl border-2 border-dashed transition-all cursor-pointer ${
-                    selectedElement?.regionId === `${cleanPath || "page"}.title` ? "border-purple-500 bg-purple-50/50 ring-2 ring-purple-400" : "border-transparent hover:border-purple-300"
-                  }`}
-                >
-                  <h1 className="text-4xl md:text-5xl font-black text-[#ff4d4d] tracking-tight leading-tight mb-4">
-                    {draftValues[`${cleanPath || "page"}.title`] || selectedPage?.title || "Strategic Digital Solutions for Businesses That Want to Lead."}
-                  </h1>
-                </div>
-
-                {/* Symbol + Subtext */}
-                <div 
-                  onClick={() => handleSelectVirtualRegion(`${cleanPath || "page"}.subtext`, "Page Hero Subtext")}
-                  className={`mt-6 max-w-2xl mx-auto flex items-start gap-4 p-4 rounded-xl border border-dashed transition-all cursor-pointer ${
-                    selectedElement?.regionId === `${cleanPath || "page"}.subtext` ? "border-purple-500 bg-purple-50/50" : "border-transparent hover:border-slate-200"
-                  }`}
-                >
-                  <div className="w-10 h-10 rounded border-2 border-[#ff4d4d] text-[#ff4d4d] font-bold flex items-center justify-center font-serif text-xl flex-shrink-0">
-                    T
-                  </div>
-                  <p className="text-sm text-slate-700 text-left leading-relaxed">
-                    {draftValues[`${cleanPath || "page"}.subtext`] || selectedPage?.prompt || "We help ambitious businesses grow through innovative technology, creative marketing, and measurable digital strategies that deliver long-term business success."}
-                  </p>
-                </div>
-
-                {/* Pink Wave Taglines */}
-                <div className="mt-12 text-center">
-                  <span className="text-2xl md:text-3xl font-black uppercase tracking-widest text-[#ff4d4d]/80">
-                    INNOVATE. &nbsp; TRANSFORM. &nbsp; GROW.
-                  </span>
-                </div>
-              </div>
-
-              {/* Render Dynamic Custom Modules */}
-              {customModules.map((mod) => (
-                <div key={mod.id} className="relative group border-b border-slate-100">
-                  <button
-                    onClick={() => handleRemoveModule(mod.id)}
-                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 bg-red-500 text-white p-1 text-[10px] rounded font-bold transition-all z-10 cursor-pointer"
-                  >
-                    Remove Section
-                  </button>
-
-                  {mod.type === "trust_badges" && (
-                    <div className="py-6 px-8 bg-slate-900 text-white border-y border-slate-800">
-                      <div className="max-w-5xl mx-auto flex flex-wrap items-center justify-center gap-6 text-xs font-bold uppercase tracking-wider text-slate-300">
-                        {mod.badges.map((b, idx) => (
-                          <span key={idx} className="bg-slate-800 px-3.5 py-1.5 rounded-full border border-slate-700 shadow-sm flex items-center gap-1.5">
-                            {b}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {mod.type === "features_6" && (
-                    <div className="py-16 px-8 bg-white border-b border-slate-100">
-                      <div className="max-w-6xl mx-auto text-center">
-                        <h3 className="text-3xl font-extrabold text-slate-900 mb-2">{mod.heading}</h3>
-                        <p className="text-sm text-slate-500 mb-12 max-w-2xl mx-auto">{mod.subheading}</p>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-left">
-                          {mod.cards.map((c, idx) => (
-                            <div key={idx} className="bg-slate-50 p-6 rounded-2xl border border-slate-200 hover:shadow-md transition-all">
-                              <div className="text-3xl mb-3">{c.icon}</div>
-                              <h4 className="text-lg font-bold text-slate-900 mb-2">{c.title}</h4>
-                              <p className="text-xs text-slate-600 leading-relaxed">{c.desc}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {mod.type === "how_it_works" && (
-                    <div className="py-16 px-8 bg-slate-950 text-white border-b border-slate-900">
-                      <div className="max-w-5xl mx-auto text-center">
-                        <h3 className="text-3xl font-extrabold mb-12">{mod.heading}</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                          {mod.steps.map((s, idx) => (
-                            <div key={idx} className="bg-slate-900 p-8 rounded-2xl border border-slate-800 relative text-left">
-                              <span className="text-4xl font-black text-[#ff4d4d] opacity-90 mb-4 block font-mono">{s.step}</span>
-                              <h4 className="text-lg font-bold mb-2 text-white">{s.title}</h4>
-                              <p className="text-xs text-slate-400 leading-relaxed">{s.desc}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {mod.type === "mockup" && (
-                    <div className="py-16 px-8 bg-white border-b border-slate-100 text-center">
-                      <div className="max-w-5xl mx-auto">
-                        <h3 className="text-3xl font-extrabold text-slate-900 mb-2">{mod.heading}</h3>
-                        <p className="text-sm text-slate-500 mb-8">{mod.subheading}</p>
-                        <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-2xl">
-                          <img src={mod.src} alt={mod.heading} className="w-full max-h-[500px] object-cover" />
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {mod.type === "testimonials" && (
-                    <div className="py-16 px-8 bg-slate-50 border-b border-slate-200">
-                      <div className="max-w-5xl mx-auto text-center">
-                        <h3 className="text-2xl font-bold text-slate-900 mb-8">{mod.heading}</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
-                          {mod.items.map((t, idx) => (
-                            <div key={idx} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                              <p className="text-xs text-slate-700 italic leading-relaxed mb-4">"{t.quote}"</p>
-                              <div className="font-bold text-xs text-[#ff4d4d]">{t.author}</div>
-                              <div className="text-[11px] text-slate-400">{t.role}</div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {mod.type === "faq" && (
-                    <div className="py-16 px-8 bg-white border-b border-slate-100">
-                      <div className="max-w-3xl mx-auto">
-                        <h3 className="text-2xl font-bold text-slate-900 mb-8 text-center">{mod.heading}</h3>
-                        <div className="space-y-4">
-                          {mod.faqs.map((f, idx) => (
-                            <div key={idx} className="bg-slate-50 p-5 rounded-xl border border-slate-200">
-                              <h4 className="font-bold text-sm text-slate-900 mb-2">Q: {f.q}</h4>
-                              <p className="text-xs text-slate-600 leading-relaxed">{f.a}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {mod.type === "content" && (
-                    <div className="py-12 px-8 max-w-4xl mx-auto">
-                      <h3 className="text-2xl font-bold text-slate-900 mb-3">{mod.heading}</h3>
-                      <p className="text-sm text-slate-600 leading-relaxed">{mod.text}</p>
-                    </div>
-                  )}
-
-                  {mod.type === "image" && (
-                    <div className="py-10 px-8 max-w-4xl mx-auto text-center">
-                      <img src={mod.src} alt={mod.caption} className="w-full max-h-96 object-cover rounded-2xl shadow-lg border" />
-                      <p className="text-xs text-slate-500 mt-2 italic">{mod.caption}</p>
-                    </div>
-                  )}
-
-                  {mod.type === "cards" && (
-                    <div className="py-12 px-8 bg-slate-50">
-                      <div className="max-w-5xl mx-auto">
-                        <h3 className="text-xl font-bold text-slate-900 mb-6 text-center">{mod.heading}</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                          {mod.cards.map((c, idx) => (
-                            <div key={idx} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                              <h4 className="font-bold text-[#ff4d4d] mb-2">{c.title}</h4>
-                              <p className="text-xs text-slate-600 leading-relaxed">{c.desc}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {mod.type === "cta" && (
-                    <div className="py-12 px-8 bg-[#111111] text-white text-center">
-                      <h3 className="text-2xl font-bold mb-3">{mod.title}</h3>
-                      <button className="mt-4 px-8 py-3 bg-[#ff4d4d] text-white font-bold rounded-full text-sm shadow-lg cursor-pointer">
-                        {mod.buttonText}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ))}
-
-              {/* Manual Module Inserter Toolbar */}
-              <div className="py-8 px-8 bg-slate-900 text-white text-center border-t border-slate-800">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
-                  + Add Sections &amp; Modules Manually
-                </p>
-                <div className="flex flex-wrap items-center justify-center gap-2">
-                  <button
-                    onClick={() => handleAddModule("text")}
-                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-lg border border-slate-700 transition-all cursor-pointer"
-                  >
-                    + Add Text Module
-                  </button>
-                  <button
-                    onClick={() => handleAddModule("image")}
-                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-lg border border-slate-700 transition-all cursor-pointer"
-                  >
-                    + Add Image Module
-                  </button>
-                  <button
-                    onClick={() => handleAddModule("cards")}
-                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-lg border border-slate-700 transition-all cursor-pointer"
-                  >
-                    + Add Service Cards
-                  </button>
-                  <button
-                    onClick={() => handleAddModule("cta")}
-                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-lg border border-slate-700 transition-all cursor-pointer"
-                  >
-                    + Add CTA Banner
-                  </button>
-                </div>
-              </div>
-
-              {/* Exact Site Footer Matching Screenshot */}
-              <footer className="py-8 px-8 bg-[#0a0a0a] text-slate-400 text-xs border-t border-slate-800 flex flex-col md:flex-row justify-between items-center gap-4">
-                <div>
-                  <span className="font-bold text-white">Triosis Digital</span> © 2026. All rights reserved.
-                </div>
-                <div className="flex gap-4">
-                  <span>Privacy Policy</span>
-                  <span>Terms of Service</span>
-                  <span>Contact</span>
-                </div>
-              </footer>
-            </div>
-          ) : previewModeType === "canvas" ? (
-            <div className="h-full w-full bg-slate-900/60 p-6 overflow-y-auto rounded-xl border border-slate-800 text-left space-y-6 max-w-5xl">
-              <div className="flex items-center justify-between pb-4 border-b border-slate-800">
-                <div>
-                  <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                    <span>{selectedPage?.title || "Page Content Canvas"}</span>
-                    <code className="text-xs text-purple-400 font-mono">/{cleanPath}</code>
-                  </h2>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    Build sections, customize content, and edit drag-and-drop blocks for this page.
-                  </p>
-                </div>
-                <button
-                  onClick={() => setPreviewModeType("shell")}
-                  className="px-3 py-1.5 bg-purple-600/20 text-purple-300 border border-purple-500/30 rounded-lg text-xs font-bold hover:bg-purple-600 hover:text-white transition-all cursor-pointer"
-                >
-                  View Live Frame Preview
-                </button>
-              </div>
-
-              {/* Section Block Editor */}
-              <BlockEditor
-                blocks={pageBlocks}
-                onChange={(updatedBlocks) => {
-                  setPageBlocks(updatedBlocks);
-                  setHasUnsavedChanges(true);
-                  setSaveStatus("unsaved");
-                }}
-                activeLocale={activeLocale}
-              />
-            </div>
-          ) : (
-            <div
-              style={{ width: getDeviceWidth(), transform: 'translateZ(0)', backfaceVisibility: 'hidden' }}
-              className="h-full bg-white rounded-xl overflow-hidden shadow-2xl transition-[width] duration-300 border border-slate-800 relative will-change-transform"
-            >
+          <div
+            style={{ width: getDeviceWidth(), transform: 'translateZ(0)', backfaceVisibility: 'hidden' }}
+            className="h-full bg-white rounded-xl overflow-hidden shadow-2xl transition-[width] duration-300 border border-slate-800 relative will-change-transform"
+          >
               {previewUrl ? (
                 <iframe
                   ref={iframeRef}
@@ -1643,7 +1309,6 @@ export function VisualEditorPage() {
                 </div>
               )}
             </div>
-          )}
         </div>
 
         {/* Right Pane: Inspector & AI Assistant Tabs */}
