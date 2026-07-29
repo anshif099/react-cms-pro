@@ -1265,26 +1265,7 @@ export function VisualEditorPage() {
               style={{ width: getDeviceWidth(), transform: 'translateZ(0)' }}
               className="h-full w-full bg-white text-slate-900 rounded-xl overflow-y-auto shadow-2xl border border-slate-300 relative text-left"
             >
-              {/* AI Live Prompt Page Builder Header Bar */}
-              <div className="bg-slate-950 p-3 border-b border-slate-800 flex items-center justify-between gap-3 sticky top-0 z-30">
-                <form onSubmit={handleAILiveBuildPage} className="flex-1 flex items-center gap-2">
-                  <span className="text-xs font-bold text-purple-400 whitespace-nowrap hidden sm:inline">✨ AI Live Page Builder:</span>
-                  <input
-                    type="text"
-                    value={aiPromptInput}
-                    onChange={(e) => setAiPromptInput(e.target.value)}
-                    placeholder="Type prompt to live build page (e.g. 'Build AI Integrated Marketing page with 3 feature cards and CTA')"
-                    className="flex-1 bg-slate-900 border border-slate-800 text-xs text-white px-3 py-1.5 rounded-lg focus:border-purple-500 outline-none"
-                  />
-                  <button
-                    type="submit"
-                    disabled={buildingAI || !aiPromptInput.trim()}
-                    className="px-3.5 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-xs rounded-lg hover:from-purple-500 hover:to-indigo-500 transition-all cursor-pointer whitespace-nowrap shadow"
-                  >
-                    {buildingAI ? "Building..." : "✨ Live Build Page"}
-                  </button>
-                </form>
-              </div>
+
 
               {/* Selected Page Visual Hero Banner */}
               <div className="py-16 px-8 bg-white text-center relative border-b border-slate-100">
