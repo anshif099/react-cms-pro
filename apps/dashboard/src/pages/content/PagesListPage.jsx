@@ -433,20 +433,6 @@ export function PagesListPage() {
               />
             </div>
 
-            {/* AI Page Generation Prompt */}
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider block">
-                ✨ AI Page Generator Prompt
-              </label>
-              <textarea
-                rows={2}
-                value={newPagePrompt}
-                onChange={(e) => setNewPagePrompt(e.target.value)}
-                placeholder="Describe what this page is about... (e.g. Comprehensive AI and Machine Learning courses for developers, including certification and practical projects)"
-                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2.5 text-xs text-white placeholder-slate-500 focus:border-primary focus:ring-1 focus:ring-primary outline-none"
-              />
-            </div>
-
             {/* Keywords Section */}
             <Input
               label="🔑 Target SEO Keywords"
@@ -463,7 +449,7 @@ export function PagesListPage() {
               </span>
               <Input
                 label="Meta Title"
-                placeholder="e.g. AI Courses & Certification | Triosis Digital"
+                placeholder="e.g. AI Courses & Certification"
                 value={newPageMetaTitle}
                 onChange={(e) => setNewPageMetaTitle(e.target.value)}
               />
@@ -500,12 +486,14 @@ export function PagesListPage() {
                   Cancel
                 </Button>
                 <Button
-                  type="submit"
+                  type="button"
+                  onClick={handleCreatePage}
                   variant="primary"
                   className="gap-1 font-bold"
+                  loading={creating}
                   disabled={!newPageTitle.trim()}
                 >
-                  Configure <ArrowRight className="w-3.5 h-3.5" />
+                  Create Page 🚀
                 </Button>
               </div>
             </div>

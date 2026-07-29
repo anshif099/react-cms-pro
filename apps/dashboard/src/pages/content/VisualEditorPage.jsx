@@ -435,6 +435,62 @@ export function VisualEditorPage() {
       } else {
         setPreviewModeType("visual");
       }
+
+      // Auto-populate template modules matching page type (e.g. Blog, Contact)
+      const tmpl = (selectedPage.template || selectedPage.title || selectedPage.slug || "").toLowerCase();
+      if (tmpl.includes("blog") || tmpl.includes("post")) {
+        setCustomModules([
+          {
+            id: "mod-trust-blog",
+            type: "trust_badges",
+            badges: ["📰 Latest Articles", "💡 Industry Insights", "🚀 Tech Trends", "⚡ Weekly Updates"]
+          },
+          {
+            id: "mod-blog-cards",
+            type: "cards",
+            heading: "Recent Blog Articles & Insights",
+            cards: [
+              { title: "Strategic Digital Growth", desc: "Discover how modern digital frameworks scale operations and increase conversion rates." },
+              { title: "Building High-Performance Architecture", desc: "Key principles for managing enterprise platforms with zero friction." },
+              { title: "Design System Best Practices", desc: "Creating harmonious visual consistency across all digital assets." }
+            ]
+          },
+          {
+            id: "mod-blog-faq",
+            type: "faq",
+            heading: "Blog & Editorial FAQ",
+            faqs: [
+              { q: "How often are new blog posts published?", a: "We publish fresh industry insights and technical articles weekly." },
+              { q: "Can I subscribe to updates?", a: "Yes, subscribe to receive email notifications when new posts go live." }
+            ]
+          },
+          {
+            id: "mod-blog-cta",
+            type: "cta",
+            title: "Subscribe to Our Weekly Editorial Insights",
+            buttonText: "Join Newsletter"
+          }
+        ]);
+      } else if (tmpl.includes("contact")) {
+        setCustomModules([
+          {
+            id: "mod-contact-cards",
+            type: "cards",
+            heading: "Get in Touch With Our Team",
+            cards: [
+              { title: "Sales & Inquiries", desc: "Reach out to our team to discuss project requirements and custom solutions." },
+              { title: "24/7 Client Support", desc: "Our support engineers are available round the clock for live assistance." },
+              { title: "Global Office", desc: "Visit our technology innovation hub or connect with us online." }
+            ]
+          },
+          {
+            id: "mod-contact-cta",
+            type: "cta",
+            title: "Ready to launch your next project?",
+            buttonText: "Schedule Discovery Call"
+          }
+        ]);
+      }
     }
   }, [selectedPage, activeLocale]);
 
