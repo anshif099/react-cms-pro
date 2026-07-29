@@ -1366,59 +1366,68 @@ export function VisualEditorPage() {
                 </div>
               </div>
 
-              {/* Site Header (Inherited from Common Home Page Layout) */}
+                {/* Site Header (Matching Connected Triosis Site Layout) */}
               {includeHeader && (
-                <header className="bg-slate-950 text-white py-4 px-8 border-b border-slate-800 flex items-center justify-between relative z-20 shadow-md">
-                  <div className="flex items-center gap-3 cursor-pointer" onClick={() => handleSelectVirtualRegion("header.logo", "Site Header Logo")}>
-                    <div className="w-8 h-8 rounded-xl bg-purple-600 flex items-center justify-center font-black text-white text-base shadow">
+                <header className="bg-white text-slate-900 py-4 px-8 border-b border-slate-100 flex items-center justify-between relative z-20 shadow-sm">
+                  <div className="flex items-center gap-2 cursor-pointer" onClick={() => handleSelectVirtualRegion("header.logo", "Site Header Logo")}>
+                    <div className="w-8 h-8 rounded-xl bg-[#ff5a5f] flex items-center justify-center font-black text-white text-base shadow">
                       T
                     </div>
-                    <span className="font-extrabold text-lg tracking-tight text-white">
-                      {draftValues["header.logo"] || selectedWebsite?.name || "Triosis Digital"}
-                    </span>
+                    <div className="flex flex-col text-left">
+                      <span className="font-extrabold text-xl tracking-tight text-[#ff5a5f]">
+                        {draftValues["Hero Symbol Logo"] || draftValues["header.logo"] || "Triosis"}
+                      </span>
+                      <span className="text-[10px] font-bold text-slate-400 -mt-1 tracking-widest uppercase">Digital</span>
+                    </div>
                   </div>
 
-                  <nav className="hidden md:flex items-center gap-6 text-xs font-semibold text-slate-300">
-                    <a href="#" className="hover:text-purple-400 transition-colors">Home</a>
-                    <a href="#" className="hover:text-purple-400 transition-colors">About Us</a>
-                    <a href="#" className="hover:text-purple-400 transition-colors">Services</a>
-                    <a href="#" className="hover:text-purple-400 transition-colors">Portfolio</a>
-                    <a href="#" className="text-purple-400 font-bold border-b-2 border-purple-500 pb-0.5 capitalize">{cleanPath || "Page"}</a>
-                    <a href="#" className="hover:text-purple-400 transition-colors">Contact Us</a>
+                  {/* Standard Main Navigation Links (No custom page path inserted) */}
+                  <nav className="hidden md:flex items-center gap-7 text-xs font-bold uppercase tracking-wider text-slate-600">
+                    <a href="#" className="hover:text-[#ff5a5f] transition-colors">Home</a>
+                    <a href="#" className="hover:text-[#ff5a5f] transition-colors">About Us</a>
+                    <a href="#" className="hover:text-[#ff5a5f] transition-colors">Services</a>
+                    <a href="#" className="hover:text-[#ff5a5f] transition-colors">Portfolio</a>
+                    <a href="#" className="hover:text-[#ff5a5f] transition-colors">Blog</a>
+                    <a href="#" className="hover:text-[#ff5a5f] transition-colors">Contact Us</a>
                   </nav>
 
-                  <button 
-                    onClick={() => handleSelectVirtualRegion("header.cta", "Header Call To Action")}
-                    className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl shadow transition-all cursor-pointer"
-                  >
-                    {draftValues["header.cta"] || "Get Started"}
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <button 
+                      onClick={() => handleSelectVirtualRegion("header.cta", "Header Call To Action")}
+                      className="hidden sm:inline-block px-5 py-2.5 bg-[#ff5a5f] hover:bg-[#ff4449] text-white font-bold text-xs rounded-xl shadow transition-all cursor-pointer"
+                    >
+                      {draftValues["header.cta"] || "Get Started"}
+                    </button>
+                    <button className="p-2 rounded-lg text-[#ff5a5f] hover:bg-rose-50 transition-colors cursor-pointer md:hidden">
+                      <Menu className="w-6 h-6" />
+                    </button>
+                  </div>
                 </header>
               )}
 
               {/* Selected Page Visual Hero Banner */}
               {includeHero && (
-                <div className="py-16 px-8 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white text-center relative border-b border-slate-800">
+                <div className="py-16 px-8 bg-slate-50 text-slate-900 text-center relative border-b border-slate-100">
                   <div 
-                    onClick={() => handleSelectVirtualRegion(`${cleanPath || "page"}.title`, "Page Hero Heading")}
+                    onClick={() => handleSelectVirtualRegion("Hero Heading", "Page Hero Heading")}
                     className={`p-6 max-w-4xl mx-auto rounded-2xl border-2 border-dashed transition-all cursor-pointer ${
-                      selectedElement?.regionId === `${cleanPath || "page"}.title` ? "border-purple-500 bg-purple-900/30 ring-2 ring-purple-400" : "border-transparent hover:border-purple-400/50"
+                      selectedElement?.regionId === "Hero Heading" || selectedElement?.regionId === `${cleanPath || "page"}.title` ? "border-[#ff5a5f] bg-rose-50/50 ring-2 ring-rose-300" : "border-transparent hover:border-slate-300"
                     }`}
                   >
-                    <h1 className="text-4xl md:text-5xl font-black text-white tracking-tight leading-tight mb-4 capitalize">
-                      {draftValues[`${cleanPath || "page"}.title`] || selectedPage?.title || cleanPath || "New Created Page"}
+                    <h1 className="text-4xl md:text-5xl font-black text-[#ff5a5f] tracking-tight leading-tight mb-4 capitalize">
+                      {draftValues["Hero Heading"] || draftValues[`${cleanPath || "page"}.title`] || selectedPage?.title || cleanPath || "New Created Page"}
                     </h1>
                   </div>
 
                   {/* Subtext */}
                   <div 
-                    onClick={() => handleSelectVirtualRegion(`${cleanPath || "page"}.subtext`, "Page Hero Subtext")}
+                    onClick={() => handleSelectVirtualRegion("Hero Subtext", "Page Hero Subtext")}
                     className={`mt-2 max-w-2xl mx-auto p-4 rounded-xl border border-dashed transition-all cursor-pointer ${
-                      selectedElement?.regionId === `${cleanPath || "page"}.subtext` ? "border-purple-500 bg-purple-900/30" : "border-transparent hover:border-slate-700"
+                      selectedElement?.regionId === "Hero Subtext" || selectedElement?.regionId === `${cleanPath || "page"}.subtext` ? "border-[#ff5a5f] bg-rose-50/50" : "border-transparent hover:border-slate-200"
                     }`}
                   >
-                    <p className="text-sm text-slate-300 text-center leading-relaxed">
-                      {draftValues[`${cleanPath || "page"}.subtext`] || selectedPage?.prompt || `Welcome to the custom ${cleanPath || "page"} page. Customize copy, add sections, and edit blocks.`}
+                    <p className="text-sm text-slate-600 text-center leading-relaxed">
+                      {draftValues["Hero Subtext"] || draftValues[`${cleanPath || "page"}.subtext`] || selectedPage?.prompt || `We help ambitious businesses grow through innovative technology, creative marketing, and measurable digital strategies.`}
                     </p>
                   </div>
                 </div>
@@ -1483,7 +1492,7 @@ export function VisualEditorPage() {
 
                   {mod.type === "content" && (
                     <div className="py-12 px-8 max-w-4xl mx-auto">
-                      <h3 className="text-2xl font-bold text-slate-900 mb-3">{mod.heading}</h3>
+                      <h3 className="text-2xl font-bold text-[#ff5a5f] mb-3">{mod.heading}</h3>
                       <p className="text-sm text-slate-600 leading-relaxed">{mod.text}</p>
                     </div>
                   )}
@@ -1502,7 +1511,7 @@ export function VisualEditorPage() {
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                           {mod.cards.map((c, idx) => (
                             <div key={idx} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                              <h4 className="font-bold text-purple-600 mb-2">{c.title}</h4>
+                              <h4 className="font-bold text-[#ff5a5f] mb-2">{c.title}</h4>
                               <p className="text-xs text-slate-600 leading-relaxed">{c.desc}</p>
                             </div>
                           ))}
@@ -1512,14 +1521,14 @@ export function VisualEditorPage() {
                   )}
 
                   {mod.type === "faq" && (
-                    <div className="py-12 px-8 bg-slate-900 text-white border-b border-slate-800">
+                    <div className="py-12 px-8 bg-white border-b border-slate-100">
                       <div className="max-w-4xl mx-auto">
-                        <h3 className="text-2xl font-bold mb-6 text-center">{mod.heading}</h3>
+                        <h3 className="text-2xl font-bold mb-6 text-center text-slate-900">{mod.heading}</h3>
                         <div className="space-y-4">
                           {(mod.faqs || []).map((f, idx) => (
-                            <div key={idx} className="bg-slate-950 p-4 rounded-xl border border-slate-800">
-                              <h4 className="font-bold text-purple-400 text-sm mb-1">{f.q}</h4>
-                              <p className="text-xs text-slate-300 leading-relaxed">{f.a}</p>
+                            <div key={idx} className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                              <h4 className="font-bold text-[#ff5a5f] text-sm mb-1">{f.q}</h4>
+                              <p className="text-xs text-slate-600 leading-relaxed">{f.a}</p>
                             </div>
                           ))}
                         </div>
@@ -1528,9 +1537,9 @@ export function VisualEditorPage() {
                   )}
 
                   {mod.type === "cta" && (
-                    <div className="py-12 px-8 bg-slate-950 text-white text-center">
+                    <div className="py-12 px-8 bg-slate-900 text-white text-center">
                       <h3 className="text-2xl font-bold mb-3">{mod.title}</h3>
-                      <button className="mt-4 px-8 py-3 bg-purple-600 text-white font-bold rounded-full text-sm shadow-lg cursor-pointer hover:bg-purple-500">
+                      <button className="mt-4 px-8 py-3 bg-[#ff5a5f] text-white font-bold rounded-full text-sm shadow-lg cursor-pointer hover:bg-[#ff4449]">
                         {mod.buttonText}
                       </button>
                     </div>
@@ -1538,79 +1547,84 @@ export function VisualEditorPage() {
                 </div>
               ))}
 
-              {/* Site Footer (Inherited from Connected Triosis Home Page Layout) */}
+              {/* Site Footer (Matching Connected Triosis Site Layout & Coral Theme) */}
               {includeFooter && (
-                <footer className="bg-slate-950 text-slate-400 py-12 px-8 border-t border-slate-800 text-left">
-                  <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-8 mb-12">
+                <footer className="bg-[#fcfbfb] text-slate-700 py-16 px-8 border-t border-slate-200 text-left font-sans">
+                  <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-12 mb-12">
+                    {/* Left Column: Social Icons */}
                     <div>
-                      <div className="flex items-center gap-2 mb-4 cursor-pointer" onClick={() => handleSelectVirtualRegion("Footer Section", "Footer Section")}>
-                        <div className="w-7 h-7 rounded-lg bg-purple-600 flex items-center justify-center font-bold text-white text-xs">
-                          T
-                        </div>
-                        <span className="font-bold text-white text-base">
-                          {draftValues["footer.title"] || selectedWebsite?.name || "Triosis Digital"}
-                        </span>
+                      <div className="flex items-center gap-3 mb-6">
+                        <span className="font-black text-2xl text-[#ff5a5f]">Triosis</span>
+                        <span className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Digital</span>
                       </div>
-                      <p 
-                        className="text-xs text-slate-400 leading-relaxed cursor-pointer hover:text-white"
-                        onClick={() => handleSelectVirtualRegion("Footer Address", "Footer Address")}
-                      >
-                        {draftValues["Footer Address"] || draftValues["footer.address"] || "Building 4, Tech Park, Suite 200, Innovation City"}
-                      </p>
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-full bg-white border border-slate-200 flex items-center justify-center text-[#ff5a5f] font-bold text-xs shadow-sm hover:border-[#ff5a5f] transition-all cursor-pointer">X</div>
+                        <div className="w-9 h-9 rounded-full bg-white border border-slate-200 flex items-center justify-center text-[#ff5a5f] font-bold text-xs shadow-sm hover:border-[#ff5a5f] transition-all cursor-pointer">f</div>
+                        <div className="w-9 h-9 rounded-full bg-white border border-slate-200 flex items-center justify-center text-[#ff5a5f] font-bold text-xs shadow-sm hover:border-[#ff5a5f] transition-all cursor-pointer">in</div>
+                        <div className="w-9 h-9 rounded-full bg-white border border-slate-200 flex items-center justify-center text-[#ff5a5f] font-bold text-xs shadow-sm hover:border-[#ff5a5f] transition-all cursor-pointer">▶</div>
+                      </div>
                     </div>
 
+                    {/* Center Column: FIND US! */}
                     <div>
                       <h4 
-                        className="text-xs font-bold text-white uppercase tracking-wider mb-3 cursor-pointer hover:text-purple-400"
-                        onClick={() => handleSelectVirtualRegion("Footer Links Title", "Footer Links Title")}
-                      >
-                        {draftValues["Footer Links Title"] || draftValues["footer.links_title"] || "Quick Links"}
-                      </h4>
-                      <ul className="space-y-2 text-xs">
-                        <li><a href="#" className="hover:text-white transition-colors">Home</a></li>
-                        <li><a href="#" className="hover:text-white transition-colors">About Us</a></li>
-                        <li><a href="#" className="hover:text-white transition-colors">Services</a></li>
-                        <li><a href="#" className="hover:text-white transition-colors">Blog Insights</a></li>
-                      </ul>
-                    </div>
-
-                    <div>
-                      <h4 
-                        className="text-xs font-bold text-white uppercase tracking-wider mb-3 cursor-pointer hover:text-purple-400"
+                        className="text-xs font-black text-[#ff5a5f] uppercase tracking-widest mb-4 cursor-pointer hover:underline"
                         onClick={() => handleSelectVirtualRegion("Footer Find Us Title", "Footer Find Us Title")}
                       >
-                        {draftValues["Footer Find Us Title"] || draftValues["footer.findus_title"] || "Find Us / Contact"}
+                        {draftValues["Footer Find Us Title"] || "FIND US!"}
                       </h4>
-                      <p 
-                        className="text-xs text-slate-400 mb-2 cursor-pointer hover:text-white"
-                        onClick={() => handleSelectVirtualRegion("Footer Email", "Footer Email")}
-                      >
-                        📧 {draftValues["Footer Email"] || draftValues["footer.email"] || "contact@triosisdigital.com"}
-                      </p>
-                      <p 
-                        className="text-xs text-slate-400 cursor-pointer hover:text-white"
-                        onClick={() => handleSelectVirtualRegion("Footer Phone", "Footer Phone")}
-                      >
-                        📞 {draftValues["Footer Phone"] || draftValues["footer.phone"] || "+1 (800) 555-0199"}
-                      </p>
+                      <div className="space-y-3 text-xs font-medium text-[#ff5a5f] uppercase tracking-wide">
+                        <p 
+                          className="cursor-pointer hover:opacity-80 leading-relaxed"
+                          onClick={() => handleSelectVirtualRegion("Footer Address", "Footer Address")}
+                        >
+                          {draftValues["Footer Address"] || "TRIOSIS DIGITAL TOWER 2, HILITE BUSINESS PARK, DOOR NO : 2211, SECOND FLOOR, POOVANGAL, PANTHEERAMKAVU, KOZHIKODE, KERALA 673014"}
+                        </p>
+                        <p 
+                          className="cursor-pointer hover:opacity-80 font-bold"
+                          onClick={() => handleSelectVirtualRegion("Footer Email", "Footer Email")}
+                        >
+                          {draftValues["Footer Email"] || "INFO@TRIOSIS.IN"}
+                        </p>
+                        <p 
+                          className="cursor-pointer hover:opacity-80 font-bold"
+                          onClick={() => handleSelectVirtualRegion("Footer Phone", "Footer Phone")}
+                        >
+                          {draftValues["Footer Phone"] || "+91 9605507008"}
+                        </p>
+                      </div>
                     </div>
 
+                    {/* Right Column: LINKS! */}
                     <div>
-                      <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-3">Triosis Platform</h4>
-                      <p className="text-xs text-slate-400 leading-relaxed">
-                        Synced &amp; Connected via ReactCMS Pro SDK v2.6.
-                      </p>
+                      <h4 
+                        className="text-xs font-black text-[#ff5a5f] uppercase tracking-widest mb-4 cursor-pointer hover:underline"
+                        onClick={() => handleSelectVirtualRegion("Footer Links Title", "Footer Links Title")}
+                      >
+                        {draftValues["Footer Links Title"] || "LINKS!"}
+                      </h4>
+                      <ul className="grid grid-cols-2 gap-2 text-xs font-bold uppercase tracking-wider text-[#ff5a5f]">
+                        <li><a href="#" className="hover:opacity-80 transition-opacity">HOME</a></li>
+                        <li><a href="#" className="hover:opacity-80 transition-opacity">ABOUT US</a></li>
+                        <li><a href="#" className="hover:opacity-80 transition-opacity">CAREER</a></li>
+                        <li><a href="#" className="hover:opacity-80 transition-opacity">OUR TEAM</a></li>
+                        <li><a href="#" className="hover:opacity-80 transition-opacity">FAQS</a></li>
+                        <li><a href="#" className="hover:opacity-80 transition-opacity">SERVICES</a></li>
+                        <li><a href="#" className="hover:opacity-80 transition-opacity">PORTFOLIO</a></li>
+                        <li><a href="#" className="hover:opacity-80 transition-opacity">BLOG</a></li>
+                        <li><a href="#" className="hover:opacity-80 transition-opacity">CONTACT US</a></li>
+                      </ul>
                     </div>
                   </div>
 
-                  <div className="max-w-6xl mx-auto border-t border-slate-900 pt-6 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500">
+                  <div className="max-w-6xl mx-auto border-t border-slate-200 pt-6 flex flex-col sm:flex-row items-center justify-between text-xs text-[#ff5a5f] font-medium">
                     <span 
-                      className="cursor-pointer hover:text-slate-300"
+                      className="cursor-pointer hover:underline"
                       onClick={() => handleSelectVirtualRegion("Footer Copyright", "Footer Copyright")}
                     >
-                      {draftValues["Footer Copyright"] || draftValues["footer.copyright"] || `© 2026 ${selectedWebsite?.name || "Triosis Digital"}. All rights reserved.`}
+                      {draftValues["Footer Copyright"] || "© 2026 Triosis. All Rights Reserved"}
                     </span>
-                    <span className="text-[11px] text-purple-400 font-mono">Connected Triosis Site Shell</span>
+                    <span className="text-[11px] text-slate-400 font-mono">Connected Triosis Site Shell</span>
                   </div>
                 </footer>
               )}
