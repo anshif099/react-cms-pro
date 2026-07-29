@@ -496,16 +496,20 @@ export function VisualEditorPage() {
     }
   };
 
-  // Keep target domain in sync, prioritizing user's local override choice (e.g. http://localhost:5173)
+  // Keep target domain in sync, defaulting directly to live production HTTPS domain
   useEffect(() => {
     if (!websiteId) return;
     const localTarget = localStorage.getItem(`rcms_target_domain_${websiteId}`);
-    if (localTarget) {
+    if (localTarget && !localTarget.includes("localhost")) {
       setTargetDomain(localTarget);
       setNewDomainInput(localTarget);
-    } else if (selectedWebsite?.domain) {
+    } else if (selectedWebsite?.domain && !selectedWebsite.domain.includes("localhost")) {
       setTargetDomain(selectedWebsite.domain);
       setNewDomainInput(selectedWebsite.domain);
+    } else {
+      const fallbackLive = "https://triosis.vercel.app";
+      setTargetDomain(fallbackLive);
+      setNewDomainInput(fallbackLive);
     }
   }, [selectedWebsite, websiteId]);
 
@@ -1032,35 +1036,10 @@ export function VisualEditorPage() {
               <Settings className="w-3 h-3 text-slate-500" />
             </button>
 
-            {/* Quick 1-Click Environment Toggle: Local Dev (5173) vs Live Vercel */}
-            <div className="hidden sm:flex bg-slate-950 p-0.5 rounded-lg border border-slate-800 text-[11px]">
-              <button
-                onClick={() => handleSwitchTargetDomain("http://localhost:5173")}
-                className={`px-3 py-1 rounded font-bold transition-all cursor-pointer ${
-                  cleanDomain.includes("localhost")
-                    ? "bg-emerald-600 text-white shadow"
-                    : "text-slate-400 hover:text-white"
-                }`}
-                title="Switch preview to local dev server (http://localhost:5173)"
-              >
-                Local Dev (5173)
-              </button>
-              <button
-                onClick={() => {
-                  const liveUrl = (selectedWebsite?.domain && !selectedWebsite.domain.includes("localhost"))
-                    ? selectedWebsite.domain
-                    : "https://triosis.vercel.app";
-                  handleSwitchTargetDomain(liveUrl);
-                }}
-                className={`px-3 py-1 rounded font-bold transition-all cursor-pointer ${
-                  !cleanDomain.includes("localhost")
-                    ? "bg-purple-600 text-white shadow"
-                    : "text-slate-400 hover:text-white"
-                }`}
-                title="Switch preview to live Vercel site"
-              >
-                Live Vercel
-              </button>
+            {/* Target Live App Domain Indicator */}
+            <div className="hidden sm:flex items-center gap-1.5 bg-purple-950/60 px-2.5 py-1 rounded-lg border border-purple-500/30 text-[11px] font-bold text-purple-300">
+              <Globe className="w-3.5 h-3.5 text-purple-400" />
+              <span>Live Preview</span>
             </div>
           </div>
 
@@ -1240,40 +1219,7 @@ export function VisualEditorPage() {
             </div>
           )}
 
-          {window.location.protocol === 'https:' && targetDomain?.startsWith('http://') && (
-            <div className="mb-3 w-full max-w-3xl bg-amber-950/90 border border-amber-500/50 p-3.5 rounded-xl flex flex-col gap-2.5 text-xs text-amber-200 shadow-2xl">
-              <div className="flex items-start gap-2.5">
-                <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <span className="font-bold text-amber-300 text-sm">Chrome / Edge Security Blocking `http://localhost:5173` inside HTTPS:</span>
-                  <p className="text-xs text-amber-200/90 mt-1 leading-relaxed">
-                    Modern browsers block <code>http://localhost:5173</code> inside an <code>https://</code> dashboard due to Mixed Content policies.
-                  </p>
-                  
-                  {/* Step-by-step fix */}
-                  <div className="mt-2.5 bg-amber-900/60 p-2.5 rounded-lg border border-amber-500/30 text-[11px] space-y-1">
-                    <p className="font-bold text-amber-200">To enable automatic loading in Chrome / Edge (takes 5 seconds):</p>
-                    <ol className="list-decimal list-inside space-y-1 text-amber-100">
-                      <li>Click the <strong>🔒 Padlock / Tune icon</strong> on the left side of your browser URL address bar.</li>
-                      <li>Click <strong>Site settings</strong> → scroll down to <strong>Insecure content</strong> → change to <strong className="text-emerald-400">Allow</strong>.</li>
-                      <li>Refresh this browser tab — <strong>localhost:5173 will load automatically</strong> inside the editor frame!</li>
-                    </ol>
-                  </div>
-                </div>
-              </div>
 
-              <div className="flex items-center justify-end gap-2 pt-1 border-t border-amber-500/20">
-                <a
-                  href={`${targetDomain}/?page=${cleanPath}&rcms_preview=1`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg text-xs transition-colors cursor-pointer flex items-center gap-1.5 shadow"
-                >
-                  <span>Open Local Tab</span> <ExternalLink className="w-3.5 h-3.5" />
-                </a>
-              </div>
-            </div>
-          )}
 
           {previewModeType === "shell" && cleanPath && cleanPath !== "home" && !isSelfDashboardOrigin && (
             <div className="mb-2 w-full max-w-2xl bg-purple-950/70 border border-purple-500/30 p-2.5 rounded-xl flex items-center justify-between text-xs text-purple-200">
