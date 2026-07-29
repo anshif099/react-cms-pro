@@ -1506,6 +1506,22 @@ export function VisualEditorPage() {
                     </div>
                   )}
 
+                  {mod.type === "faq" && (
+                    <div className="py-12 px-8 bg-slate-900 text-white border-b border-slate-800">
+                      <div className="max-w-4xl mx-auto">
+                        <h3 className="text-2xl font-bold mb-6 text-center">{mod.heading}</h3>
+                        <div className="space-y-4">
+                          {(mod.faqs || []).map((f, idx) => (
+                            <div key={idx} className="bg-slate-950 p-4 rounded-xl border border-slate-800">
+                              <h4 className="font-bold text-purple-400 text-sm mb-1">{f.q}</h4>
+                              <p className="text-xs text-slate-300 leading-relaxed">{f.a}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {mod.type === "cta" && (
                     <div className="py-12 px-8 bg-slate-950 text-white text-center">
                       <h3 className="text-2xl font-bold mb-3">{mod.title}</h3>
