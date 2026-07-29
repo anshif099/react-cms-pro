@@ -505,12 +505,16 @@ export function VisualEditorPage() {
 
     const loadInitialRegions = async () => {
       try {
-        const draftData = await contentSyncService.getDraft(websiteId, pageSlug);
-        const publishedData = await contentSyncService.getPublished(websiteId, pageSlug);
+        const homeDraft = await contentSyncService.getDraft(websiteId, "home");
+        const homePublished = await contentSyncService.getPublished(websiteId, "home");
+        const pageDraft = await contentSyncService.getDraft(websiteId, pageSlug);
+        const pagePublished = await contentSyncService.getPublished(websiteId, pageSlug);
 
         const initialRegions = {
-          ...(publishedData?.regions || {}),
-          ...(draftData?.regions || {})
+          ...(homePublished?.regions || {}),
+          ...(homeDraft?.regions || {}),
+          ...(pagePublished?.regions || {}),
+          ...(pageDraft?.regions || {})
         };
 
         if (Object.keys(initialRegions).length > 0) {
@@ -1534,26 +1538,34 @@ export function VisualEditorPage() {
                 </div>
               ))}
 
-              {/* Site Footer (Inherited from Common Home Page Layout) */}
+              {/* Site Footer (Inherited from Connected Triosis Home Page Layout) */}
               {includeFooter && (
                 <footer className="bg-slate-950 text-slate-400 py-12 px-8 border-t border-slate-800 text-left">
                   <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-8 mb-12">
                     <div>
-                      <div className="flex items-center gap-2 mb-4 cursor-pointer" onClick={() => handleSelectVirtualRegion("footer.title", "Footer Title")}>
+                      <div className="flex items-center gap-2 mb-4 cursor-pointer" onClick={() => handleSelectVirtualRegion("Footer Section", "Footer Section")}>
                         <div className="w-7 h-7 rounded-lg bg-purple-600 flex items-center justify-center font-bold text-white text-xs">
                           T
                         </div>
                         <span className="font-bold text-white text-base">
-                          {selectedWebsite?.name || "Triosis Digital"}
+                          {draftValues["footer.title"] || selectedWebsite?.name || "Triosis Digital"}
                         </span>
                       </div>
-                      <p className="text-xs text-slate-400 leading-relaxed">
-                        {draftValues["footer.description"] || "Building scalable digital solutions and visual content management systems for enterprise growth."}
+                      <p 
+                        className="text-xs text-slate-400 leading-relaxed cursor-pointer hover:text-white"
+                        onClick={() => handleSelectVirtualRegion("Footer Address", "Footer Address")}
+                      >
+                        {draftValues["Footer Address"] || draftValues["footer.address"] || "Building 4, Tech Park, Suite 200, Innovation City"}
                       </p>
                     </div>
 
                     <div>
-                      <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-3">Quick Links</h4>
+                      <h4 
+                        className="text-xs font-bold text-white uppercase tracking-wider mb-3 cursor-pointer hover:text-purple-400"
+                        onClick={() => handleSelectVirtualRegion("Footer Links Title", "Footer Links Title")}
+                      >
+                        {draftValues["Footer Links Title"] || draftValues["footer.links_title"] || "Quick Links"}
+                      </h4>
                       <ul className="space-y-2 text-xs">
                         <li><a href="#" className="hover:text-white transition-colors">Home</a></li>
                         <li><a href="#" className="hover:text-white transition-colors">About Us</a></li>
@@ -1563,24 +1575,42 @@ export function VisualEditorPage() {
                     </div>
 
                     <div>
-                      <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-3">Legal &amp; Policy</h4>
-                      <ul className="space-y-2 text-xs">
-                        <li><a href="#" className="hover:text-white transition-colors">Privacy Policy</a></li>
-                        <li><a href="#" className="hover:text-white transition-colors">Terms of Service</a></li>
-                        <li><a href="#" className="hover:text-white transition-colors">Cookie Settings</a></li>
-                      </ul>
+                      <h4 
+                        className="text-xs font-bold text-white uppercase tracking-wider mb-3 cursor-pointer hover:text-purple-400"
+                        onClick={() => handleSelectVirtualRegion("Footer Find Us Title", "Footer Find Us Title")}
+                      >
+                        {draftValues["Footer Find Us Title"] || draftValues["footer.findus_title"] || "Find Us / Contact"}
+                      </h4>
+                      <p 
+                        className="text-xs text-slate-400 mb-2 cursor-pointer hover:text-white"
+                        onClick={() => handleSelectVirtualRegion("Footer Email", "Footer Email")}
+                      >
+                        📧 {draftValues["Footer Email"] || draftValues["footer.email"] || "contact@triosisdigital.com"}
+                      </p>
+                      <p 
+                        className="text-xs text-slate-400 cursor-pointer hover:text-white"
+                        onClick={() => handleSelectVirtualRegion("Footer Phone", "Footer Phone")}
+                      >
+                        📞 {draftValues["Footer Phone"] || draftValues["footer.phone"] || "+1 (800) 555-0199"}
+                      </p>
                     </div>
 
                     <div>
-                      <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-3">Contact Support</h4>
-                      <p className="text-xs text-slate-400 mb-2">support@triosisdigital.com</p>
-                      <p className="text-xs text-slate-400">+1 (800) 555-0199</p>
+                      <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-3">Triosis Platform</h4>
+                      <p className="text-xs text-slate-400 leading-relaxed">
+                        Synced &amp; Connected via ReactCMS Pro SDK v2.6.
+                      </p>
                     </div>
                   </div>
 
                   <div className="max-w-6xl mx-auto border-t border-slate-900 pt-6 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500">
-                    <span>© 2026 {selectedWebsite?.name || "Triosis Digital"}. All rights reserved.</span>
-                    <span className="text-[11px] text-purple-400 font-mono">Common Home Layout Shell</span>
+                    <span 
+                      className="cursor-pointer hover:text-slate-300"
+                      onClick={() => handleSelectVirtualRegion("Footer Copyright", "Footer Copyright")}
+                    >
+                      {draftValues["Footer Copyright"] || draftValues["footer.copyright"] || `© 2026 ${selectedWebsite?.name || "Triosis Digital"}. All rights reserved.`}
+                    </span>
+                    <span className="text-[11px] text-purple-400 font-mono">Connected Triosis Site Shell</span>
                   </div>
                 </footer>
               )}
