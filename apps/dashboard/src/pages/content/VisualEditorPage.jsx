@@ -1036,11 +1036,10 @@ export function VisualEditorPage() {
 
   let previewUrl = "";
   if (cleanDomain) {
-    if (previewModeType === "shell" && cleanPath && cleanPath !== "home") {
-      previewUrl = `${cleanDomain}/?page=${encodeURIComponent(cleanPath)}&rcms_preview=1`;
-    } else if (cleanPath && cleanPath !== "home") {
+    if (previewModeType === "direct" && cleanPath && cleanPath !== "home") {
       previewUrl = `${cleanDomain}/${cleanPath}?rcms_preview=1`;
     } else {
+      // Default live site shell URL guarantees no 404 on connected Vercel site
       previewUrl = `${cleanDomain}/?rcms_preview=1`;
     }
   }
@@ -1221,18 +1220,6 @@ export function VisualEditorPage() {
           >
             <Send className="w-3.5 h-3.5" />
             Publish
-          </Button>
-
-          {/* Trigger Vercel Deployment */}
-          <Button
-            onClick={handleTriggerVercelDeploy}
-            variant="secondary"
-            loading={deployingVercel}
-            className="text-xs py-1.5 px-3 font-bold gap-1.5 cursor-pointer bg-purple-950/60 border-purple-500/40 text-purple-200 hover:bg-purple-900/80"
-            title="Trigger 1-click Vercel deployment directly from CMS without writing code or git commands"
-          >
-            <UploadCloud className="w-3.5 h-3.5 text-purple-400" />
-            Deploy Vercel
           </Button>
         </div>
       </header>
