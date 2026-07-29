@@ -62,7 +62,7 @@ export function VisualEditorPage() {
   const [activeDevice, setActiveDevice] = useState("full");
   const [selectedElement, setSelectedElement] = useState(null);
   const [regionsMap, setRegionsMap] = useState({});
-  const [previewModeType, setPreviewModeType] = useState("shell"); // "shell" | "direct"
+  const [previewModeType, setPreviewModeType] = useState("visual"); // "visual" | "shell" | "direct"
 
   // Target domain state & modal
   const [targetDomain, setTargetDomain] = useState("");
@@ -429,11 +429,11 @@ export function VisualEditorPage() {
       setPageSeo(localeData.seo || {});
       setPageBlocks(localeData.blocks || []);
 
-      // Default preview mode to shell so real connected client iframe with real Header & Footer loads
+      // Default preview mode to visual page builder so custom page content and + Add Section options load directly
       if (selectedPage.isImported) {
         setPreviewModeType("direct");
       } else {
-        setPreviewModeType("shell");
+        setPreviewModeType("visual");
       }
     }
   }, [selectedPage, activeLocale]);
@@ -1036,10 +1036,32 @@ export function VisualEditorPage() {
               <Settings className="w-3 h-3 text-slate-500" />
             </button>
 
-            {/* Target Live App Domain Indicator */}
-            <div className="hidden sm:flex items-center gap-1.5 bg-purple-950/60 px-2.5 py-1 rounded-lg border border-purple-500/30 text-[11px] font-bold text-purple-300">
-              <Globe className="w-3.5 h-3.5 text-purple-400" />
-              <span>Live Preview</span>
+            {/* View Mode Selector: Visual Page Builder (+ Add Sections) vs Connected Live Site */}
+            <div className="hidden lg:flex bg-slate-950 p-0.5 rounded-lg border border-slate-800 text-[11px]">
+              <button
+                onClick={() => setPreviewModeType("visual")}
+                className={`px-3 py-1 rounded font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  previewModeType === "visual"
+                    ? "bg-purple-600 text-white shadow"
+                    : "text-slate-400 hover:text-white"
+                }`}
+                title="Visual Page Builder with AI and + Add Section controls"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-purple-300" />
+                <span>Visual Page Builder (+ Add Sections)</span>
+              </button>
+              <button
+                onClick={() => setPreviewModeType("shell")}
+                className={`px-3 py-1 rounded font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  previewModeType === "shell"
+                    ? "bg-purple-600 text-white shadow"
+                    : "text-slate-400 hover:text-white"
+                }`}
+                title="Connected Live Site Frame preview"
+              >
+                <Globe className="w-3.5 h-3.5" />
+                <span>Live Site Frame</span>
+              </button>
             </div>
           </div>
 
@@ -1238,10 +1260,194 @@ export function VisualEditorPage() {
             </div>
           )}
 
-          <div
-            style={{ width: getDeviceWidth(), transform: 'translateZ(0)', backfaceVisibility: 'hidden' }}
-            className="h-full bg-white rounded-xl overflow-hidden shadow-2xl transition-[width] duration-300 border border-slate-800 relative will-change-transform"
-          >
+          {previewModeType === "visual" ? (
+            <div
+              style={{ width: getDeviceWidth(), transform: 'translateZ(0)' }}
+              className="h-full w-full bg-white text-slate-900 rounded-xl overflow-y-auto shadow-2xl border border-slate-300 relative text-left"
+            >
+              {/* AI Live Prompt Page Builder Header Bar */}
+              <div className="bg-slate-950 p-3 border-b border-slate-800 flex items-center justify-between gap-3 sticky top-0 z-30">
+                <form onSubmit={handleAILiveBuildPage} className="flex-1 flex items-center gap-2">
+                  <span className="text-xs font-bold text-purple-400 whitespace-nowrap hidden sm:inline">✨ AI Live Page Builder:</span>
+                  <input
+                    type="text"
+                    value={aiPromptInput}
+                    onChange={(e) => setAiPromptInput(e.target.value)}
+                    placeholder="Type prompt to live build page (e.g. 'Build AI Integrated Marketing page with 3 feature cards and CTA')"
+                    className="flex-1 bg-slate-900 border border-slate-800 text-xs text-white px-3 py-1.5 rounded-lg focus:border-purple-500 outline-none"
+                  />
+                  <button
+                    type="submit"
+                    disabled={buildingAI || !aiPromptInput.trim()}
+                    className="px-3.5 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-xs rounded-lg hover:from-purple-500 hover:to-indigo-500 transition-all cursor-pointer whitespace-nowrap shadow"
+                  >
+                    {buildingAI ? "Building..." : "✨ Live Build Page"}
+                  </button>
+                </form>
+              </div>
+
+              {/* Selected Page Visual Hero Banner */}
+              <div className="py-16 px-8 bg-white text-center relative border-b border-slate-100">
+                <div 
+                  onClick={() => handleSelectVirtualRegion(`${cleanPath || "page"}.title`, "Page Hero Heading")}
+                  className={`p-6 max-w-4xl mx-auto rounded-2xl border-2 border-dashed transition-all cursor-pointer ${
+                    selectedElement?.regionId === `${cleanPath || "page"}.title` ? "border-purple-500 bg-purple-50/50 ring-2 ring-purple-400" : "border-transparent hover:border-purple-300"
+                  }`}
+                >
+                  <h1 className="text-4xl md:text-5xl font-black text-purple-600 tracking-tight leading-tight mb-4 capitalize">
+                    {draftValues[`${cleanPath || "page"}.title`] || selectedPage?.title || cleanPath || "New Created Page"}
+                  </h1>
+                </div>
+
+                {/* Subtext */}
+                <div 
+                  onClick={() => handleSelectVirtualRegion(`${cleanPath || "page"}.subtext`, "Page Hero Subtext")}
+                  className={`mt-4 max-w-2xl mx-auto p-4 rounded-xl border border-dashed transition-all cursor-pointer ${
+                    selectedElement?.regionId === `${cleanPath || "page"}.subtext` ? "border-purple-500 bg-purple-50/50" : "border-transparent hover:border-slate-200"
+                  }`}
+                >
+                  <p className="text-sm text-slate-600 text-center leading-relaxed">
+                    {draftValues[`${cleanPath || "page"}.subtext`] || selectedPage?.prompt || `Welcome to the custom ${cleanPath || "page"} page. Customize copy, add sections, and edit blocks.`}
+                  </p>
+                </div>
+              </div>
+
+              {/* Render Dynamic Custom Modules */}
+              {customModules.map((mod) => (
+                <div key={mod.id} className="relative group border-b border-slate-100">
+                  <button
+                    onClick={() => handleRemoveModule(mod.id)}
+                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 bg-red-500 text-white p-1 text-[10px] rounded font-bold transition-all z-10 cursor-pointer"
+                  >
+                    Remove Section
+                  </button>
+
+                  {mod.type === "trust_badges" && (
+                    <div className="py-6 px-8 bg-slate-900 text-white border-y border-slate-800">
+                      <div className="max-w-5xl mx-auto flex flex-wrap items-center justify-center gap-6 text-xs font-bold uppercase tracking-wider text-slate-300">
+                        {mod.badges.map((b, idx) => (
+                          <span key={idx} className="bg-slate-800 px-3.5 py-1.5 rounded-full border border-slate-700 shadow-sm flex items-center gap-1.5">
+                            {b}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {mod.type === "features_6" && (
+                    <div className="py-16 px-8 bg-white border-b border-slate-100">
+                      <div className="max-w-6xl mx-auto text-center">
+                        <h3 className="text-3xl font-extrabold text-slate-900 mb-2">{mod.heading}</h3>
+                        <p className="text-sm text-slate-500 mb-12 max-w-2xl mx-auto">{mod.subheading}</p>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-left">
+                          {mod.cards.map((c, idx) => (
+                            <div key={idx} className="bg-slate-50 p-6 rounded-2xl border border-slate-200 hover:shadow-md transition-all">
+                              <div className="text-3xl mb-3">{c.icon}</div>
+                              <h4 className="text-lg font-bold text-slate-900 mb-2">{c.title}</h4>
+                              <p className="text-xs text-slate-600 leading-relaxed">{c.desc}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {mod.type === "how_it_works" && (
+                    <div className="py-16 px-8 bg-slate-950 text-white border-b border-slate-900">
+                      <div className="max-w-5xl mx-auto text-center">
+                        <h3 className="text-3xl font-extrabold mb-12">{mod.heading}</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                          {mod.steps.map((s, idx) => (
+                            <div key={idx} className="bg-slate-900 p-8 rounded-2xl border border-slate-800 relative text-left">
+                              <span className="text-4xl font-black text-purple-400 opacity-90 mb-4 block font-mono">{s.step}</span>
+                              <h4 className="text-lg font-bold mb-2 text-white">{s.title}</h4>
+                              <p className="text-xs text-slate-400 leading-relaxed">{s.desc}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {mod.type === "content" && (
+                    <div className="py-12 px-8 max-w-4xl mx-auto">
+                      <h3 className="text-2xl font-bold text-slate-900 mb-3">{mod.heading}</h3>
+                      <p className="text-sm text-slate-600 leading-relaxed">{mod.text}</p>
+                    </div>
+                  )}
+
+                  {mod.type === "image" && (
+                    <div className="py-10 px-8 max-w-4xl mx-auto text-center">
+                      <img src={mod.src} alt={mod.caption} className="w-full max-h-96 object-cover rounded-2xl shadow-lg border" />
+                      <p className="text-xs text-slate-500 mt-2 italic">{mod.caption}</p>
+                    </div>
+                  )}
+
+                  {mod.type === "cards" && (
+                    <div className="py-12 px-8 bg-slate-50">
+                      <div className="max-w-5xl mx-auto">
+                        <h3 className="text-xl font-bold text-slate-900 mb-6 text-center">{mod.heading}</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                          {mod.cards.map((c, idx) => (
+                            <div key={idx} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                              <h4 className="font-bold text-purple-600 mb-2">{c.title}</h4>
+                              <p className="text-xs text-slate-600 leading-relaxed">{c.desc}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {mod.type === "cta" && (
+                    <div className="py-12 px-8 bg-slate-950 text-white text-center">
+                      <h3 className="text-2xl font-bold mb-3">{mod.title}</h3>
+                      <button className="mt-4 px-8 py-3 bg-purple-600 text-white font-bold rounded-full text-sm shadow-lg cursor-pointer hover:bg-purple-500">
+                        {mod.buttonText}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {/* Manual Module Inserter Toolbar */}
+              <div className="py-8 px-8 bg-slate-900 text-white text-center border-t border-slate-800">
+                <p className="text-xs font-bold text-purple-400 uppercase tracking-wider mb-3">
+                  + Add Sections &amp; Modules Manually to /{cleanPath || "page"}
+                </p>
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <button
+                    onClick={() => handleAddModule("text")}
+                    className="px-3.5 py-2 bg-slate-800 hover:bg-purple-900 text-white font-bold text-xs rounded-xl border border-slate-700 transition-all cursor-pointer flex items-center gap-1.5"
+                  >
+                    + Add Text Module
+                  </button>
+                  <button
+                    onClick={() => handleAddModule("image")}
+                    className="px-3.5 py-2 bg-slate-800 hover:bg-purple-900 text-white font-bold text-xs rounded-xl border border-slate-700 transition-all cursor-pointer flex items-center gap-1.5"
+                  >
+                    + Add Image Module
+                  </button>
+                  <button
+                    onClick={() => handleAddModule("cards")}
+                    className="px-3.5 py-2 bg-slate-800 hover:bg-purple-900 text-white font-bold text-xs rounded-xl border border-slate-700 transition-all cursor-pointer flex items-center gap-1.5"
+                  >
+                    + Add Service Cards
+                  </button>
+                  <button
+                    onClick={() => handleAddModule("cta")}
+                    className="px-3.5 py-2 bg-slate-800 hover:bg-purple-900 text-white font-bold text-xs rounded-xl border border-slate-700 transition-all cursor-pointer flex items-center gap-1.5"
+                  >
+                    + Add CTA Banner
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div
+              style={{ width: getDeviceWidth(), transform: 'translateZ(0)', backfaceVisibility: 'hidden' }}
+              className="h-full bg-white rounded-xl overflow-hidden shadow-2xl transition-[width] duration-300 border border-slate-800 relative will-change-transform"
+            >
               {previewUrl ? (
                 <iframe
                   ref={iframeRef}
@@ -1266,6 +1472,7 @@ export function VisualEditorPage() {
                 </div>
               )}
             </div>
+          )}
         </div>
 
         {/* Right Pane: Inspector & AI Assistant Tabs */}
