@@ -64,7 +64,7 @@ export function VisualEditorPage() {
   const [activeDevice, setActiveDevice] = useState("full");
   const [selectedElement, setSelectedElement] = useState(null);
   const [regionsMap, setRegionsMap] = useState({});
-  const [previewModeType, setPreviewModeType] = useState("visual"); // "visual" | "shell" | "direct"
+  const [previewModeType, setPreviewModeType] = useState("shell"); // "shell" | "direct" | "visual"
   const [includeHeader, setIncludeHeader] = useState(true);
   const [includeHero, setIncludeHero] = useState(true);
   const [includeFooter, setIncludeFooter] = useState(true);
@@ -1101,33 +1101,6 @@ export function VisualEditorPage() {
               <Settings className="w-3 h-3 text-slate-500" />
             </button>
 
-            {/* View Mode Selector: Visual Page Builder (+ Add Sections) vs Connected Live Site */}
-            <div className="hidden lg:flex bg-slate-950 p-0.5 rounded-lg border border-slate-800 text-[11px]">
-              <button
-                onClick={() => setPreviewModeType("visual")}
-                className={`px-3 py-1 rounded font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                  previewModeType === "visual"
-                    ? "bg-purple-600 text-white shadow"
-                    : "text-slate-400 hover:text-white"
-                }`}
-                title="Visual Page Builder with AI and + Add Section controls"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-purple-300" />
-                <span>Visual Page Builder (+ Add Sections)</span>
-              </button>
-              <button
-                onClick={() => setPreviewModeType("shell")}
-                className={`px-3 py-1 rounded font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                  previewModeType === "shell"
-                    ? "bg-purple-600 text-white shadow"
-                    : "text-slate-400 hover:text-white"
-                }`}
-                title="Connected Live Site Frame preview"
-              >
-                <Globe className="w-3.5 h-3.5" />
-                <span>Live Site Frame</span>
-              </button>
-            </div>
           </div>
 
           {/* Auto-save Status Indicator */}
@@ -1248,17 +1221,6 @@ export function VisualEditorPage() {
           >
             <Send className="w-3.5 h-3.5" />
             Publish
-          </Button>
-
-          {/* Rocket AI 2.6 DOM Verification Agent Workspace Launcher */}
-          <Button
-            onClick={() => setShowAgentWorkspace(true)}
-            variant="primary"
-            className="text-xs py-1.5 px-3 font-bold gap-1.5 cursor-pointer bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-600/30 hover:brightness-110"
-            title="Launch Rocket AI 2.6 DOM Verification Agent Workspace"
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            🚀 Rocket AI 2.6
           </Button>
 
           {/* Trigger Vercel Deployment */}
@@ -1719,181 +1681,22 @@ export function VisualEditorPage() {
           )}
         </div>
 
-        {/* Right Pane: Inspector & AI Assistant Tabs */}
+        {/* Right Pane: Region Inspector */}
         <div className="w-80 flex-shrink-0 bg-slate-900 border-l border-slate-800 flex flex-col h-full overflow-hidden text-left">
-          {/* Tab Switcher */}
-          <div className="flex border-b border-slate-800 bg-slate-950 p-1">
-            <button
-              onClick={() => setRightPanelTab("inspector")}
-              className={`flex-1 py-1.5 text-xs font-bold rounded transition-all cursor-pointer ${
-                rightPanelTab === "inspector" ? "bg-slate-800 text-white shadow" : "text-slate-400 hover:text-white"
-              }`}
-            >
-              Inspector
-            </button>
-            <button
-              onClick={() => setRightPanelTab("ai_assistant")}
-              className={`flex-1 py-1.5 text-xs font-bold rounded transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                rightPanelTab === "ai_assistant" ? "bg-purple-600 text-white shadow" : "text-slate-400 hover:text-white"
-              }`}
-            >
-              <Sparkles className="w-3.5 h-3.5 text-purple-300" />
-              AI Assistant
-            </button>
+          <div className="px-4 py-3 border-b border-slate-800 bg-slate-950 flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-200 uppercase tracking-wider">Region Inspector</span>
+            <span className="text-[10px] font-mono text-purple-400 bg-purple-950/60 px-2 py-0.5 rounded border border-purple-500/30">Live DOM Inspector</span>
           </div>
 
-          {rightPanelTab === "inspector" ? (
-            <RegionInspectorPanel
-              selectedElement={selectedElement}
-              onChangeRegion={handleRegionValueChange}
-              activePageId={pageId}
-              onSwitchDevice={(bp) => {
-                const deviceMap = { mobile: "mobile", tablet: "tablet", desktop: "desktop" };
-                setActiveDevice(deviceMap[bp] || "full");
-              }}
-            />
-          ) : (
-            <div className="flex-1 flex flex-col h-full bg-slate-950 text-left overflow-hidden">
-              {/* Chat Header with AI Model Selector */}
-              <div className="p-3 border-b border-slate-800 bg-slate-900 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-full bg-purple-600 flex items-center justify-center text-white text-xs font-bold shadow">
-                    ✨
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
-                      <span>AI Assistant</span>
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                    </h4>
-                    <p className="text-[10px] text-purple-400 font-mono">Connected: /{cleanPath}</p>
-                  </div>
-                </div>
-
-                {/* AI Model Selector */}
-                <select
-                  value={selectedAIModel}
-                  onChange={(e) => setSelectedAIModel(e.target.value)}
-                  className="bg-slate-950 text-purple-300 border border-purple-500/40 text-[10px] font-bold px-2 py-1 rounded outline-none cursor-pointer hover:border-purple-400 transition-colors"
-                >
-                  <option value="rocket-2.6">🚀 Rocket AI 2.6 (DOM Verification Agent)</option>
-                </select>
-              </div>
-
-              {/* Chat Messages List */}
-              <div className="flex-1 p-3 overflow-y-auto space-y-3 text-xs">
-                {aiChatMessages.map((msg, idx) => (
-                  <div
-                    key={idx}
-                    className={`flex flex-col ${
-                      msg.sender === "user" ? "items-end" : "items-start"
-                    }`}
-                  >
-                    <div
-                      className={`max-w-[88%] p-2.5 rounded-xl leading-relaxed whitespace-pre-wrap ${
-                        msg.sender === "user"
-                          ? "bg-purple-600 text-white rounded-br-none shadow-md"
-                          : "bg-slate-900 border border-slate-800 text-slate-200 rounded-bl-none"
-                      }`}
-                    >
-                      {msg.text}
-                    </div>
-                  </div>
-                ))}
-                {aiChatProcessing && (
-                  <div className="flex items-center gap-2 text-purple-400 text-xs font-bold p-2 bg-slate-900/60 rounded-lg border border-purple-500/20">
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Rocket AI 2.6 (DOM Verification Agent) processing prompt...
-                  </div>
-                )}
-              </div>
-
-              {/* Quick Action Prompt Pills */}
-              <div className="p-2 bg-slate-900/80 border-t border-slate-800 flex flex-wrap gap-1.5">
-                <button
-                  onClick={() => handleSendAIChatMessage('i want bg colour header same as this colour on this entire page now black that i dont want -, this not white check it')}
-                  className="text-[10px] bg-purple-950/80 border border-purple-500/30 text-purple-200 px-2 py-1 rounded hover:bg-purple-900 transition-colors cursor-pointer"
-                >
-                  🎨 Match Header & Page Theme
-                </button>
-                <button
-                  onClick={() => handleSendAIChatMessage('next add a above about ads 📊 Client Success Statistics moving carosil')}
-                  className="text-[10px] bg-slate-800 border border-slate-700 text-slate-300 px-2 py-1 rounded hover:bg-slate-700 transition-colors cursor-pointer"
-                >
-                  📊 Add Moving Stats Carousel
-                </button>
-                <button
-                  onClick={() => handleSendAIChatMessage('below book free consultation add : Create a "Why Choose Us" section with 6 cards')}
-                  className="text-[10px] bg-slate-800 border border-slate-700 text-slate-300 px-2 py-1 rounded hover:bg-slate-700 transition-colors cursor-pointer"
-                >
-                  🌟 Add Why Choose Us
-                </button>
-                <button
-                  onClick={() => handleSendAIChatMessage('Change title to "Generate High-Converting AI Landing Pages in Seconds"')}
-                  className="text-[10px] bg-slate-800 border border-slate-700 text-slate-300 px-2 py-1 rounded hover:bg-slate-700 transition-colors cursor-pointer"
-                >
-                  ✍️ Update Title
-                </button>
-              </div>
-
-              {/* Attached Image Thumbnail Preview */}
-              {attachedImage && (
-                <div className="px-2.5 pt-2 bg-slate-900 border-t border-slate-800 flex items-center gap-2">
-                  <div className="relative group">
-                    <img src={attachedImage} alt="Attached Preview" className="w-12 h-12 object-cover rounded-lg border border-purple-500 shadow" />
-                    <button
-                      onClick={() => setAttachedImage(null)}
-                      className="absolute -top-1.5 -right-1.5 bg-red-600 text-white w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold shadow cursor-pointer"
-                    >
-                      ×
-                    </button>
-                  </div>
-                  <span className="text-[11px] text-purple-300 font-semibold">Image attached to prompt</span>
-                </div>
-              )}
-
-              {/* Chat Input */}
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  handleSendAIChatMessage();
-                }}
-                className="p-2.5 bg-slate-900 border-t border-slate-800 flex items-center gap-2"
-              >
-                {/* Hidden File Input */}
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleImageFileSelect}
-                  accept="image/*"
-                  className="hidden"
-                />
-                
-                {/* Image Attach Button */}
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="p-1.5 text-slate-400 hover:text-purple-300 bg-slate-950 border border-slate-800 hover:border-purple-500/50 rounded-lg transition-colors cursor-pointer"
-                  title="Attach Image to Prompt"
-                >
-                  🖼️
-                </button>
-
-                <input
-                  type="text"
-                  value={aiChatInput}
-                  onChange={(e) => setAiChatInput(e.target.value)}
-                  placeholder="Ask AI Assistant to edit page..."
-                  className="flex-1 bg-slate-950 border border-slate-800 text-xs text-white px-3 py-1.5 rounded-lg focus:border-purple-500 outline-none"
-                />
-                <button
-                  type="submit"
-                  disabled={aiChatProcessing || (!aiChatInput.trim() && !attachedImage)}
-                  className="px-3 py-1.5 bg-purple-600 text-white font-bold text-xs rounded-lg hover:bg-purple-500 transition-colors cursor-pointer disabled:opacity-50"
-                >
-                  Send
-                </button>
-              </form>
-            </div>
-          )}
+          <RegionInspectorPanel
+            selectedElement={selectedElement}
+            onChangeRegion={handleRegionValueChange}
+            activePageId={pageId}
+            onSwitchDevice={(bp) => {
+              const deviceMap = { mobile: "mobile", tablet: "tablet", desktop: "desktop" };
+              setActiveDevice(deviceMap[bp] || "full");
+            }}
+          />
         </div>
       </div>
 

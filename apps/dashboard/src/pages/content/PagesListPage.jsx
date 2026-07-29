@@ -191,18 +191,6 @@ export function PagesListPage() {
             <RefreshCw className={`w-3.5 h-3.5 ${syncLoading ? "animate-spin" : ""}`} />
             Sync Now
           </Button>
-          <Button
-            onClick={() => {
-              setNewPageTitle("");
-              setNewPageSlug("");
-              setIsCreateOpen(true);
-            }}
-            variant="primary"
-            className="gap-2 font-bold py-2.5 shadow-md shadow-primary/10 cursor-pointer text-xs"
-          >
-            <Plus className="w-4 h-4" />
-            New Page
-          </Button>
         </div>
       </div>
 
@@ -362,53 +350,6 @@ export function PagesListPage() {
           })}
         </Table>
       )}
-
-      {/* Single Step Create Page Modal */}
-      <Modal
-        isOpen={isCreateOpen}
-        onClose={() => setIsCreateOpen(false)}
-        title="Create New Page"
-        size="md"
-      >
-        <form onSubmit={handleCreatePage} className="space-y-4 text-left">
-          <Input
-            label="Page Display Title"
-            placeholder="e.g. Ads"
-            value={newPageTitle}
-            onChange={handleTitleChange}
-            required
-            autoFocus
-          />
-          <Input
-            label="Route Path Slug"
-            placeholder="e.g. ads"
-            value={newPageSlug}
-            onChange={(e) => setNewPageSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, "-"))}
-            helperText={`Resolves to /${newPageSlug || "..."}`}
-            required
-          />
-          
-          <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
-            <Button
-              type="button"
-              onClick={() => setIsCreateOpen(false)}
-              variant="secondary"
-              className="border-slate-800"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              variant="primary"
-              className="gap-1 font-bold"
-              loading={creating}
-              disabled={!newPageTitle.trim()}
-            >
-              Create Page
-            </Button>
-          </div>
-        </form>
-      </Modal>
 
       <ManualRouteImportModal
         isOpen={showManualSync}
