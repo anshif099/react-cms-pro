@@ -517,6 +517,12 @@ export function VisualEditorPage() {
       setNewDomainInput(newDomain);
       await websiteService.updateDomain(websiteId, newDomain);
       toast.success(`Preview target URL set to ${newDomain}`);
+
+      // Auto-launch local tab/popup when switching to Local Dev on HTTPS dashboard
+      if (window.location.protocol === 'https:' && newDomain.includes('localhost')) {
+        const localPath = cleanPath ? `?page=${cleanPath}&rcms_preview=1` : `?rcms_preview=1`;
+        window.open(`${newDomain}/${localPath}`, '_blank');
+      }
     } catch (err) {
       console.error("Failed to switch target domain:", err);
       toast.error("Failed to update target domain.");
