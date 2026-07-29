@@ -434,12 +434,8 @@ export function VisualEditorPage() {
       setPageSeo(localeData.seo || {});
       setPageBlocks(localeData.blocks || []);
 
-      // Default preview mode to visual page builder so custom page content and + Add Section options load directly
-      if (selectedPage.isImported) {
-        setPreviewModeType("direct");
-      } else {
-        setPreviewModeType("visual");
-      }
+      // Always use shell mode to display connected live site without Vercel 404 errors
+      setPreviewModeType("shell");
 
       // Auto-populate template modules matching page type (e.g. Blog, Contact)
       const tmpl = (selectedPage.template || selectedPage.title || selectedPage.slug || "").toLowerCase();
@@ -1036,12 +1032,8 @@ export function VisualEditorPage() {
 
   let previewUrl = "";
   if (cleanDomain) {
-    if (previewModeType === "direct" && cleanPath && cleanPath !== "home") {
-      previewUrl = `${cleanDomain}/${cleanPath}?rcms_preview=1`;
-    } else {
-      // Default live site shell URL guarantees no 404 on connected Vercel site
-      previewUrl = `${cleanDomain}/?rcms_preview=1`;
-    }
+    // Always load connected live site root URL with preview mode parameter to guarantee clean rendering without 404
+    previewUrl = `${cleanDomain}/?rcms_preview=1`;
   }
 
   // Check if targetDomain points to Dashboard Vercel origin itself
