@@ -214,6 +214,11 @@ export const websiteService = {
     return updated;
   },
 
+  async updateDomain(id, domain) {
+    const updated = await this.update(id, { domain });
+    return updated;
+  },
+
   async syncWebsite(id) {
     const website = await this.getById(id);
     if (!website) throw new Error("Website not found");
