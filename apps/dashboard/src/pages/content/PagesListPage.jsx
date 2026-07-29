@@ -193,8 +193,8 @@ export function PagesListPage() {
           </Button>
           <Button
             onClick={() => {
-              setWizardStep(1);
-              setSelectedTemplate("blank");
+              setNewPageTitle("");
+              setNewPageSlug("");
               setIsCreateOpen(true);
             }}
             variant="primary"
@@ -363,202 +363,51 @@ export function PagesListPage() {
         </Table>
       )}
 
-      {/* 3-Step Wizard Create Page Modal Dialog */}
+      {/* Single Step Create Page Modal */}
       <Modal
         isOpen={isCreateOpen}
         onClose={() => setIsCreateOpen(false)}
-        title={
-          wizardStep === 1 
-            ? "Step 1: Choose Layout Template" 
-            : wizardStep === 2 
-              ? "Step 2: Configure Page Details" 
-              : "Step 3: Review & Create Page"
-        }
-        size={wizardStep === 1 ? "lg" : "md"}
+        title="Create New Page"
+        size="md"
       >
-        {wizardStep === 1 && (
-          <div className="space-y-4 text-left">
-            <PageTemplateSelector
-              selectedTemplate={selectedTemplate}
-              onSelect={setSelectedTemplate}
-            />
-            <div className="flex justify-between items-center pt-3 border-t border-slate-800">
-              <span className="text-xs text-admin-secondary">
-                Selected: <span className="font-bold text-white capitalize">{selectedTemplate}</span>
-              </span>
-              <div className="flex gap-2">
-                <Button
-                  onClick={() => setIsCreateOpen(false)}
-                  variant="secondary"
-                  className="border-slate-800"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={() => setWizardStep(2)}
-                  variant="primary"
-                  className="gap-1 font-bold"
-                >
-                  Next Step <ArrowRight className="w-3.5 h-3.5" />
-                </Button>
-              </div>
-            </div>
+        <form onSubmit={handleCreatePage} className="space-y-4 text-left">
+          <Input
+            label="Page Display Title"
+            placeholder="e.g. Ads"
+            value={newPageTitle}
+            onChange={handleTitleChange}
+            required
+            autoFocus
+          />
+          <Input
+            label="Route Path Slug"
+            placeholder="e.g. ads"
+            value={newPageSlug}
+            onChange={(e) => setNewPageSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, "-"))}
+            helperText={`Resolves to /${newPageSlug || "..."}`}
+            required
+          />
+          
+          <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
+            <Button
+              type="button"
+              onClick={() => setIsCreateOpen(false)}
+              variant="secondary"
+              className="border-slate-800"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              className="gap-1 font-bold"
+              loading={creating}
+              disabled={!newPageTitle.trim()}
+            >
+              Create Page
+            </Button>
           </div>
-        )}
-
-        {wizardStep === 2 && (
-          <form 
-            onSubmit={(e) => {
-              e.preventDefault();
-              setWizardStep(3);
-            }} 
-            className="space-y-4 text-left"
-          >
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <Input
-                label="Page Display Title"
-                placeholder="e.g. AI Courses"
-                value={newPageTitle}
-                onChange={handleTitleChange}
-                required
-                autoFocus
-              />
-              <Input
-                label="Route Path Slug"
-                placeholder="e.g. ai-courses"
-                value={newPageSlug}
-                onChange={(e) => setNewPageSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, "-"))}
-                helperText={`Resolves to /${newPageSlug || "..."}`}
-                required
-              />
-            </div>
-
-            {/* Keywords Section */}
-            <Input
-              label="🔑 Target SEO Keywords"
-              placeholder="e.g. ai courses, artificial intelligence training, machine learning certification"
-              value={newPageKeywords}
-              onChange={(e) => setNewPageKeywords(e.target.value)}
-              helperText="Comma-separated keywords used for search optimization and content generation."
-            />
-
-            {/* SEO Meta Tags Section */}
-            <div className="p-3 bg-slate-950/60 border border-slate-800 rounded-xl space-y-3">
-              <span className="text-[11px] font-bold text-purple-400 uppercase tracking-wider block">
-                🏷️ SEO Meta Tags
-              </span>
-              <Input
-                label="Meta Title"
-                placeholder="e.g. AI Courses & Certification"
-                value={newPageMetaTitle}
-                onChange={(e) => setNewPageMetaTitle(e.target.value)}
-              />
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider block">
-                  Meta Description
-                </label>
-                <textarea
-                  rows={2}
-                  value={newPageMetaDesc}
-                  onChange={(e) => setNewPageMetaDesc(e.target.value)}
-                  placeholder="e.g. Master AI with hands-on training, industry certifications, and real-world projects."
-                  className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2.5 text-xs text-white placeholder-slate-500 focus:border-primary outline-none"
-                />
-              </div>
-            </div>
-            
-            <div className="flex justify-between pt-3 border-t border-slate-800">
-              <Button
-                type="button"
-                onClick={() => setWizardStep(1)}
-                variant="secondary"
-                className="border-slate-800"
-              >
-                Back
-              </Button>
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  onClick={() => setIsCreateOpen(false)}
-                  variant="secondary"
-                  className="border-slate-800"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="button"
-                  onClick={handleCreatePage}
-                  variant="primary"
-                  className="gap-1 font-bold"
-                  loading={creating}
-                  disabled={!newPageTitle.trim()}
-                >
-                  Create Page 🚀
-                </Button>
-              </div>
-            </div>
-          </form>
-        )}
-
-        {wizardStep === 3 && (
-          <div className="space-y-4 text-left">
-            <div className="space-y-3.5 p-4 rounded-xl border border-admin-border dark:border-slate-800 bg-slate-950/20 text-xs">
-              <div className="flex justify-between border-b border-slate-800/60 pb-2">
-                <span className="text-slate-400 font-semibold">Page Title:</span>
-                <span className="text-white font-bold">{newPageTitle}</span>
-              </div>
-              <div className="flex justify-between border-b border-slate-800/60 pb-2">
-                <span className="text-slate-400 font-semibold">Route Slug:</span>
-                <span className="text-purple-400 font-mono">/{newPageSlug}</span>
-              </div>
-              {newPagePrompt && (
-                <div className="border-b border-slate-800/60 pb-2">
-                  <span className="text-slate-400 font-semibold block mb-0.5">AI Prompt:</span>
-                  <span className="text-slate-200 italic">{newPagePrompt}</span>
-                </div>
-              )}
-              {newPageKeywords && (
-                <div className="border-b border-slate-800/60 pb-2">
-                  <span className="text-slate-400 font-semibold block mb-0.5">Keywords:</span>
-                  <span className="text-purple-300 font-mono">{newPageKeywords}</span>
-                </div>
-              )}
-              <div className="flex justify-between pb-1">
-                <span className="text-slate-400 font-semibold">Creation Source:</span>
-                <span className="text-emerald-400 font-bold capitalize">{newPagePrompt ? "AI Generator" : "CMS Page"}</span>
-              </div>
-            </div>
-
-            <div className="flex justify-between pt-3 border-t border-slate-800">
-              <Button
-                type="button"
-                onClick={() => setWizardStep(2)}
-                variant="secondary"
-                className="border-slate-800"
-              >
-                Back
-              </Button>
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  onClick={() => setIsCreateOpen(false)}
-                  variant="secondary"
-                  className="border-slate-800"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={() => handleCreatePage()}
-                  variant="primary"
-                  loading={creating}
-                  disabled={!newPageTitle.trim()}
-                >
-                  Create Page
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
+        </form>
       </Modal>
 
       <ManualRouteImportModal
