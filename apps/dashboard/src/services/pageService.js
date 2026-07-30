@@ -1,5 +1,5 @@
 import { database } from "../lib/firebase";
-import { ref, get, set, push, update, remove, onValue, serverTimestamp } from "firebase/database";
+import { ref, get, set, push, remove, onValue, serverTimestamp } from "firebase/database";
 import contentSyncService from "./contentSyncService";
 import revisionService from "./revisionService";
 import searchService from "./searchService";
@@ -56,8 +56,8 @@ export const pageService = {
       const routePath = data.route || data.path || (data.slug === "home" ? "/" : `/${data.slug}`);
 
       const metaTitle = data.metaTitle || data.title;
-      const metaDesc = data.metaDescription || data.prompt || `Learn more about ${data.title}. Expert solutions and services.`;
-      const keywords = data.keywords || `${data.title.toLowerCase()}, services, digital solutions`;
+      const metaDesc = data.metaDescription || data.prompt || "";
+      const keywords = data.keywords || "";
 
       const pageData = {
         title: data.title,
@@ -68,6 +68,14 @@ export const pageService = {
         status: data.status || "draft",
         source: data.source || (data.prompt ? "generated" : "cms"),
         isImported: data.isImported || false,
+        sourceProvider: data.sourceProvider || null,
+        sourceFile: data.sourceFile || null,
+        sourceRouterFile: data.sourceRouterFile || null,
+        sourceComponent: data.sourceComponent || null,
+        sourceRevision: data.sourceRevision || null,
+        nativeArtifactStatus: data.nativeArtifactStatus || (
+          data.isImported ? "source-only" : "ready"
+        ),
         prompt: data.prompt || "",
         keywords: keywords,
         locales: data.locales || {
@@ -107,22 +115,25 @@ export const pageService = {
       // Initialize content draft in Firebase for this page slug
       const pageSlug = data.slug || routeId || "home";
       if (pageSlug) {
-        const generatedHeroSubtext = data.prompt 
-          ? data.prompt 
-          : `Explore comprehensive ${data.title} solutions designed for modern business growth and success.`;
+        let initialRegions = {};
+        if (!data.isImported) {
+          const generatedHeroSubtext = data.prompt
+            ? data.prompt
+            : `Explore comprehensive ${data.title} solutions designed for modern business growth and success.`;
 
-        const generatedDescription = data.prompt
-          ? `Our ${data.title} services deliver end-to-end strategies, tools, and digital solutions. Key focus areas include: ${keywords}. Built to help ambitious organizations scale efficiently.`
-          : `We deliver innovative technology, creative marketing, and measurable digital strategies for ${data.title}.`;
+          const generatedDescription = data.prompt
+            ? `Our ${data.title} services deliver end-to-end strategies, tools, and digital solutions. Key focus areas include: ${keywords}. Built to help ambitious organizations scale efficiently.`
+            : `We deliver innovative technology, creative marketing, and measurable digital strategies for ${data.title}.`;
 
-        const initialRegions = {
-          [`${pageSlug}.title`]: data.title,
-          [`${pageSlug}.subtext`]: generatedHeroSubtext,
-          [`${pageSlug}.heading`]: `About ${data.title}`,
-          [`${pageSlug}.description`]: generatedDescription,
-          [`${pageSlug}.cta_title`]: `Ready to get started with ${data.title}?`,
-          [`${pageSlug}.cta_button`]: "Book Free Consultation"
-        };
+          initialRegions = {
+            [`${pageSlug}.title`]: data.title,
+            [`${pageSlug}.subtext`]: generatedHeroSubtext,
+            [`${pageSlug}.heading`]: `About ${data.title}`,
+            [`${pageSlug}.description`]: generatedDescription,
+            [`${pageSlug}.cta_title`]: `Ready to get started with ${data.title}?`,
+            [`${pageSlug}.cta_button`]: "Book Free Consultation"
+          };
+        }
 
         await contentSyncService.syncDraft(websiteId, pageSlug, {
           id: pageSlug,

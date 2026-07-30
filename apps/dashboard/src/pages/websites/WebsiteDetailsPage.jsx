@@ -11,9 +11,9 @@ import {
   Check, 
   Key, 
   Clock, 
-  HeartHandshake,
   LayoutDashboard,
-  RefreshCw
+  RefreshCw,
+  Download
 } from "lucide-react";
 import { useWebsites } from "../../hooks/useWebsites";
 import { useToast } from "../../hooks/useToast";
@@ -25,8 +25,8 @@ import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { SecretField } from "../../components/ui/SecretField";
 import { SyncStatusCard } from "../../components/websites/SyncStatusCard";
 import { registryService } from "../../services/registryService";
+import sourceImportService from "../../services/sourceImportService";
 import { ManualRouteImportModal } from "../../components/websites/ManualRouteImportModal";
-import { motion } from "framer-motion";
 
 export function WebsiteDetailsPage() {
   const { id } = useParams();
@@ -120,10 +120,10 @@ export function WebsiteDetailsPage() {
   const handleDisconnect = async () => {
     try {
       await updateStatus(selectedWebsite.id, "disconnected");
-      toast.info("Website SDK disconnected");
+      toast.info("Website source connection disconnected");
       setShowDisconnect(false);
     } catch (error) {
-      toast.error("Failed to disconnect SDK.");
+      toast.error("Failed to disconnect website source.");
     }
   };
 
@@ -144,6 +144,22 @@ export function WebsiteDetailsPage() {
       setShowRegenSecretKey(false);
     } catch (error) {
       toast.error("Failed to regenerate Secret Key.");
+    }
+  };
+
+  const handleDownloadSource = async () => {
+    try {
+      const sourceName = selectedWebsite.connection?.repository
+        ?.split("/")
+        .pop()
+        ?.replace(/\.zip$/i, "") || selectedWebsite.name;
+      await sourceImportService.downloadCodebase(
+        selectedWebsite.connection?.artifactPath,
+        `${sourceName}-source.zip`
+      );
+    } catch (error) {
+      console.error(error);
+      toast.error(error.message || "Source archive could not be downloaded.");
     }
   };
 
@@ -192,25 +208,39 @@ export function WebsiteDetailsPage() {
               Verify Domain
             </Button>
           )}
-          <Button
-            onClick={handleSync}
-            variant="outline"
-            size="sm"
-            className="gap-1.5 font-bold cursor-pointer"
-            loading={syncLoading}
-          >
-            <RefreshCw className={`w-4 h-4 ${syncLoading ? "animate-spin" : ""}`} />
-            Sync Website
-          </Button>
-          <Button 
-            onClick={() => navigate(`/websites/${selectedWebsite.id}/sdk`)}
-            variant="primary" 
-            size="sm"
-            className="gap-1.5"
-          >
-            <Terminal className="w-4 h-4" />
-            SDK Guide
-          </Button>
+          {selectedWebsite.sourceConnected ? (
+            <Button
+              onClick={() => navigate(`/content/${selectedWebsite.id}/pages`)}
+              variant="primary"
+              size="sm"
+              className="gap-1.5"
+            >
+              <LayoutDashboard className="w-4 h-4" />
+              Open Pages
+            </Button>
+          ) : (
+            <>
+              <Button
+                onClick={handleSync}
+                variant="outline"
+                size="sm"
+                className="gap-1.5 font-bold cursor-pointer"
+                loading={syncLoading}
+              >
+                <RefreshCw className={`w-4 h-4 ${syncLoading ? "animate-spin" : ""}`} />
+                Sync Website
+              </Button>
+              <Button
+                onClick={() => navigate(`/websites/${selectedWebsite.id}/sdk`)}
+                variant="primary"
+                size="sm"
+                className="gap-1.5"
+              >
+                <Terminal className="w-4 h-4" />
+                SDK Guide
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
@@ -267,7 +297,57 @@ export function WebsiteDetailsPage() {
             </div>
           </Card>
 
-          {/* API Credentials Card */}
+          {/* Connection details */}
+          {selectedWebsite.sourceConnected ? (
+            <Card title="Imported Source" subtitle="Versioned codebase artifact used for page discovery">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 text-xs">
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-admin-secondary tracking-wider block mb-1">
+                    Provider
+                  </span>
+                  <span className="font-semibold text-admin-text capitalize">
+                    {selectedWebsite.connection?.provider || selectedWebsite.connectionProvider}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-admin-secondary tracking-wider block mb-1">
+                    Repository / Archive
+                  </span>
+                  <span className="font-semibold text-admin-text break-all">
+                    {selectedWebsite.connection?.repository || "Imported source"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-admin-secondary tracking-wider block mb-1">
+                    Source Revision
+                  </span>
+                  <code className="font-mono text-admin-text break-all">
+                    {selectedWebsite.connection?.sourceRevision || "N/A"}
+                  </code>
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-admin-secondary tracking-wider block mb-1">
+                    Imported Files / Routes
+                  </span>
+                  <span className="font-semibold text-admin-text">
+                    {selectedWebsite.connection?.fileCount || 0} files / {selectedWebsite.connection?.routeCount || 0} routes
+                  </span>
+                </div>
+                <div className="sm:col-span-2 pt-3 border-t border-admin-border dark:border-slate-800">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={handleDownloadSource}
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    Download Imported Codebase
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          ) : (
           <Card title="API Credentials" subtitle="Access key pairs used by SDK clients">
             <div className="space-y-4">
               {/* API Public Key */}
@@ -320,6 +400,7 @@ export function WebsiteDetailsPage() {
               </div>
             </div>
           </Card>
+          )}
 
           <SyncStatusCard
             syncStats={syncStats}
@@ -331,29 +412,35 @@ export function WebsiteDetailsPage() {
 
         {/* Right side stats/status & Danger Zone */}
         <div className="space-y-6">
-          {/* Runtime Status Panel */}
-          <Card title="Runtime Status">
+          {/* Runtime / source status panel */}
+          <Card title={selectedWebsite.sourceConnected ? "Source Status" : "Runtime Status"}>
             <div className="space-y-4 text-xs font-medium text-admin-secondary text-left">
               <div className="flex justify-between items-center">
-                <span>Heartbeat Status</span>
-                <Badge variant={runtimeStatus?.status === "online" ? "success" : "neutral"}>
-                  {runtimeStatus?.status || "offline"}
+                <span>{selectedWebsite.sourceConnected ? "Import Status" : "Heartbeat Status"}</span>
+                <Badge variant={selectedWebsite.sourceConnected || runtimeStatus?.status === "online" ? "success" : "neutral"}>
+                  {selectedWebsite.sourceConnected
+                    ? selectedWebsite.connection?.status || "ready"
+                    : runtimeStatus?.status || "offline"}
                 </Badge>
               </div>
               <div className="flex justify-between items-center pt-2 border-t border-slate-100 dark:border-slate-800/80">
-                <span>Last Ping</span>
+                <span>{selectedWebsite.sourceConnected ? "Imported At" : "Last Ping"}</span>
                 <span className="font-bold text-admin-text">
-                  {runtimeStatus?.heartbeat ? new Date(runtimeStatus.heartbeat).toLocaleTimeString() : "Never"}
+                  {selectedWebsite.sourceConnected
+                    ? selectedWebsite.connection?.importedAt
+                      ? new Date(selectedWebsite.connection.importedAt).toLocaleString()
+                      : "Unknown"
+                    : runtimeStatus?.heartbeat ? new Date(runtimeStatus.heartbeat).toLocaleTimeString() : "Never"}
                 </span>
               </div>
-              <div className="flex justify-between items-center pt-2 border-t border-slate-100 dark:border-slate-800/80">
+              {!selectedWebsite.sourceConnected && <div className="flex justify-between items-center pt-2 border-t border-slate-100 dark:border-slate-800/80">
                 <span>Runtime Version</span>
                 <span className="font-bold text-admin-text">{runtimeStatus?.runtimeVersion || "N/A"}</span>
-              </div>
-              <div className="flex justify-between items-center pt-2 border-t border-slate-100 dark:border-slate-800/80">
+              </div>}
+              {!selectedWebsite.sourceConnected && <div className="flex justify-between items-center pt-2 border-t border-slate-100 dark:border-slate-800/80">
                 <span>SDK Version</span>
                 <span className="font-bold text-admin-text">{runtimeStatus?.sdkVersion || "N/A"}</span>
-              </div>
+              </div>}
               <div className="flex justify-between items-center pt-2 border-t border-slate-100 dark:border-slate-800/80">
                 <span>Compatibility</span>
                 <Badge variant={runtimeStatus?.compatibility === "ok" ? "success" : "neutral"}>
@@ -367,15 +454,17 @@ export function WebsiteDetailsPage() {
           <Card title="Connection Health">
             <div className="space-y-4 text-xs font-medium text-admin-secondary">
               <div className="flex justify-between items-center">
-                <span>SDK Status</span>
-                <Badge variant={selectedWebsite.sdkInstalled ? "success" : "neutral"}>
-                  {selectedWebsite.sdkInstalled ? "Installed" : "Not Found"}
+                <span>{selectedWebsite.sourceConnected ? "Source Status" : "SDK Status"}</span>
+                <Badge variant={selectedWebsite.sourceConnected || selectedWebsite.sdkInstalled ? "success" : "neutral"}>
+                  {selectedWebsite.sourceConnected
+                    ? selectedWebsite.connection?.provider || "Imported"
+                    : selectedWebsite.sdkInstalled ? "Installed" : "Not Found"}
                 </Badge>
               </div>
-              <div className="flex justify-between items-center pt-2 border-t border-slate-100 dark:border-slate-800/80">
+              {!selectedWebsite.sourceConnected && <div className="flex justify-between items-center pt-2 border-t border-slate-100 dark:border-slate-800/80">
                 <span>SDK Version</span>
                 <span className="font-bold text-admin-text">{selectedWebsite.sdkVersion || "N/A"}</span>
-              </div>
+              </div>}
               <div className="flex justify-between items-center pt-2 border-t border-slate-100 dark:border-slate-800/80">
                 <span>Connection Health</span>
                 <Badge>{selectedWebsite.connectionHealth}</Badge>
@@ -391,7 +480,7 @@ export function WebsiteDetailsPage() {
           <Card title="Danger Zone" className="border-red-200 dark:border-red-950/40">
             <div className="space-y-4">
               <p className="text-xs text-admin-secondary leading-relaxed text-left">
-                Disconnecting the SDK stops content synchronization. Deleting the website permanently deletes all settings.
+                Disconnecting stops future source synchronization. Deleting permanently removes all ReactCMS pages, content, media, revisions, and imported source artifacts.
               </p>
               
               <div className="flex flex-col gap-2.5">
@@ -402,7 +491,7 @@ export function WebsiteDetailsPage() {
                     className="w-full text-red-500 border-red-200 dark:border-red-950/40 hover:bg-red-50 dark:hover:bg-red-950/20 text-xs font-semibold gap-1.5 py-1.5"
                   >
                     <Unlink className="w-3.5 h-3.5" />
-                    Disconnect SDK
+                    Disconnect Source
                   </Button>
                 )}
                 <Button 
@@ -424,16 +513,16 @@ export function WebsiteDetailsPage() {
         isOpen={showDelete}
         onClose={() => setShowDelete(false)}
         onConfirm={handleDelete}
-        title="Delete Website configuration?"
-        message={`This action cannot be undone. This will delete "${selectedWebsite.name}" and deactivate all credentials associated with ${selectedWebsite.domain}.`}
+        title="Delete Website and Imported Data?"
+        message={`This cannot be undone. ReactCMS will delete "${selectedWebsite.name}", its pages, drafts, published content, revisions, media, registry data, and source artifacts. The external repository and live domain are not deleted.`}
       />
 
       <ConfirmDialog
         isOpen={showDisconnect}
         onClose={() => setShowDisconnect(false)}
         onConfirm={handleDisconnect}
-        title="Disconnect Website SDK?"
-        message="Are you sure you want to mock disconnecting this SDK client connection? Status will revert to disconnected."
+        title="Disconnect Website Source?"
+        message="This marks the website source as disconnected. Existing imported data remains until you delete the website."
       />
 
       <ConfirmDialog

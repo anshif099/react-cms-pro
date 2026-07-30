@@ -160,7 +160,13 @@ export const websiteSyncService = {
           slug: slug,
           title: r.title.trim(),
           layout: r.layout || "default",
-          source: "imported"
+          source: "imported",
+          sourceProvider: r.sourceProvider || null,
+          sourceFile: r.sourceFile || null,
+          sourceRouterFile: r.sourceRouterFile || null,
+          sourceComponent: r.sourceComponent || null,
+          sourceRevision: r.sourceRevision || null,
+          nativeArtifactStatus: r.nativeArtifactStatus || "source-only"
         };
       });
 
@@ -241,6 +247,12 @@ export const websiteSyncService = {
           layout: layout,
           source: matchedPage.source || "imported",
           isImported: true,
+          sourceProvider: route.sourceProvider || matchedPage.sourceProvider || null,
+          sourceFile: route.sourceFile || matchedPage.sourceFile || null,
+          sourceRouterFile: route.sourceRouterFile || matchedPage.sourceRouterFile || null,
+          sourceComponent: route.sourceComponent || matchedPage.sourceComponent || null,
+          sourceRevision: route.sourceRevision || matchedPage.sourceRevision || null,
+          nativeArtifactStatus: route.nativeArtifactStatus || matchedPage.nativeArtifactStatus || "source-only",
           lastSynced: serverTimestamp(),
           updatedAt: serverTimestamp()
         };
@@ -270,6 +282,12 @@ export const websiteSyncService = {
           layout: layout,
           source: "imported",
           isImported: true,
+          sourceProvider: route.sourceProvider || null,
+          sourceFile: route.sourceFile || null,
+          sourceRouterFile: route.sourceRouterFile || null,
+          sourceComponent: route.sourceComponent || null,
+          sourceRevision: route.sourceRevision || null,
+          nativeArtifactStatus: route.nativeArtifactStatus || "source-only",
           userId: userId || "system",
           locales: {
             en: {

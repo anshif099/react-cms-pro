@@ -1,5 +1,21 @@
 export type ConnectionHealth = 'healthy' | 'unverified' | 'error' | 'unknown';
 export type SyncStatus = 'idle' | 'syncing' | 'manual' | 'error';
+export type WebsiteStatus = 'connected' | 'importing' | 'pending' | 'disconnected' | 'error' | 'suspended';
+export type ConnectionProvider = 'github' | 'cpanel' | 'sdk';
+
+export interface WebsiteSourceConnection {
+  provider: ConnectionProvider;
+  status: 'pending' | 'importing' | 'ready' | 'disconnected' | 'error';
+  repository?: string;
+  branch?: string;
+  rootDirectory?: string;
+  sourceRevision?: string;
+  artifactPath?: string;
+  fileCount?: number;
+  routeCount?: number;
+  importedAt?: number;
+  error?: string;
+}
 
 export interface Website {
   id: string;
@@ -13,13 +29,16 @@ export interface Website {
   secretKeyHash: string;
   verificationCode?: string;
   verificationStatus: 'verified' | 'unverified';
-  status: 'active' | 'pending' | 'suspended';
+  status: WebsiteStatus;
   sdkInstalled: boolean;
+  sourceConnected?: boolean;
+  connectionProvider?: ConnectionProvider;
+  connection?: WebsiteSourceConnection;
   sdkVersion?: string;
   lastSync?: number;
   connectionHealth: ConnectionHealth;
   syncStatus: SyncStatus;
-  syncMode?: 'manifest' | 'manual' | 'runtime';
+  syncMode?: 'manifest' | 'manual' | 'runtime' | 'registry';
   createdAt: number;
   updatedAt: number;
 }

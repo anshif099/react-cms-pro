@@ -132,15 +132,17 @@ export function PagesListPage() {
             <Plus className="w-3.5 h-3.5" />
             New Page
           </Button>
-          <Button
-            onClick={handleSync}
-            variant="outline"
-            className="gap-2 font-bold py-2.5 cursor-pointer border-slate-805 text-xs"
-            loading={syncLoading}
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${syncLoading ? "animate-spin" : ""}`} />
-            Sync Now
-          </Button>
+          {!selectedWebsite.sourceConnected && (
+            <Button
+              onClick={handleSync}
+              variant="outline"
+              className="gap-2 font-bold py-2.5 cursor-pointer border-slate-805 text-xs"
+              loading={syncLoading}
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${syncLoading ? "animate-spin" : ""}`} />
+              Sync Now
+            </Button>
+          )}
         </div>
       </div>
 

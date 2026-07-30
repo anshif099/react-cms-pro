@@ -32,7 +32,6 @@ import { useAuth } from "../../hooks/useAuth";
 import { useToast } from "../../hooks/useToast";
 import revisionService from "../../services/revisionService";
 import themeService from "../../services/themeService";
-import pageConversionService from "../../services/pageConversionService";
 import visualBuilderService, {
   createVisualNode
 } from "../../services/visualBuilderService";
@@ -66,19 +65,6 @@ function buildInitialTree(page, document, locale, pageKey) {
       title: localeData.title || page.title,
       locale
     });
-  }
-
-  if (page.isImported) {
-    const migratedBlocks = pageConversionService.getRouteBlocks(
-      page.route || `/${page.slug || ""}`
-    );
-    if (migratedBlocks.length) {
-      return blocksToPageTree(migratedBlocks, {
-        id: pageKey,
-        title: localeData.title || page.title,
-        locale
-      });
-    }
   }
 
   return regionsToPageTree({}, {
@@ -118,6 +104,26 @@ function NativeBuilderWorkspace({
   const editor = useNativeEditor();
   const isPreview = mode === "preview";
   const blocks = useMemo(() => pageTreeToBlocks(editor.tree), [editor.tree]);
+  const importedSourceEmptyState = page.isImported ? (
+    <div className="max-w-lg px-8 py-10 text-center">
+      <div className="mx-auto mb-4 h-10 w-10 rounded-xl border border-amber-300/40 bg-amber-50 text-amber-600 grid place-items-center text-lg">
+        !
+      </div>
+      <h2 className="text-base font-bold text-slate-900">
+        Native page artifact not available
+      </h2>
+      <p className="mt-2 text-xs font-normal leading-5 text-slate-500">
+        ReactCMS imported this route from the connected source, but the source
+        has not produced an editor-safe component tree. No generated template
+        or placeholder page is being substituted.
+      </p>
+      {page.sourceFile && (
+        <code className="mt-4 inline-block max-w-full truncate rounded-md bg-slate-100 px-2.5 py-1.5 text-[10px] text-slate-600">
+          {page.sourceFile}
+        </code>
+      )}
+    </div>
+  ) : null;
 
   const addNode = useCallback((type, targetId = null, position = "after") => {
     const node = createVisualNode(type, locale);
@@ -237,6 +243,7 @@ function NativeBuilderWorkspace({
             onMove={editor.move}
             onInsert={addNode}
             onCommand={editor.command}
+            emptyState={importedSourceEmptyState}
             className="flex-1 min-h-0"
           />
         </main>

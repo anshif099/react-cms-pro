@@ -48,6 +48,7 @@ export interface NativeCanvasProps {
   onMove?: RuntimeRendererProps['onMove'];
   onInsert?: (componentType: string, targetId: string | null, position: DropPosition) => void;
   onCommand?: RuntimeRendererProps['onCommand'];
+  emptyState?: React.ReactNode;
   className?: string;
 }
 
@@ -79,6 +80,7 @@ export const NativeCanvas = forwardRef<NativeCanvasHandle, NativeCanvasProps>(fu
   onMove,
   onInsert,
   onCommand,
+  emptyState,
   className,
 }, forwardedRef) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
@@ -284,7 +286,7 @@ export const NativeCanvas = forwardRef<NativeCanvasHandle, NativeCanvasProps>(fu
               color: '#64748b',
               font: '600 14px Inter,system-ui,sans-serif',
             }}>
-              Drag an element here or choose Add Element
+              {emptyState || 'Drag an element here or choose Add Element'}
             </div>
           )}
           {tree.children.length === 0 && mode !== 'edit' && (
@@ -297,7 +299,7 @@ export const NativeCanvas = forwardRef<NativeCanvasHandle, NativeCanvasProps>(fu
               textAlign: 'center',
               font: '600 14px Inter,system-ui,sans-serif',
             }}>
-              This page has no published or draft components yet.
+              {emptyState || 'This page has no published or draft components yet.'}
             </div>
           )}
         </div>

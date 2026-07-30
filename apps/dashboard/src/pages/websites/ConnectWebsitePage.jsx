@@ -1,290 +1,387 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as zod from "zod";
-import { Globe, ArrowLeft, Key, HelpCircle, Eye, EyeOff } from "lucide-react";
+import {
+  Archive,
+  ArrowLeft,
+  Eye,
+  EyeOff,
+  FolderGit2,
+  Info,
+  UploadCloud
+} from "lucide-react";
 import { useWebsites } from "../../hooks/useWebsites";
 import { useToast } from "../../hooks/useToast";
 import { useAuth } from "../../hooks/useAuth";
 import { Input } from "../../components/ui/Input";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
-import { generateWebsiteId, generateApiKey, generateSecretKey } from "../../utils/generators";
-import { motion } from "framer-motion";
+import sourceImportService from "../../services/sourceImportService";
 
 const connectSchema = zod.object({
   name: zod.string().min(2, "Website name must be at least 2 characters"),
-  domain: zod.string().min(1, "Domain URL is required").url("Must be a valid URL (e.g. https://example.com)"),
-  framework: zod.enum(["React", "React + Vite", "Next.js", "Other"], {
-    errorMap: () => ({ message: "Please select a framework" })
-  }),
-  hosting: zod.enum(["cPanel", "VPS", "Cloud", "Other"], {
-    errorMap: () => ({ message: "Please select a hosting provider" })
-  }),
+  domain: zod.string().min(1, "Domain URL is required").url("Enter a full URL, including https://"),
+  connectionProvider: zod.enum(["github", "cpanel"]),
+  repositoryUrl: zod.string().optional(),
+  branch: zod.string().optional(),
+  rootDirectory: zod.string().optional(),
+  githubToken: zod.string().optional(),
   ownerName: zod.string().min(2, "Owner name is required"),
-  ownerEmail: zod.string().min(1, "Owner email is required").email("Invalid email format")
+  ownerEmail: zod.string().email("Enter a valid owner email")
+}).superRefine((data, context) => {
+  if (data.connectionProvider === "github" && !data.repositoryUrl?.trim()) {
+    context.addIssue({
+      code: "custom",
+      path: ["repositoryUrl"],
+      message: "GitHub repository URL is required"
+    });
+  }
 });
 
 export function ConnectWebsitePage() {
-  const { createWebsite } = useWebsites();
+  const {
+    createWebsite,
+    importRoutes,
+    updateWebsite
+  } = useWebsites();
   const { user } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
-  
-  // Generating visual read-only placeholders to showcase dynamic keygen
-  const [mockId] = useState(() => generateWebsiteId());
-  const [mockApiKey, setMockApiKey] = useState(() => generateApiKey());
-  const [mockSecretKey, setMockSecretKey] = useState(() => generateSecretKey());
-  const [showSecret, setShowSecret] = useState(false);
+  const [archiveFile, setArchiveFile] = useState(null);
+  const [showToken, setShowToken] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+  const [progress, setProgress] = useState("");
 
-  const { register, handleSubmit, formState: { errors }, watch, reset } = useForm({
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    watch,
+    reset
+  } = useForm({
     resolver: zodResolver(connectSchema),
     defaultValues: {
       name: "",
       domain: "",
-      framework: "React + Vite",
-      hosting: "cPanel",
+      connectionProvider: "github",
+      repositoryUrl: "",
+      branch: "",
+      rootDirectory: "",
+      githubToken: "",
       ownerName: "",
       ownerEmail: ""
     }
   });
 
+  const provider = watch("connectionProvider");
+
   useEffect(() => {
-    if (user) {
-      reset({
-        name: "",
-        domain: "",
-        framework: "React + Vite",
-        hosting: "cPanel",
-        ownerName: user.name || "",
-        ownerEmail: user.email || ""
-      });
-    }
-  }, [user, reset]);
+    if (!user) return;
+    reset((current) => ({
+      ...current,
+      ownerName: user.name || current.ownerName,
+      ownerEmail: user.email || current.ownerEmail
+    }));
+  }, [reset, user]);
 
   const onSubmit = async (data) => {
-    console.log("Form submit started. Data:", data);
-    try {
-      // Create website using local storage service
-      const created = await createWebsite({
-        ...data,
-        id: mockId,
-        apiKey: mockApiKey,
-        secretKey: mockSecretKey
-      });
-      console.log("Website created successfully:", created);
-      
-      toast.success(`Website "${created.name}" connected!`);
-      // Redirect straight to verification page of the newly created website
-      navigate(`/websites/${created.id}/verify`);
-    } catch (e) {
-      console.error("Connect website failure", e);
-      let errorMsg = "Failed to connect website.";
-      if (e.message && (e.message.includes("API has not been used") || e.message.includes("disabled") || e.message.includes("permission-denied"))) {
-        errorMsg = "Failed to connect: Cloud Firestore API is disabled or permissions are not set. Enable it in your Firebase Console.";
-      } else if (e.message) {
-        errorMsg = `Failed to connect website: ${e.message}`;
-      }
-      toast.error(errorMsg);
+    if (data.connectionProvider === "cpanel" && !archiveFile) {
+      toast.error("Choose the ZIP source backup downloaded from cPanel.");
+      return;
     }
-  };
 
-  const onInvalid = (formErrors) => {
-    console.warn("Form validation failed. Errors:", formErrors);
-  };
+    setConnecting(true);
+    setProgress("Preparing source import...");
+    let createdWebsite = null;
+    try {
+      const imported = data.connectionProvider === "github"
+        ? await sourceImportService.importGitHub({
+          repositoryUrl: data.repositoryUrl,
+          branch: data.branch,
+          rootDirectory: data.rootDirectory,
+          token: data.githubToken,
+          onProgress: setProgress
+        })
+        : await sourceImportService.importCPanelArchive({
+          file: archiveFile,
+          rootDirectory: data.rootDirectory,
+          onProgress: setProgress
+        });
 
-  const handleRegenerateKeys = () => {
-    setMockApiKey(generateApiKey());
-    setMockSecretKey(generateSecretKey());
-    toast.info("Regenerated temporary key pairs");
+      setProgress("Creating website record...");
+      createdWebsite = await createWebsite({
+        name: data.name,
+        domain: data.domain,
+        framework: imported.manifest.framework,
+        hosting: data.connectionProvider === "cpanel" ? "cPanel" : "GitHub",
+        ownerName: data.ownerName,
+        ownerEmail: data.ownerEmail,
+        connectionProvider: data.connectionProvider,
+        connection: {
+          provider: data.connectionProvider,
+          status: "importing",
+          repository: imported.manifest.repository,
+          branch: imported.manifest.branch,
+          rootDirectory: imported.manifest.rootDirectory,
+          sourceRevision: imported.manifest.revision
+        }
+      });
+
+      const codebase = await sourceImportService.persistCodebase(
+        createdWebsite.id,
+        imported,
+        setProgress
+      );
+
+      setProgress(`Importing ${imported.routes.length} discovered pages...`);
+      await importRoutes(
+        createdWebsite.id,
+        imported.routes,
+        user?.email || user?.uid || "system"
+      );
+
+      await updateWebsite(createdWebsite.id, {
+        framework: imported.manifest.framework,
+        status: "connected",
+        verificationStatus: "verified",
+        sdkInstalled: false,
+        connectionHealth: "healthy",
+        sourceConnected: true,
+        connection: {
+          provider: data.connectionProvider,
+          status: "ready",
+          repository: imported.manifest.repository,
+          branch: imported.manifest.branch,
+          rootDirectory: imported.manifest.rootDirectory,
+          sourceRevision: imported.manifest.revision,
+          artifactPath: codebase.artifactPath,
+          fileCount: imported.manifest.fileCount,
+          routeCount: imported.routes.length,
+          importedAt: Date.now()
+        }
+      });
+
+      toast.success(
+        `${data.name} source imported with ${imported.routes.length} page${imported.routes.length === 1 ? "" : "s"}.`
+      );
+      navigate(`/content/${createdWebsite.id}/pages`);
+    } catch (error) {
+      console.error("Source connection failed", error);
+      if (createdWebsite) {
+        try {
+          await updateWebsite(createdWebsite.id, {
+            status: "error",
+            connectionHealth: "error",
+            "connection/status": "error",
+            "connection/error": error.message
+          });
+        } catch (updateError) {
+          console.error("Could not persist import failure", updateError);
+        }
+      }
+      toast.error(error.message || "Website source could not be imported.");
+    } finally {
+      setConnecting(false);
+      setProgress("");
+    }
   };
 
   return (
-    <div className="space-y-6 text-left max-w-4xl mx-auto">
-      {/* Back button */}
+    <div className="space-y-6 text-left max-w-5xl mx-auto">
+      <button
+        type="button"
+        onClick={() => navigate("/websites")}
+        className="flex items-center gap-1.5 text-xs font-semibold text-admin-secondary hover:text-primary transition-colors cursor-pointer"
+      >
+        <ArrowLeft className="w-3.5 h-3.5" />
+        Back to Websites
+      </button>
+
       <div>
-        <button
-          onClick={() => navigate("/websites")}
-          className="flex items-center gap-1.5 text-xs font-semibold text-admin-secondary hover:text-primary transition-colors cursor-pointer"
-        >
-          <ArrowLeft className="w-3.5 h-3.5" />
-          Back to Websites
-        </button>
+        <h2 className="text-2xl font-bold text-admin-text tracking-tight">
+          Import Website Source
+        </h2>
+        <p className="text-sm text-admin-secondary mt-1">
+          Connect the codebase directly. No ReactCMS SDK or npm package is required.
+        </p>
       </div>
 
-      {/* Title */}
-      <div>
-        <h2 className="text-2xl font-bold text-admin-text tracking-tight">Connect Website</h2>
-        <p className="text-sm text-admin-secondary">Register a new domain and generate SDK access credentials</p>
-      </div>
-
-      <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Core details card */}
+      <form onSubmit={handleSubmit(onSubmit)} className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-6">
-          <Card title="Website Details" subtitle="Provide information about the website deployment">
-            <div className="space-y-5">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                {/* Website Name */}
-                <Input
-                  label="Website Name *"
-                  placeholder="e.g. Triosis"
-                  error={errors.name?.message}
-                  {...register("name")}
+          <Card title="Connection Method" subtitle="Choose where ReactCMS should read the website source">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className={`rounded-xl border p-4 cursor-pointer transition-colors ${
+                provider === "github"
+                  ? "border-primary bg-primary/5"
+                  : "border-admin-border dark:border-slate-800 hover:border-slate-600"
+              }`}>
+                <input
+                  type="radio"
+                  value="github"
+                  className="sr-only"
+                  {...register("connectionProvider")}
                 />
+                <FolderGit2 className="w-6 h-6 text-admin-text" />
+                <span className="block mt-3 text-sm font-bold text-admin-text">GitHub Repository</span>
+                <span className="block mt-1 text-xs leading-5 text-admin-secondary">
+                  Download a branch directly from a public or token-authorized repository.
+                </span>
+              </label>
 
-                {/* Domain URL */}
-                <Input
-                  label="Domain URL (with https://) *"
-                  placeholder="e.g. https://triosis.in"
-                  error={errors.domain?.message}
-                  {...register("domain")}
+              <label className={`rounded-xl border p-4 cursor-pointer transition-colors ${
+                provider === "cpanel"
+                  ? "border-primary bg-primary/5"
+                  : "border-admin-border dark:border-slate-800 hover:border-slate-600"
+              }`}>
+                <input
+                  type="radio"
+                  value="cpanel"
+                  className="sr-only"
+                  {...register("connectionProvider")}
                 />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                {/* Framework Selector */}
-                <div className="flex flex-col gap-1 text-left">
-                  <label className="text-xs font-semibold text-admin-secondary uppercase tracking-wider">
-                    Framework *
-                  </label>
-                  <select
-                    className="w-full text-sm py-2 px-3 rounded-lg border border-admin-border bg-white text-admin-text outline-none dark:border-slate-700 dark:bg-slate-800 focus:border-primary focus:ring-2 focus:ring-primary/20 cursor-pointer"
-                    {...register("framework")}
-                  >
-                    <option value="React">React</option>
-                    <option value="React + Vite">React + Vite</option>
-                    <option value="Next.js">Next.js</option>
-                    <option value="Other">Other</option>
-                  </select>
-                  {errors.framework?.message && (
-                    <span className="text-xs text-admin-danger font-medium">{errors.framework.message}</span>
-                  )}
-                </div>
-
-                {/* Hosting Selector */}
-                <div className="flex flex-col gap-1 text-left">
-                  <label className="text-xs font-semibold text-admin-secondary uppercase tracking-wider">
-                    Hosting Provider *
-                  </label>
-                  <select
-                    className="w-full text-sm py-2 px-3 rounded-lg border border-admin-border bg-white text-admin-text outline-none dark:border-slate-700 dark:bg-slate-800 focus:border-primary focus:ring-2 focus:ring-primary/20 cursor-pointer"
-                    {...register("hosting")}
-                  >
-                    <option value="cPanel">cPanel</option>
-                    <option value="VPS">VPS</option>
-                    <option value="Cloud">Cloud</option>
-                    <option value="Other">Other</option>
-                  </select>
-                  {errors.hosting?.message && (
-                    <span className="text-xs text-admin-danger font-medium">{errors.hosting.message}</span>
-                  )}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-3 border-t border-admin-border dark:border-slate-800/80">
-                {/* Owner Name */}
-                <Input
-                  label="Owner Contact Name *"
-                  placeholder="e.g. John Doe"
-                  error={errors.ownerName?.message}
-                  {...register("ownerName")}
-                />
-
-                {/* Owner Email */}
-                <Input
-                  label="Owner Email Address *"
-                  placeholder="e.g. john@triosis.in"
-                  error={errors.ownerEmail?.message}
-                  {...register("ownerEmail")}
-                />
-              </div>
+                <Archive className="w-6 h-6 text-admin-text" />
+                <span className="block mt-3 text-sm font-bold text-admin-text">cPanel Source Backup</span>
+                <span className="block mt-1 text-xs leading-5 text-admin-secondary">
+                  Import a ZIP created in cPanel File Manager without sharing cPanel credentials.
+                </span>
+              </label>
             </div>
           </Card>
-          
-          {/* Actions */}
-          <div className="flex items-center justify-end gap-3.5">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => navigate("/websites")}
-            >
+
+          <Card title="Website Details" subtitle="Identify the deployed website and project owner">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <Input
+                label="Website Name *"
+                placeholder="e.g. Triosis"
+                error={errors.name?.message}
+                {...register("name")}
+              />
+              <Input
+                label="Live Domain *"
+                placeholder="https://triosis.vercel.app"
+                error={errors.domain?.message}
+                {...register("domain")}
+              />
+              <Input
+                label="Owner Name *"
+                placeholder="Website owner"
+                error={errors.ownerName?.message}
+                {...register("ownerName")}
+              />
+              <Input
+                label="Owner Email *"
+                placeholder="owner@example.com"
+                error={errors.ownerEmail?.message}
+                {...register("ownerEmail")}
+              />
+            </div>
+          </Card>
+
+          {provider === "github" ? (
+            <Card title="GitHub Source" subtitle="The token is held in memory for this import only and is never stored">
+              <div className="space-y-5">
+                <Input
+                  label="Repository URL *"
+                  placeholder="https://github.com/owner/repository"
+                  error={errors.repositoryUrl?.message}
+                  {...register("repositoryUrl")}
+                />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <Input
+                    label="Branch"
+                    placeholder="Default branch"
+                    {...register("branch")}
+                  />
+                  <Input
+                    label="Project Root"
+                    placeholder="Empty for repository root"
+                    {...register("rootDirectory")}
+                  />
+                </div>
+                <div className="relative">
+                  <Input
+                    type={showToken ? "text" : "password"}
+                    label="Fine-grained Token (private repo only)"
+                    placeholder="Leave empty for a public repository"
+                    autoComplete="off"
+                    {...register("githubToken")}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowToken((current) => !current)}
+                    className="absolute right-3 top-8 text-admin-secondary hover:text-admin-text cursor-pointer"
+                    aria-label={showToken ? "Hide GitHub token" : "Show GitHub token"}
+                  >
+                    {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+            </Card>
+          ) : (
+            <Card title="cPanel Source Backup" subtitle="In cPanel File Manager, compress the source project folder as ZIP, then select it here">
+              <div className="space-y-5">
+                <label className="min-h-36 rounded-xl border-2 border-dashed border-slate-700 hover:border-primary bg-slate-950/20 grid place-items-center cursor-pointer transition-colors">
+                  <input
+                    type="file"
+                    accept=".zip,application/zip"
+                    className="sr-only"
+                    onChange={(event) => setArchiveFile(event.target.files?.[0] || null)}
+                  />
+                  <span className="text-center px-6 py-5">
+                    <UploadCloud className="w-7 h-7 text-primary mx-auto" />
+                    <span className="block mt-2 text-sm font-bold text-admin-text">
+                      {archiveFile ? archiveFile.name : "Choose cPanel source ZIP"}
+                    </span>
+                    <span className="block mt-1 text-xs text-admin-secondary">
+                      Maximum compressed size: 50 MB
+                    </span>
+                  </span>
+                </label>
+                <Input
+                  label="Project Root Inside ZIP"
+                  placeholder="e.g. public_html or app (optional)"
+                  {...register("rootDirectory")}
+                />
+              </div>
+            </Card>
+          )}
+
+          <div className="flex items-center justify-end gap-3">
+            <Button type="button" variant="secondary" onClick={() => navigate("/websites")}>
               Cancel
             </Button>
-            <Button
-              type="submit"
-              variant="primary"
-              className="px-6"
-            >
-              Connect Website
+            <Button type="submit" variant="primary" loading={connecting} className="px-6">
+              {connecting ? "Importing Source..." : "Import Website"}
             </Button>
           </div>
         </div>
 
-        {/* Sidebar keygen info */}
         <div className="space-y-6">
-          <Card title="SDK Credentials" subtitle="Automatically generated secure credentials">
-            <div className="space-y-5">
-              {/* Web ID */}
-              <div>
-                <span className="text-[10px] font-semibold text-admin-secondary uppercase tracking-wider block mb-1">
-                  Website ID
-                </span>
-                <code className="block w-full py-1.5 px-3 border border-admin-border dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 rounded-lg text-xs font-mono select-all overflow-hidden text-ellipsis">
-                  {mockId}
-                </code>
-              </div>
-
-              {/* API Key */}
-              <div>
-                <span className="text-[10px] font-semibold text-admin-secondary uppercase tracking-wider block mb-1">
-                  API Key
-                </span>
-                <code className="block w-full py-1.5 px-3 border border-admin-border dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 rounded-lg text-xs font-mono select-all overflow-hidden text-ellipsis">
-                  {mockApiKey}
-                </code>
-              </div>
-
-              {/* Secret Key */}
-              <div>
-                <div className="flex justify-between items-center mb-1">
-                  <span className="text-[10px] font-semibold text-admin-secondary uppercase tracking-wider">
-                    Secret Key
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setShowSecret(!showSecret)}
-                    className="text-[10px] text-primary hover:underline flex items-center cursor-pointer"
-                  >
-                    {showSecret ? <EyeOff className="w-3 h-3 mr-0.5" /> : <Eye className="w-3 h-3 mr-0.5" />}
-                    {showSecret ? "Hide" : "Show"}
-                  </button>
-                </div>
-                <code className="block w-full py-1.5 px-3 border border-admin-border dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 rounded-lg text-xs font-mono select-all overflow-hidden text-ellipsis">
-                  {showSecret ? mockSecretKey : "••••••••••••••••••••••••"}
-                </code>
-              </div>
-
-              <div className="pt-2">
-                <Button 
-                  onClick={handleRegenerateKeys} 
-                  variant="outline" 
-                  size="sm"
-                  className="w-full gap-2 text-xs font-semibold py-1.5"
-                >
-                  <Key className="w-3.5 h-3.5" />
-                  Regenerate Keys
-                </Button>
-              </div>
-
-              <div className="p-3 bg-blue-50 dark:bg-slate-800/60 rounded-lg flex items-start gap-2.5 text-xs text-admin-secondary leading-relaxed mt-4">
-                <HelpCircle className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
-                <span>
-                  The secret key should never be checked into code. It must be kept private to allow secure content updates.
-                </span>
-              </div>
+          <Card title="What gets imported">
+            <div className="space-y-3 text-xs leading-5 text-admin-secondary">
+              <p>ReactCMS stores the complete ZIP as a versioned source artifact.</p>
+              <p>Framework, source files, routes, branch, and revision are indexed for the Pages module.</p>
+              <p>No SDK credentials or npm installation are generated.</p>
             </div>
           </Card>
+
+          <div className="rounded-xl border border-amber-400/20 bg-amber-400/5 p-4 flex gap-3">
+            <Info className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <p className="text-xs leading-5 text-admin-secondary">
+              Arbitrary React code is not executed inside the dashboard. A page must produce an
+              editor-safe native component tree before it can be rendered and edited. Unsupported
+              pages show their real source status, never a fabricated template.
+            </p>
+          </div>
+
+          {connecting && (
+            <div className="rounded-xl border border-primary/30 bg-primary/5 p-4">
+              <p className="text-xs font-bold text-primary">Import in progress</p>
+              <p className="text-xs text-admin-secondary mt-1">{progress}</p>
+            </div>
+          )}
         </div>
       </form>
     </div>
@@ -292,4 +389,3 @@ export function ConnectWebsitePage() {
 }
 
 export default ConnectWebsitePage;
-// Note: This connects domain and redirects user to verify route.

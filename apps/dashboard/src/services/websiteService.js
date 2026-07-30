@@ -1,5 +1,9 @@
-import { database } from "../lib/firebase";
-import { ref, get, set, push, update, remove, serverTimestamp } from "firebase/database";
+import { database, storage } from "../lib/firebase";
+import { ref, get, set, push, update, serverTimestamp } from "firebase/database";
+import {
+  deleteObject,
+  ref as storageRef
+} from "firebase/storage";
 import { 
   generateWebsiteId, 
   generateApiKey, 
@@ -15,6 +19,34 @@ async function hashSecretKey(key) {
   const hashBuffer = await window.crypto.subtle.digest("SHA-256", data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+function collectArtifactPaths(value, paths = new Set()) {
+  if (!value || typeof value !== "object") return paths;
+  if (typeof value.storagePath === "string") paths.add(value.storagePath);
+  if (typeof value.artifactPath === "string") paths.add(value.artifactPath);
+  Object.values(value).forEach((child) => collectArtifactPaths(child, paths));
+  return paths;
+}
+
+async function deleteWebsiteArtifacts(id) {
+  const [mediaSnapshot, codebaseSnapshot, importsSnapshot] = await Promise.all([
+    get(ref(database, `media/${id}`)),
+    get(ref(database, `codebases/${id}`)),
+    get(ref(database, `imports/${id}`))
+  ]);
+  const paths = new Set();
+  [mediaSnapshot, codebaseSnapshot, importsSnapshot].forEach((snapshot) => {
+    if (snapshot.exists()) collectArtifactPaths(snapshot.val(), paths);
+  });
+
+  await Promise.all(Array.from(paths).map(async (path) => {
+    try {
+      await deleteObject(storageRef(storage, path));
+    } catch (error) {
+      if (error?.code !== "storage/object-not-found") throw error;
+    }
+  }));
 }
 
 export const websiteService = {
@@ -68,8 +100,9 @@ export const websiteService = {
 
       const websiteId = generateWebsiteId();
       const apiKey = generateApiKey();
-      const rawSecretKey = generateSecretKey();
-      const secretKeyHash = await hashSecretKey(rawSecretKey);
+      const usesSdk = !data.connectionProvider || data.connectionProvider === "sdk";
+      const rawSecretKey = usesSdk ? generateSecretKey() : "";
+      const secretKeyHash = usesSdk ? await hashSecretKey(rawSecretKey) : "";
       const verificationCode = generateVerificationCode();
 
       const websiteData = {
@@ -80,13 +113,19 @@ export const websiteService = {
         hosting: data.hosting,
         ownerName: data.ownerName,
         ownerEmail: data.ownerEmail,
-        apiKey,
+        apiKey: usesSdk ? apiKey : "",
         secretKeyHash,
         verificationCode,
-        status: "pending",
-        verificationStatus: "unverified",
+        status: data.status || (usesSdk ? "pending" : "importing"),
+        verificationStatus: data.verificationStatus || "unverified",
         sdkInstalled: false,
         sdkVersion: "",
+        sourceConnected: false,
+        connectionProvider: data.connectionProvider || "sdk",
+        connection: data.connection || {
+          provider: "sdk",
+          status: "pending"
+        },
         lastSync: null,
         connectionHealth: "unknown",
         createdAt: serverTimestamp(),
@@ -150,17 +189,35 @@ export const websiteService = {
   async delete(id) {
     try {
       const website = await this.getById(id);
-      const docRef = ref(database, `websites/${id}`);
-      await remove(docRef);
+      if (!website) return true;
 
-      if (website) {
-        await activityLogService.logActivity(
-          "website_deleted",
-          "Website deleted",
-          `Permanently deleted website: ${website.name}`,
-          id
-        );
-      }
+      // Remove binary artifacts before deleting metadata. If Storage rejects
+      // cleanup, keep the website record so the user can retry safely.
+      await deleteWebsiteArtifacts(id);
+
+      // Firebase multi-path updates are atomic. This prevents deleted websites
+      // from leaving pages, drafts, registries, revisions, or source manifests.
+      await update(ref(database), {
+        [`websites/${id}`]: null,
+        [`pages/${id}`]: null,
+        [`content/${id}`]: null,
+        [`registry/${id}`]: null,
+        [`revisions/${id}`]: null,
+        [`media/${id}`]: null,
+        [`searchIndex/${id}`]: null,
+        [`contentTypes/${id}`]: null,
+        [`global/${id}`]: null,
+        [`settings/${id}`]: null,
+        [`codebases/${id}`]: null,
+        [`imports/${id}`]: null
+      });
+
+      await activityLogService.logActivity(
+        "website_deleted",
+        "Website deleted",
+        `Permanently deleted website and scoped data: ${website.name}`,
+        id
+      );
       return true;
     } catch (error) {
       console.error("Failed to delete website:", error);

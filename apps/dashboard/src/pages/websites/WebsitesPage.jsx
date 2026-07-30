@@ -10,13 +10,11 @@ import {
   Terminal, 
   Key, 
   Trash2, 
-  AlertCircle, 
   Unlink 
 } from "lucide-react";
 import { useWebsites } from "../../hooks/useWebsites";
 import { useToast } from "../../hooks/useToast";
 import { Button } from "../../components/ui/Button";
-import { Input } from "../../components/ui/Input";
 import { Card } from "../../components/ui/Card";
 import { Badge } from "../../components/ui/Badge";
 import { Dropdown } from "../../components/ui/Dropdown";
@@ -70,9 +68,9 @@ export function WebsitesPage() {
     if (disconnectId) {
       try {
         await updateStatus(disconnectId, "disconnected");
-        toast.info("Website SDK disconnected");
+        toast.info("Website source connection disconnected");
       } catch (error) {
-        toast.error("Failed to disconnect SDK.");
+        toast.error("Failed to disconnect the website source.");
       } finally {
         setDisconnectId(null);
       }
@@ -111,44 +109,43 @@ export function WebsitesPage() {
     return matchesSearch && matchesStatus && matchesFramework && matchesHosting;
   });
 
-  const getActionItems = (web) => [
-    {
+  const getActionItems = (web) => {
+    const items = [{
       label: "View Details",
       icon: Eye,
       onClick: () => handleSelectWebsite(web.id)
-    },
-    {
+    }];
+    if (!web.sourceConnected) {
+      items.push({
       label: "Verify Domain",
       icon: ShieldCheck,
       onClick: () => handleSelectWebsite(web.id, "/verify")
-    },
-    {
+      }, {
       label: "SDK Guide",
       icon: Terminal,
       onClick: () => handleSelectWebsite(web.id, "/sdk")
-    },
-    {
+      }, {
       label: "Regenerate API Key",
       icon: Key,
       onClick: () => {
         setRegenerateId(web.id);
         setRegenerateType("api");
       }
-    },
-    {
-      label: "Disconnect SDK",
+      });
+    }
+    items.push({
+      label: web.sourceConnected ? "Disconnect Source" : "Disconnect SDK",
       icon: Unlink,
       onClick: () => setDisconnectId(web.id),
       className: web.status !== "connected" ? "hidden" : ""
-    },
-    { divider: true },
-    {
+    }, { divider: true }, {
       label: "Delete Website",
       icon: Trash2,
       variant: "danger",
       onClick: () => setDeleteId(web.id)
-    }
-  ];
+    });
+    return items;
+  };
 
   return (
     <div className="space-y-6 text-left">
@@ -292,9 +289,13 @@ export function WebsitesPage() {
                       <Badge>{web.verificationStatus}</Badge>
                     </div>
                     <div className="flex flex-col gap-1 items-start flex-1 min-w-[80px]">
-                      <span className="text-[9px] uppercase tracking-wider font-semibold text-admin-secondary">SDK</span>
-                      <Badge variant={web.sdkInstalled ? "success" : "neutral"}>
-                        {web.sdkInstalled ? "Installed" : "Not Found"}
+                      <span className="text-[9px] uppercase tracking-wider font-semibold text-admin-secondary">
+                        {web.sourceConnected ? "Source" : "SDK"}
+                      </span>
+                      <Badge variant={web.sourceConnected || web.sdkInstalled ? "success" : "neutral"}>
+                        {web.sourceConnected
+                          ? (web.connection?.provider || "Imported")
+                          : web.sdkInstalled ? "Installed" : "Not Found"}
                       </Badge>
                     </div>
                   </div>
@@ -302,9 +303,11 @@ export function WebsitesPage() {
                   {/* Card Footer Details */}
                   <div className="flex justify-between items-center text-[10px] text-admin-secondary mt-4 font-medium">
                     <div>
-                      <span>Key: </span>
+                      <span>{web.sourceConnected ? "Revision: " : "Key: "}</span>
                       <code className="bg-slate-50 dark:bg-slate-800 py-0.5 px-1.5 rounded-sm font-mono text-[9px] border border-admin-border dark:border-slate-800">
-                        {web.apiKey ? `${web.apiKey.substring(0, 11)}...` : "none"}
+                        {web.sourceConnected
+                          ? web.connection?.sourceRevision?.slice(0, 11) || "source"
+                          : web.apiKey ? `${web.apiKey.substring(0, 11)}...` : "none"}
                       </code>
                     </div>
                     <div>
@@ -324,15 +327,15 @@ export function WebsitesPage() {
         onClose={() => setDeleteId(null)}
         onConfirm={handleDelete}
         title="Delete Website"
-        message="Are you sure you want to delete this website? This action is permanent and will delete all configuration settings from the CMS."
+        message="This permanently deletes the website, pages, drafts, published content, revisions, media, registry data, and imported source artifacts from ReactCMS. The external GitHub repository, cPanel account, and live website are not deleted."
       />
 
       <ConfirmDialog
         isOpen={disconnectId !== null}
         onClose={() => setDisconnectId(null)}
         onConfirm={handleDisconnect}
-        title="Disconnect SDK"
-        message="Are you sure you want to disconnect this website's SDK? It will put the website back into 'disconnected' status until it syncs again."
+        title="Disconnect Website Source"
+        message="This marks the source connection as disconnected. Imported data remains until the website is deleted."
       />
 
       <ConfirmDialog

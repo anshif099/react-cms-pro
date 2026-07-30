@@ -1,0 +1,378 @@
+import { unzipSync, zipSync } from "fflate";
+import { ref as databaseRef, set, serverTimestamp } from "firebase/database";
+import { getBlob, ref as storageRef, uploadBytes } from "firebase/storage";
+import { database, storage } from "../lib/firebase";
+import {
+  buildSourceManifest,
+  isSourceTextFile,
+  normalizeSourceFiles
+} from "./sourceImportUtils";
+
+const MAX_ARCHIVE_BYTES = 50 * 1024 * 1024;
+const MAX_EXTRACTED_BYTES = 100 * 1024 * 1024;
+const MAX_EXTRACTED_FILES = 12000;
+const MAX_TEXT_FILE_BYTES = 2 * 1024 * 1024;
+const SKIPPED_SOURCE_DIRECTORIES = new Set([
+  ".git",
+  ".next",
+  ".turbo",
+  "build",
+  "coverage",
+  "dist",
+  "node_modules",
+  "out",
+  "vendor"
+]);
+
+function parseGitHubRepository(value) {
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error("Enter a valid GitHub repository URL.");
+  }
+  if (!["github.com", "www.github.com"].includes(url.hostname.toLowerCase())) {
+    throw new Error("The repository must be hosted on github.com.");
+  }
+  const [owner, repositoryName] = url.pathname
+    .replace(/^\/+|\/+$/g, "")
+    .split("/");
+  const repository = repositoryName?.replace(/\.git$/i, "");
+  if (!owner || !repository) {
+    throw new Error("Use a repository URL such as https://github.com/owner/project.");
+  }
+  return { owner, repository, fullName: `${owner}/${repository}` };
+}
+
+function githubHeaders(token) {
+  return {
+    Accept: "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
+    ...(token ? { Authorization: `Bearer ${token.trim()}` } : {})
+  };
+}
+
+function inspectZipArchive(buffer) {
+  const bytes = new Uint8Array(buffer);
+  const view = new DataView(buffer);
+  const minimumOffset = Math.max(0, bytes.length - 65557);
+  let endOffset = -1;
+  for (let index = bytes.length - 22; index >= minimumOffset; index -= 1) {
+    if (view.getUint32(index, true) === 0x06054b50) {
+      endOffset = index;
+      break;
+    }
+  }
+  if (endOffset === -1) throw new Error("The ZIP end record is missing.");
+
+  const entryCount = view.getUint16(endOffset + 10, true);
+  const centralDirectoryOffset = view.getUint32(endOffset + 16, true);
+  if (entryCount === 0xffff || centralDirectoryOffset === 0xffffffff) {
+    throw new Error("ZIP64 source archives are not supported.");
+  }
+  if (entryCount > MAX_EXTRACTED_FILES) {
+    throw new Error("The archive contains too many files (maximum 12,000).");
+  }
+
+  const decoder = new TextDecoder("utf-8", { fatal: false });
+  let cursor = centralDirectoryOffset;
+  let totalExtractedBytes = 0;
+  for (let index = 0; index < entryCount; index += 1) {
+    if (cursor + 46 > view.byteLength || view.getUint32(cursor, true) !== 0x02014b50) {
+      throw new Error("The ZIP central directory is invalid.");
+    }
+    const extractedSize = view.getUint32(cursor + 24, true);
+    const filenameLength = view.getUint16(cursor + 28, true);
+    const extraLength = view.getUint16(cursor + 30, true);
+    const commentLength = view.getUint16(cursor + 32, true);
+    const filename = decoder.decode(
+      bytes.subarray(cursor + 46, cursor + 46 + filenameLength)
+    ).replaceAll("\\", "/");
+    if (
+      filename.startsWith("/")
+      || filename.split("/").some((segment) => segment === "..")
+    ) {
+      throw new Error(`Unsafe archive path rejected: ${filename}`);
+    }
+    totalExtractedBytes += extractedSize;
+    if (totalExtractedBytes > MAX_EXTRACTED_BYTES) {
+      throw new Error("The extracted source exceeds the 100 MB safety limit.");
+    }
+    cursor += 46 + filenameLength + extraLength + commentLength;
+  }
+}
+
+async function fetchGitHubJson(url, token) {
+  const response = await fetch(url, { headers: githubHeaders(token) });
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error("GitHub rejected the token. Check its repository access.");
+    }
+    if (response.status === 403) {
+      throw new Error("GitHub rate limit or repository permission blocked the import.");
+    }
+    if (response.status === 404) {
+      throw new Error("GitHub repository or branch was not found.");
+    }
+    throw new Error(`GitHub import failed (${response.status}).`);
+  }
+  return response.json();
+}
+
+function decodeArchive(archiveBuffer, rootDirectory = "") {
+  if (archiveBuffer.byteLength > MAX_ARCHIVE_BYTES) {
+    throw new Error("The source archive exceeds the 50 MB import limit.");
+  }
+  inspectZipArchive(archiveBuffer);
+
+  let extracted;
+  try {
+    extracted = unzipSync(new Uint8Array(archiveBuffer));
+  } catch {
+    throw new Error("The selected file is not a readable ZIP source archive.");
+  }
+
+  const entries = Object.entries(extracted);
+  if (entries.length > MAX_EXTRACTED_FILES) {
+    throw new Error("The archive contains too many files (maximum 12,000).");
+  }
+
+  const decoder = new TextDecoder("utf-8", { fatal: false });
+  return normalizeSourceFiles(entries.map(([path, bytes]) => ({
+    path,
+    size: bytes.byteLength,
+    content: isSourceTextFile(path) && bytes.byteLength <= MAX_TEXT_FILE_BYTES
+      ? decoder.decode(bytes)
+      : null
+  })), rootDirectory);
+}
+
+async function sha256(buffer) {
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", buffer);
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function archiveResult(buffer, files, metadata, filename) {
+  const manifest = buildSourceManifest(files, metadata);
+  if (!manifest.sourceFileCount) {
+    throw new Error("No source files were found in the selected repository root.");
+  }
+  if (!manifest.routes.length) {
+    throw new Error(
+      "No website routes were discovered. Select the project root containing package.json and src/pages, app, or router files."
+    );
+  }
+  return {
+    archive: new Blob([buffer], { type: "application/zip" }),
+    filename,
+    manifest,
+    routes: manifest.routes
+  };
+}
+
+function githubTreeFiles(tree, rootDirectory) {
+  const root = String(rootDirectory || "")
+    .replaceAll("\\", "/")
+    .replace(/^\/+|\/+$/g, "");
+  const blobs = tree
+    .filter((entry) => entry.type === "blob")
+    .map((entry) => {
+      const repositoryPath = entry.path.replaceAll("\\", "/").replace(/^\/+/, "");
+      if (root && repositoryPath !== root && !repositoryPath.startsWith(`${root}/`)) {
+        return null;
+      }
+      const path = root ? repositoryPath.slice(root.length).replace(/^\/+/, "") : repositoryPath;
+      if (!path || path.split("/").some((segment) => SKIPPED_SOURCE_DIRECTORIES.has(segment))) {
+        return null;
+      }
+      return {
+        repositoryPath,
+        path,
+        size: entry.size || 0
+      };
+    })
+    .filter(Boolean);
+
+  if (blobs.length > MAX_EXTRACTED_FILES) {
+    throw new Error("The repository contains too many files (maximum 12,000).");
+  }
+  const totalBytes = blobs.reduce((total, file) => total + file.size, 0);
+  if (totalBytes > MAX_ARCHIVE_BYTES) {
+    throw new Error("The repository source exceeds the 50 MB import limit.");
+  }
+  return blobs;
+}
+
+async function downloadGitHubFiles(files, repository, revision, token, onProgress) {
+  const results = new Array(files.length);
+  let cursor = 0;
+  let completed = 0;
+  const workerCount = Math.min(8, files.length);
+
+  const worker = async () => {
+    while (cursor < files.length) {
+      const index = cursor;
+      cursor += 1;
+      const file = files[index];
+      const encodedPath = file.repositoryPath
+        .split("/")
+        .map(encodeURIComponent)
+        .join("/");
+      const response = token
+        ? await fetch(
+          `https://api.github.com/repos/${repository.owner}/${repository.repository}/contents/${encodedPath}?ref=${revision}`,
+          {
+            headers: {
+              ...githubHeaders(token),
+              Accept: "application/vnd.github.raw+json"
+            }
+          }
+        )
+        : await fetch(
+          `https://raw.githubusercontent.com/${repository.owner}/${repository.repository}/${revision}/${encodedPath}`
+        );
+      if (!response.ok) {
+        throw new Error(`GitHub could not download ${file.repositoryPath} (${response.status}).`);
+      }
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      results[index] = { ...file, bytes };
+      completed += 1;
+      if (completed === files.length || completed % 25 === 0) {
+        onProgress?.(`Downloading source files (${completed}/${files.length})...`);
+      }
+    }
+  };
+
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  return results;
+}
+
+export const sourceImportService = {
+  async importGitHub({
+    repositoryUrl,
+    branch,
+    rootDirectory = "",
+    token = "",
+    onProgress
+  }) {
+    const repository = parseGitHubRepository(repositoryUrl);
+    onProgress?.("Checking GitHub repository...");
+    const repo = await fetchGitHubJson(
+      `https://api.github.com/repos/${repository.owner}/${repository.repository}`,
+      token
+    );
+    const selectedBranch = branch?.trim() || repo.default_branch;
+    const commit = await fetchGitHubJson(
+      `https://api.github.com/repos/${repository.owner}/${repository.repository}/commits/${encodeURIComponent(selectedBranch)}`,
+      token
+    );
+    const tree = await fetchGitHubJson(
+      `https://api.github.com/repos/${repository.owner}/${repository.repository}/git/trees/${commit.sha}?recursive=1`,
+      token
+    );
+    if (tree.truncated) {
+      throw new Error("GitHub truncated this large repository tree. Choose a smaller project root.");
+    }
+
+    const treeFiles = githubTreeFiles(tree.tree || [], rootDirectory);
+    if (!treeFiles.length) {
+      throw new Error("No files were found at the selected GitHub project root.");
+    }
+    if (token && treeFiles.length > 4500) {
+      throw new Error("This private repository exceeds the 4,500-file authenticated import limit.");
+    }
+    onProgress?.(`Downloading source files (0/${treeFiles.length})...`);
+    const downloaded = await downloadGitHubFiles(
+      treeFiles,
+      repository,
+      commit.sha,
+      token,
+      onProgress
+    );
+
+    onProgress?.("Building the source artifact...");
+    const archiveBytes = zipSync(
+      Object.fromEntries(downloaded.map((file) => [file.path, file.bytes])),
+      { level: 6 }
+    );
+    const decoder = new TextDecoder("utf-8", { fatal: false });
+    const files = downloaded.map((file) => ({
+      path: file.path,
+      size: file.bytes.byteLength,
+      content: isSourceTextFile(file.path) && file.bytes.byteLength <= MAX_TEXT_FILE_BYTES
+        ? decoder.decode(file.bytes)
+        : null
+    }));
+    const buffer = archiveBytes.buffer.slice(
+      archiveBytes.byteOffset,
+      archiveBytes.byteOffset + archiveBytes.byteLength
+    );
+
+    onProgress?.("Inspecting framework and routes...");
+    return archiveResult(buffer, files, {
+      provider: "github",
+      repository: repository.fullName,
+      branch: selectedBranch,
+      revision: commit.sha,
+      rootDirectory
+    }, `${repository.repository}-${commit.sha.slice(0, 8)}.zip`);
+  },
+
+  async importCPanelArchive({ file, rootDirectory = "", onProgress }) {
+    if (!file) throw new Error("Choose the source ZIP downloaded from cPanel.");
+    if (!/\.zip$/i.test(file.name)) {
+      throw new Error("The cPanel source backup must be a .zip file.");
+    }
+    onProgress?.("Reading cPanel source backup...");
+    const buffer = await file.arrayBuffer();
+    onProgress?.("Inspecting framework and routes...");
+    const revision = await sha256(buffer);
+    const files = decodeArchive(buffer, rootDirectory);
+    return archiveResult(buffer, files, {
+      provider: "cpanel",
+      repository: file.name,
+      branch: null,
+      revision,
+      rootDirectory
+    }, file.name);
+  },
+
+  async persistCodebase(websiteId, imported, onProgress) {
+    const timestamp = Date.now();
+    const safeFilename = imported.filename.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const artifactPath = `source-code/${websiteId}/imports/${timestamp}_${safeFilename}`;
+    onProgress?.("Uploading the source artifact...");
+    await uploadBytes(
+      storageRef(storage, artifactPath),
+      imported.archive,
+      { contentType: "application/zip" }
+    );
+
+    onProgress?.("Saving the codebase manifest...");
+    const codebase = {
+      ...imported.manifest,
+      artifactPath,
+      active: true,
+      importedAt: serverTimestamp()
+    };
+    await set(databaseRef(database, `codebases/${websiteId}`), codebase);
+    return { ...codebase, importedAt: timestamp };
+  },
+
+  async downloadCodebase(artifactPath, filename = "website-source.zip") {
+    if (!artifactPath) throw new Error("The source artifact path is missing.");
+    const blob = await getBlob(storageRef(storage, artifactPath));
+    const href = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = href;
+    anchor.download = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(href);
+  }
+};
+
+export default sourceImportService;
