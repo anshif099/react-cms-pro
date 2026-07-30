@@ -29,8 +29,7 @@ const SKIPPED_SEGMENTS = new Set([
   "coverage",
   "dist",
   "node_modules",
-  "out",
-  "vendor"
+  "out"
 ]);
 
 function extension(path) {
@@ -153,6 +152,17 @@ function componentTitle(component) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase()) || null;
 }
 
+function sourceRouteLabel(content, path) {
+  const objects = content.match(/\{[^{}]{0,500}\}/g) || [];
+  for (const object of objects) {
+    const objectPath = object.match(/\bpath\s*:\s*["']([^"']+)["']/)?.[1];
+    if (normalizeRoutePath(objectPath) !== path) continue;
+    const label = object.match(/\blabel\s*:\s*["']([^"']+)["']/)?.[1];
+    if (label) return label.trim();
+  }
+  return null;
+}
+
 function normalizeRoutePath(path) {
   const raw = String(path || "").trim();
   if (!raw || raw === "*" || raw.startsWith("http")) return null;
@@ -256,7 +266,9 @@ export function discoverSourceRoutes(files, sourceMetadata = {}) {
       path: normalized,
       route: normalized,
       slug: normalized === "/" ? "home" : normalized.replace(/^\//, ""),
-      title: componentTitle(component) || routeTitle(normalized),
+      title: sourceRouteLabel(file.content || "", normalized)
+        || componentTitle(component)
+        || routeTitle(normalized),
       layout: "default",
       source: "imported",
       isImported: true,
@@ -281,6 +293,16 @@ export function discoverSourceRoutes(files, sourceMetadata = {}) {
         add(match[1] || match[2], file, sourceComponentNear(file.content, match.index));
       }
     });
+
+    const routeMapPattern = /["'](\/[^"']*)["']\s*:\s*["']([^"']+)["']/g;
+    let routeMapMatch;
+    while ((routeMapMatch = routeMapPattern.exec(file.content))) {
+      const stateKey = routeMapMatch[2].replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const componentMatch = file.content.match(
+        new RegExp(`currentPage\\s*===\\s*["']${stateKey}["'][\\s\\S]{0,160}?<([A-Z][A-Za-z0-9_]*)`)
+      );
+      add(routeMapMatch[1], file, componentMatch?.[1] || null);
+    }
   });
 
   if (!discovered.length) {
@@ -320,6 +342,9 @@ export function buildSourceManifest(files, metadata = {}) {
     branch: metadata.branch || null,
     revision: metadata.revision || null,
     rootDirectory: metadata.rootDirectory || "",
+    authentication: metadata.authentication || null,
+    tokenIgnored: !!metadata.tokenIgnored,
+    rootIgnored: !!metadata.rootIgnored,
     framework,
     fileCount: files.length,
     sourceFileCount: textFiles.length,

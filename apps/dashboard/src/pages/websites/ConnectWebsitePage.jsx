@@ -6,8 +6,6 @@ import * as zod from "zod";
 import {
   Archive,
   ArrowLeft,
-  Eye,
-  EyeOff,
   FolderGit2,
   Info,
   UploadCloud
@@ -50,7 +48,6 @@ export function ConnectWebsitePage() {
   const navigate = useNavigate();
   const toast = useToast();
   const [archiveFile, setArchiveFile] = useState(null);
-  const [showToken, setShowToken] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [progress, setProgress] = useState("");
 
@@ -109,6 +106,12 @@ export function ConnectWebsitePage() {
           rootDirectory: data.rootDirectory,
           onProgress: setProgress
         });
+      if (imported.manifest.tokenIgnored) {
+        toast.info("The invalid token was ignored because this repository is public.");
+      }
+      if (imported.manifest.rootIgnored) {
+        toast.info("Project Root matched the branch name, so the repository root was used.");
+      }
 
       setProgress("Creating website record...");
       createdWebsite = await createWebsite({
@@ -125,7 +128,8 @@ export function ConnectWebsitePage() {
           repository: imported.manifest.repository,
           branch: imported.manifest.branch,
           rootDirectory: imported.manifest.rootDirectory,
-          sourceRevision: imported.manifest.revision
+          sourceRevision: imported.manifest.revision,
+          authentication: imported.manifest.authentication
         }
       });
 
@@ -156,6 +160,7 @@ export function ConnectWebsitePage() {
           branch: imported.manifest.branch,
           rootDirectory: imported.manifest.rootDirectory,
           sourceRevision: imported.manifest.revision,
+          authentication: imported.manifest.authentication,
           artifactPath: codebase.artifactPath,
           fileCount: imported.manifest.fileCount,
           routeCount: imported.routes.length,
@@ -292,31 +297,24 @@ export function ConnectWebsitePage() {
                   <Input
                     label="Branch"
                     placeholder="Default branch"
+                    helperText="For Triosis use main."
                     {...register("branch")}
                   />
                   <Input
                     label="Project Root"
                     placeholder="Empty for repository root"
+                    helperText="Leave empty unless package.json is inside a subfolder. Do not enter the branch here."
                     {...register("rootDirectory")}
                   />
                 </div>
-                <div className="relative">
-                  <Input
-                    type={showToken ? "text" : "password"}
-                    label="Fine-grained Token (private repo only)"
-                    placeholder="Leave empty for a public repository"
-                    autoComplete="off"
-                    {...register("githubToken")}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowToken((current) => !current)}
-                    className="absolute right-3 top-8 text-admin-secondary hover:text-admin-text cursor-pointer"
-                    aria-label={showToken ? "Hide GitHub token" : "Show GitHub token"}
-                  >
-                    {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
+                <Input
+                  type="password"
+                  label="Fine-grained Token (private repo only)"
+                  placeholder="Leave empty for a public repository"
+                  helperText="Triosis is public, so leave this field empty."
+                  autoComplete="off"
+                  {...register("githubToken")}
+                />
               </div>
             </Card>
           ) : (

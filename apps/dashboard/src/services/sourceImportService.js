@@ -20,8 +20,7 @@ const SKIPPED_SOURCE_DIRECTORIES = new Set([
   "coverage",
   "dist",
   "node_modules",
-  "out",
-  "vendor"
+  "out"
 ]);
 
 function parseGitHubRepository(value) {
@@ -106,7 +105,9 @@ async function fetchGitHubJson(url, token) {
   const response = await fetch(url, { headers: githubHeaders(token) });
   if (!response.ok) {
     if (response.status === 401) {
-      throw new Error("GitHub rejected the token. Check its repository access.");
+      const error = new Error("GitHub rejected the token. Check its repository access.");
+      error.code = "github/unauthorized";
+      throw error;
     }
     if (response.status === 403) {
       throw new Error("GitHub rate limit or repository permission blocked the import.");
@@ -259,28 +260,54 @@ export const sourceImportService = {
   }) {
     const repository = parseGitHubRepository(repositoryUrl);
     onProgress?.("Checking GitHub repository...");
-    const repo = await fetchGitHubJson(
-      `https://api.github.com/repos/${repository.owner}/${repository.repository}`,
-      token
-    );
+    const repositoryApiUrl = `https://api.github.com/repos/${repository.owner}/${repository.repository}`;
+    let effectiveToken = token.trim();
+    let tokenIgnored = false;
+    let repo;
+    try {
+      repo = await fetchGitHubJson(repositoryApiUrl, effectiveToken);
+    } catch (error) {
+      if (error.code !== "github/unauthorized" || !effectiveToken) throw error;
+      onProgress?.("Token rejected; checking whether the repository is public...");
+      try {
+        repo = await fetchGitHubJson(repositoryApiUrl, "");
+        effectiveToken = "";
+        tokenIgnored = true;
+      } catch {
+        throw error;
+      }
+    }
     const selectedBranch = branch?.trim() || repo.default_branch;
     const commit = await fetchGitHubJson(
       `https://api.github.com/repos/${repository.owner}/${repository.repository}/commits/${encodeURIComponent(selectedBranch)}`,
-      token
+      effectiveToken
     );
     const tree = await fetchGitHubJson(
       `https://api.github.com/repos/${repository.owner}/${repository.repository}/git/trees/${commit.sha}?recursive=1`,
-      token
+      effectiveToken
     );
     if (tree.truncated) {
       throw new Error("GitHub truncated this large repository tree. Choose a smaller project root.");
     }
 
-    const treeFiles = githubTreeFiles(tree.tree || [], rootDirectory);
+    let selectedRoot = rootDirectory?.trim() || "";
+    let rootIgnored = false;
+    if (selectedRoot === selectedBranch) {
+      const branchNamedFolderExists = (tree.tree || []).some((entry) => (
+        entry.path === selectedRoot || entry.path.startsWith(`${selectedRoot}/`)
+      ));
+      if (!branchNamedFolderExists) {
+        selectedRoot = "";
+        rootIgnored = true;
+        onProgress?.("Project Root matched the branch name; using the repository root...");
+      }
+    }
+
+    const treeFiles = githubTreeFiles(tree.tree || [], selectedRoot);
     if (!treeFiles.length) {
       throw new Error("No files were found at the selected GitHub project root.");
     }
-    if (token && treeFiles.length > 4500) {
+    if (effectiveToken && treeFiles.length > 4500) {
       throw new Error("This private repository exceeds the 4,500-file authenticated import limit.");
     }
     onProgress?.(`Downloading source files (0/${treeFiles.length})...`);
@@ -288,7 +315,7 @@ export const sourceImportService = {
       treeFiles,
       repository,
       commit.sha,
-      token,
+      effectiveToken,
       onProgress
     );
 
@@ -316,7 +343,10 @@ export const sourceImportService = {
       repository: repository.fullName,
       branch: selectedBranch,
       revision: commit.sha,
-      rootDirectory
+      rootDirectory: selectedRoot,
+      authentication: effectiveToken ? "token" : "anonymous",
+      tokenIgnored,
+      rootIgnored
     }, `${repository.repository}-${commit.sha.slice(0, 8)}.zip`);
   },
 

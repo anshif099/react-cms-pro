@@ -54,6 +54,35 @@ describe("source import discovery", () => {
     expect(manifest.routes.map((route) => route.path)).toEqual(["/", "/contact"]);
   });
 
+  it("discovers custom path maps and resolves their rendered page components", () => {
+    const routes = discoverSourceRoutes([
+      {
+        path: "src/App.jsx",
+        content: `
+          import ContactPage from './pages/ContactPage.jsx';
+          const navigation = [{ label: 'Contact Us', path: '/contact' }];
+          const pathToPage = { '/': 'home', '/contact': 'contact', '/career': 'career' };
+          {currentPage === 'contact' && <ContactPage />}
+        `
+      },
+      {
+        path: "src/pages/ContactPage.jsx",
+        content: "export default function ContactPage() {}"
+      }
+    ], { provider: "github" });
+
+    expect(routes).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: "/", title: "Home" }),
+      expect.objectContaining({
+        path: "/contact",
+        title: "Contact Us",
+        sourceComponent: "ContactPage",
+        sourceFile: "src/pages/ContactPage.jsx"
+      }),
+      expect.objectContaining({ path: "/career", title: "Career" })
+    ]));
+  });
+
   it("removes a generated archive root and ignored dependency folders", () => {
     const files = normalizeSourceFiles([
       { path: "owner-project-abc/src/App.jsx", size: 10 },
