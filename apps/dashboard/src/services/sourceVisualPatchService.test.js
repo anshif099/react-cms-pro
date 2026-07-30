@@ -65,7 +65,7 @@ describe("connected visual routes", () => {
       { route: "/our-team", slug: "our-team" },
       "preview"
     )).toBe(
-      "/api/live-preview?target=https%3A%2F%2Ftriosis.vercel.app%2F&route=%2Four-team&mode=preview"
+      "/our-team?__rcms_canvas=1&target=https%3A%2F%2Ftriosis.vercel.app%2F&mode=preview&rcms_preview=1"
     );
   });
 
@@ -75,7 +75,7 @@ describe("connected visual routes", () => {
       { route: "/contact" },
       "edit"
     )).toBe(
-      "/api/live-preview?target=https%3A%2F%2Fexample.com%2Fsite&route=%2Fcontact&mode=edit"
+      "/contact?__rcms_canvas=1&target=https%3A%2F%2Fexample.com%2Fsite&mode=edit&rcms_edit=1"
     );
     expect(createRuntimeMessage("rcms/v1/enter-edit-mode", {}).websiteId).toBe("");
   });

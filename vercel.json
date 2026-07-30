@@ -10,6 +10,17 @@
     }
   },
   "rewrites": [
+    {
+      "source": "/:previewPath*",
+      "has": [
+        {
+          "type": "query",
+          "key": "__rcms_canvas",
+          "value": "1"
+        }
+      ],
+      "destination": "/api/live-preview?route=/:previewPath*"
+    },
     { "source": "/:path*", "destination": "/index.html" }
   ]
 }
