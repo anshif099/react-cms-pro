@@ -1,18 +1,16 @@
 import React, { useState } from "react";
-import { X, ZoomIn, ZoomOut, RotateCw, Maximize2, Download } from "lucide-react";
+import { X, ZoomIn, ZoomOut, RotateCw, Download } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export function MediaPreviewModal({ isOpen, onClose, file }) {
-  if (!file) return null;
-
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
+
+  if (!file) return null;
 
   const isImage = file.type.startsWith("image/");
   const isVideo = file.type.startsWith("video/");
   const isPdf = file.type === "application/pdf" || file.name.endsWith(".pdf");
-  const isSvg = file.type === "image/svg+xml" || file.name.endsWith(".svg");
-
   const handleZoomIn = (e) => {
     e.stopPropagation();
     setZoom(prev => Math.min(prev + 0.25, 3));

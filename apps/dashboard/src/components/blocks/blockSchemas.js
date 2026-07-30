@@ -83,6 +83,21 @@ export const BLOCK_SCHEMAS = [
       { key: "alt", label: "Alternative Alt Text", type: "text", localized: true },
       { key: "caption", label: "Image Caption Text", type: "text", localized: true },
       { key: "width", label: "Custom Width (e.g. 100%, 300px)", type: "text", localized: false },
+      { key: "height", label: "Custom Height (e.g. auto, 420px)", type: "text", localized: false },
+      {
+        key: "objectFit",
+        label: "Crop Mode",
+        type: "select",
+        localized: false,
+        defaultValue: "cover",
+        options: [
+          { value: "cover", label: "Crop to Fill" },
+          { value: "contain", label: "Fit Entire Image" },
+          { value: "fill", label: "Stretch to Fill" }
+        ]
+      },
+      { key: "objectPosition", label: "Crop Focus (e.g. 50% 50%)", type: "text", localized: false, defaultValue: "50% 50%" },
+      { key: "radius", label: "Corner Radius", type: "number", localized: false, defaultValue: 0 },
       { key: "linkUrl", label: "Click Link Redirect URL", type: "url", localized: false }
     ]
   },
@@ -382,7 +397,20 @@ export const BLOCK_SCHEMAS = [
         ]
       },
       { key: "color", label: "Button Color", type: "color", localized: false, defaultValue: "#2563eb" },
-      { key: "radius", label: "Corner Radius", type: "number", localized: false, defaultValue: 10 }
+      { key: "radius", label: "Corner Radius", type: "number", localized: false, defaultValue: 10 },
+      {
+        key: "shadow",
+        label: "Shadow",
+        type: "select",
+        localized: false,
+        defaultValue: "medium",
+        options: [
+          { value: "none", label: "None" },
+          { value: "small", label: "Small" },
+          { value: "medium", label: "Medium" },
+          { value: "large", label: "Large" }
+        ]
+      }
     ]
   },
   {
@@ -546,6 +574,149 @@ export const BLOCK_SCHEMAS = [
     fields: [
       { key: "componentId", label: "Registered Component ID", type: "text", localized: false },
       { key: "propsJson", label: "Component Props (JSON)", type: "textarea", localized: false, defaultValue: "{}" }
+    ]
+  },
+  {
+    type: "section",
+    label: "Section",
+    icon: "SquareDashed",
+    category: "layout",
+    description: "Full-width nestable page section.",
+    fields: [
+      { key: "name", label: "Section Name", type: "text", localized: false, defaultValue: "Section" }
+    ]
+  },
+  {
+    type: "grid",
+    label: "Grid",
+    icon: "Grid3X3",
+    category: "layout",
+    description: "Nestable responsive grid layout.",
+    fields: [
+      { key: "columns", label: "Columns", type: "number", localized: false, defaultValue: 3 },
+      { key: "gap", label: "Gap", type: "number", localized: false, defaultValue: 24 }
+    ]
+  },
+  {
+    type: "flex",
+    label: "Flex Layout",
+    icon: "PanelTopOpen",
+    category: "layout",
+    description: "Nestable flexible row or column layout.",
+    fields: [
+      {
+        key: "direction",
+        label: "Direction",
+        type: "select",
+        localized: false,
+        defaultValue: "row",
+        options: [
+          { value: "row", label: "Row" },
+          { value: "column", label: "Column" }
+        ]
+      },
+      { key: "gap", label: "Gap", type: "number", localized: false, defaultValue: 20 }
+    ]
+  },
+  {
+    type: "input",
+    label: "Input",
+    icon: "TextCursorInput",
+    category: "social",
+    description: "Single-line form input element.",
+    fields: [
+      { key: "label", label: "Field Label", type: "text", localized: true, defaultValue: "Name" },
+      { key: "placeholder", label: "Placeholder", type: "text", localized: true, defaultValue: "Enter a value" },
+      { key: "required", label: "Required", type: "boolean", localized: false }
+    ]
+  },
+  {
+    type: "textarea-field",
+    label: "Textarea",
+    icon: "TextSelect",
+    category: "social",
+    description: "Multi-line form input element.",
+    fields: [
+      { key: "label", label: "Field Label", type: "text", localized: true, defaultValue: "Message" },
+      { key: "placeholder", label: "Placeholder", type: "text", localized: true, defaultValue: "Enter your message" },
+      { key: "rows", label: "Rows", type: "number", localized: false, defaultValue: 5 }
+    ]
+  },
+  {
+    type: "checkbox",
+    label: "Checkbox",
+    icon: "SquareCheckBig",
+    category: "social",
+    description: "Checkbox with editable label.",
+    fields: [
+      { key: "label", label: "Checkbox Label", type: "text", localized: true, defaultValue: "I agree" },
+      { key: "checked", label: "Checked by Default", type: "boolean", localized: false }
+    ]
+  },
+  {
+    type: "select-field",
+    label: "Select",
+    icon: "ListFilter",
+    category: "social",
+    description: "Dropdown field with configurable options.",
+    fields: [
+      { key: "label", label: "Field Label", type: "text", localized: true, defaultValue: "Choose an option" },
+      { key: "options", label: "Options (comma separated)", type: "textarea", localized: true, defaultValue: "First option, Second option" }
+    ]
+  },
+  {
+    type: "slider",
+    label: "Slider",
+    icon: "GalleryHorizontal",
+    category: "content",
+    description: "Responsive media or content slider.",
+    fields: [
+      {
+        key: "slides",
+        label: "Slides",
+        type: "array",
+        localized: true,
+        fields: [
+          { key: "title", label: "Title", type: "text" },
+          { key: "description", label: "Description", type: "textarea" },
+          { key: "image", label: "Image", type: "image" }
+        ]
+      }
+    ]
+  },
+  {
+    type: "embed",
+    label: "Embed",
+    icon: "PanelsTopLeft",
+    category: "actions",
+    description: "Safe external media or widget embed slot.",
+    fields: [
+      { key: "url", label: "Embed URL", type: "url", localized: false },
+      { key: "title", label: "Accessible Title", type: "text", localized: true, defaultValue: "Embedded content" },
+      { key: "height", label: "Height", type: "number", localized: false, defaultValue: 420 }
+    ]
+  },
+  {
+    type: "code",
+    label: "Code",
+    icon: "CodeXml",
+    category: "actions",
+    description: "Formatted code or developer snippet.",
+    fields: [
+      { key: "language", label: "Language", type: "text", localized: false, defaultValue: "javascript" },
+      { key: "code", label: "Code", type: "textarea", localized: false, defaultValue: "// Add code" }
+    ]
+  },
+  {
+    type: "dynamic",
+    label: "Dynamic Value",
+    icon: "DatabaseZap",
+    category: "actions",
+    description: "Data-bound runtime value.",
+    fields: [
+      { key: "source", label: "Data Source", type: "text", localized: false },
+      { key: "path", label: "Value Path", type: "text", localized: false },
+      { key: "fallback", label: "Fallback Text", type: "text", localized: true, defaultValue: "Dynamic content" }
     ]
   }
 ];

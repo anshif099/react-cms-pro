@@ -1,0 +1,17 @@
+{
+  "name": "@anshif.rainhopes/reactcms-history",
+  "version": "2.0.0",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch"
+  },
+  "devDependencies": {
+    "tsup": "^8.2.4",
+    "typescript": "^5.5.4"
+  }
+}

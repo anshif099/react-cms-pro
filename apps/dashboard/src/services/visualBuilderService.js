@@ -7,10 +7,13 @@ import {
 } from "@anshif.rainhopes/shared";
 import { database } from "../lib/firebase";
 import BLOCK_SCHEMAS from "../components/blocks/blockSchemas";
+import {
+  blockToComponentNode,
+  isPageComponentTree
+} from "@anshif.rainhopes/reactcms-renderer";
 
 export const BUILDER_BLOCKS_REGION = "__rcms_builder_blocks__";
-
-const RCMS_MESSAGE_VERSION = "v1";
+export const NATIVE_PAGE_TREE_FIELD = "tree";
 
 const BLOCK_STARTER_VALUES = {
   hero: {
@@ -171,27 +174,8 @@ const BLOCK_STARTER_VALUES = {
   spacer: { global: { height: 64 } },
   divider: { global: { style: "solid", color: "#cbd5e1", margin: 24 } },
   html: { global: { code: "<div style=\"padding:24px;text-align:center\">Custom HTML content</div>" } },
-  footer: { localized: { copyright: "© Your Company" } }
+  footer: { localized: { copyright: "(c) Your Company" } }
 };
-
-function createMessage(type, websiteId, payload = {}) {
-  return {
-    rcms: true,
-    version: RCMS_MESSAGE_VERSION,
-    type,
-    websiteId,
-    payload,
-    timestamp: Date.now()
-  };
-}
-
-function getTargetOrigin(targetUrl) {
-  try {
-    return new URL(targetUrl).origin;
-  } catch {
-    return "*";
-  }
-}
 
 function decodeRegions(raw) {
   if (!raw || typeof raw !== "object") return {};
@@ -207,103 +191,81 @@ function decodeRegions(raw) {
   );
 }
 
-export const visualBuilderService = {
-  normalizeDomain(domain) {
-    if (!domain) return "";
-    const trimmed = domain.trim();
-    if (/^https?:\/\//i.test(trimmed)) return trimmed.replace(/\/+$/, "");
-    return `https://${trimmed.replace(/\/+$/, "")}`;
-  },
+function decodePageDocument(raw) {
+  if (!raw || typeof raw !== "object") {
+    return { tree: null, regions: {}, blocks: [], metadata: {} };
+  }
 
+  const decoded = decodeFirebaseObject(raw);
+  const regions = decodeRegions(decoded);
+  const blocks = Array.isArray(regions[BUILDER_BLOCKS_REGION])
+    ? regions[BUILDER_BLOCKS_REGION]
+    : [];
+  delete regions[BUILDER_BLOCKS_REGION];
+
+  return {
+    tree: isPageComponentTree(decoded[NATIVE_PAGE_TREE_FIELD])
+      ? decoded[NATIVE_PAGE_TREE_FIELD]
+      : null,
+    regions,
+    blocks,
+    metadata: {
+      id: decoded.id,
+      title: decoded.title,
+      slug: decoded.slug,
+      updatedAt: decoded.updatedAt,
+      publishedAt: decoded.publishedAt
+    }
+  };
+}
+
+export const visualBuilderService = {
   resolvePageKey(page) {
     const route = page?.route || page?.slug || "home";
     const clean = String(route).split("?")[0].replace(/^\/+|\/+$/g, "");
     return clean || "home";
   },
 
-  buildCanvasUrl(domain, page, mode, locale = "en") {
-    const base = this.normalizeDomain(domain);
-    if (!base) return "";
-
-    const route = page?.route || (page?.slug === "home" ? "/" : `/${page?.slug || ""}`);
-    const url = new URL(route || "/", `${base}/`);
-    url.searchParams.set("page", this.resolvePageKey(page));
-    url.searchParams.set(mode === "edit" ? "rcms_edit" : "rcms_preview", "1");
-    url.searchParams.set("rcms_embed", "1");
-    url.searchParams.set("rcms_locale", locale);
-    return url.toString();
-  },
-
-  postToCanvas(iframe, targetUrl, websiteId, type, payload = {}) {
-    if (!iframe?.contentWindow) return;
-    const message = createMessage(type, websiteId, payload);
-    const targetOrigin = getTargetOrigin(targetUrl);
-
-    try {
-      iframe.contentWindow.postMessage(message, targetOrigin);
-    } catch (error) {
-      console.warn(`[VisualBuilder] Could not send ${type} to canvas:`, error);
-    }
-  },
-
-  setCanvasMode(iframe, targetUrl, websiteId, mode) {
-    this.postToCanvas(
-      iframe,
-      targetUrl,
-      websiteId,
-      mode === "edit" ? "rcms/v1/enter-edit-mode" : "rcms/v1/exit-edit-mode"
-    );
-  },
-
-  hydrateCanvas(iframe, targetUrl, websiteId, pageKey, regions) {
-    Object.entries(regions || {}).forEach(([regionId, value]) => {
-      this.postToCanvas(iframe, targetUrl, websiteId, "rcms/v1/field-update", {
-        pageId: pageKey,
-        regionId,
-        value
-      });
-    });
-  },
-
-  updateCanvasRegion(iframe, targetUrl, websiteId, pageKey, regionId, value) {
-    this.postToCanvas(iframe, targetUrl, websiteId, "rcms/v1/field-update", {
-      pageId: pageKey,
-      regionId,
-      value
-    });
-  },
-
-  updateCanvasBlocks(iframe, targetUrl, websiteId, pageKey, blocks) {
-    this.updateCanvasRegion(
-      iframe,
-      targetUrl,
-      websiteId,
-      pageKey,
-      BUILDER_BLOCKS_REGION,
-      blocks
-    );
-    this.postToCanvas(iframe, targetUrl, websiteId, "rcms/v1/builder-structure-update", {
-      pageId: pageKey,
-      blocks
-    });
-  },
-
-  async loadRegions(websiteId, pageKey) {
-    const [draftSnapshot, publishedSnapshot] = await Promise.all([
+  async loadNativePage(websiteId, pageKey) {
+    const [draftSnapshot, publishedSnapshot, registeredTreeSnapshot] = await Promise.all([
       get(ref(database, paths.contentDraft(websiteId, pageKey))),
-      get(ref(database, paths.contentPublished(websiteId, pageKey)))
+      get(ref(database, paths.contentPublished(websiteId, pageKey))),
+      get(ref(database, paths.registryPageTree(websiteId, pageKey)))
     ]);
 
     const published = publishedSnapshot.exists()
-      ? decodeRegions(publishedSnapshot.val())
-      : {};
-    const draft = draftSnapshot.exists()
-      ? decodeRegions(draftSnapshot.val())
-      : {};
+      ? decodePageDocument(publishedSnapshot.val())
+      : decodePageDocument(null);
+    const draftDocument = draftSnapshot.exists()
+      ? decodePageDocument(draftSnapshot.val())
+      : decodePageDocument(null);
+    const registeredTree = registeredTreeSnapshot.exists()
+      && isPageComponentTree(registeredTreeSnapshot.val())
+      ? registeredTreeSnapshot.val()
+      : null;
 
     return {
       published,
-      draft: { ...published, ...draft }
+      draft: {
+        ...draftDocument,
+        tree: draftDocument.tree || published.tree || registeredTree,
+        blocks: draftDocument.blocks.length ? draftDocument.blocks : published.blocks,
+        regions: { ...published.regions, ...draftDocument.regions }
+      }
+    };
+  },
+
+  async loadRegions(websiteId, pageKey) {
+    const { published, draft } = await this.loadNativePage(websiteId, pageKey);
+    return {
+      published: {
+        ...published.regions,
+        [BUILDER_BLOCKS_REGION]: published.blocks
+      },
+      draft: {
+        ...draft.regions,
+        [BUILDER_BLOCKS_REGION]: draft.blocks
+      }
     };
   },
 
@@ -324,7 +286,8 @@ export const visualBuilderService = {
     page,
     pageSettings,
     regions,
-    blocks
+    blocks,
+    tree
   }) {
     const title = pageSettings.title || page.title || "Untitled Page";
     const slug = pageSettings.slug ?? page.slug ?? "";
@@ -334,6 +297,7 @@ export const visualBuilderService = {
       id: pageKey,
       title,
       slug,
+      [NATIVE_PAGE_TREE_FIELD]: tree,
       regions: {
         ...regions,
         [BUILDER_BLOCKS_REGION]: blocks
@@ -351,7 +315,8 @@ export const visualBuilderService = {
       [`locales/${locale}/title`]: title,
       [`locales/${locale}/slug`]: slug,
       [`locales/${locale}/seo`]: seo,
-      [`locales/${locale}/blocks`]: blocks
+      [`locales/${locale}/blocks`]: blocks,
+      [`locales/${locale}/componentTree`]: tree
     };
 
     if (locale === "en") {
@@ -398,6 +363,10 @@ export const visualBuilderService = {
     const draftSnapshot = await get(draftRef);
     if (!draftSnapshot.exists()) {
       throw new Error("Save a draft before publishing.");
+    }
+    const decodedDraft = decodeFirebaseObject(draftSnapshot.val());
+    if (!isPageComponentTree(decodedDraft[NATIVE_PAGE_TREE_FIELD])) {
+      throw new Error("The native component tree is missing or invalid.");
     }
 
     const payload = {
@@ -463,6 +432,11 @@ export function createVisualBlock(type, locale = "en") {
   }
 
   return block;
+}
+
+export function createVisualNode(type, locale = "en") {
+  const block = createVisualBlock(type, locale);
+  return block ? blockToComponentNode(block) : null;
 }
 
 export default visualBuilderService;

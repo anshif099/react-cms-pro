@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Edit3, Eye, Search, FileText, Trash2, Globe, RefreshCw } from "lucide-react";
+import { Edit3, Eye, Search, FileText, Trash2, Globe, Plus, RefreshCw } from "lucide-react";
 import { usePages } from "../../hooks/usePages";
 import { useLocale } from "../../hooks/useLocale";
 import { useWebsites } from "../../hooks/useWebsites";
@@ -124,6 +124,14 @@ export function PagesListPage() {
           </p>
         </div>
         <div className="flex gap-3">
+          <Button
+            onClick={() => navigate(`/content/${websiteId}/pages/new`)}
+            variant="primary"
+            className="gap-2 font-bold py-2.5 cursor-pointer text-xs"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            New Page
+          </Button>
           <Button
             onClick={handleSync}
             variant="outline"

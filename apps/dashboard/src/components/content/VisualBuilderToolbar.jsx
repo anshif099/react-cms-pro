@@ -8,6 +8,7 @@ import {
   Monitor,
   PanelTop,
   Redo2,
+  Ruler,
   Save,
   Settings,
   Smartphone,
@@ -21,7 +22,8 @@ const DEVICES = [
   { id: "desktop", label: "Desktop", icon: Monitor },
   { id: "laptop", label: "Laptop", icon: Laptop },
   { id: "tablet", label: "Tablet", icon: Tablet },
-  { id: "mobile", label: "Mobile", icon: Smartphone }
+  { id: "mobile", label: "Mobile", icon: Smartphone },
+  { id: "custom", label: "Custom", icon: Ruler }
 ];
 
 function SaveState({ status }) {

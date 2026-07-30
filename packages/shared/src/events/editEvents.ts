@@ -23,17 +23,3 @@ export interface RegionSelectedPayload {
 export interface OpenInspectorPayload {
   regionId: string;
 }
-
-export interface BuilderStructureUpdatePayload {
-  pageId: string;
-  blocks: unknown[];
-}
-
-export interface BuilderInsertRequestPayload {
-  index: number;
-}
-
-export interface BuilderCommandPayload {
-  command: 'duplicate' | 'delete' | 'move-up' | 'move-down';
-  blockId: string;
-}

@@ -9,12 +9,8 @@ import Input from "../../components/ui/Input";
 import ImagePicker from "../../components/ui/ImagePicker";
 import ColorPicker from "../../components/ui/ColorPicker";
 
-import themePreviewService from "../../services/themePreviewService";
-import { useWebsites } from "../../hooks/useWebsites";
-
 export function ThemeManagerPage() {
   const { websiteId } = useParams();
-  const { selectedWebsite } = useWebsites();
   const toast = useToast();
   
   const [loading, setLoading] = useState(false);
@@ -49,16 +45,7 @@ export function ThemeManagerPage() {
     setSaving(true);
     try {
       await themeService.saveTheme(websiteId, themeData);
-
-      // Broadcast live theme update to preview frame if connected
-      if (selectedWebsite?.domain) {
-        const iframes = document.querySelectorAll("iframe");
-        iframes.forEach((frame) => {
-          themePreviewService.sendThemeUpdate(frame, websiteId, themeData);
-        });
-      }
-
-      toast.success("Branding and theme tokens saved & pushed to client SDK successfully!");
+      toast.success("Theme tokens saved. Native canvases and connected runtimes will receive the update.");
     } catch (err) {
       console.error(err);
       toast.error("Failed to save theme configurations.");

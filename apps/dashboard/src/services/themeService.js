@@ -1,5 +1,5 @@
 import { database } from "../lib/firebase";
-import { ref, get, set } from "firebase/database";
+import { ref, get, onValue, set } from "firebase/database";
 import { paths } from "@anshif.rainhopes/shared";
 import activityLogService from "./activityLogService";
 
@@ -59,6 +59,23 @@ export const themeService = {
       websiteId
     );
     return true;
+  },
+
+  subscribeTheme(websiteId, callback) {
+    const themeRef = ref(database, paths.contentTheme(websiteId));
+    return onValue(themeRef, (snapshot) => {
+      if (!snapshot.exists()) {
+        callback(DEFAULT_THEME);
+        return;
+      }
+      const data = snapshot.val();
+      callback({
+        branding: { ...DEFAULT_THEME.branding, ...data.branding },
+        colors: { ...DEFAULT_THEME.colors, ...data.colors },
+        typography: { ...DEFAULT_THEME.typography, ...data.typography },
+        buttons: { ...DEFAULT_THEME.buttons, ...data.buttons }
+      });
+    });
   }
 };
 

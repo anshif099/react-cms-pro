@@ -3,7 +3,7 @@ import { Routes, Route } from 'react-router-dom';
 import { ref, onValue } from 'firebase/database';
 import { getFirebaseDatabase } from '@anshif.rainhopes/reactcms-sdk';
 import { paths, RouteEntry } from '@anshif.rainhopes/shared';
-import { DynamicPageRenderer } from './routing/dynamicPageRenderer';
+import { BuilderSections } from './BuilderSections';
 
 export interface RouteRegistryProps {
   websiteId: string;
@@ -42,7 +42,13 @@ export function RouteRegistry({ websiteId, apiKey }: RouteRegistryProps) {
         <Route
           key={route.id}
           path={route.path}
-          element={<DynamicPageRenderer slug={route.path} />}
+          element={(
+            <BuilderSections
+              websiteId={websiteId}
+              apiKey={apiKey}
+              pageId={route.path}
+            />
+          )}
         />
       ))}
     </Routes>

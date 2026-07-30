@@ -8,6 +8,8 @@ export const paths = {
   registryTheme:      (id: string) => `registry/${id}/theme`,
   registryModels:     (id: string) => `registry/${id}/contentModels`,
   registryComponents: (id: string) => `registry/${id}/components`,
+  registryPageTrees:  (id: string) => `registry/${id}/pageTrees`,
+  registryPageTree:   (id: string, pageId: string) => `registry/${id}/pageTrees/${pageId}`,
   registryRegions:    (id: string, pageId: string) => `registry/${id}/editableRegions/${pageId}`,
   registryPlugins:    (id: string) => `registry/${id}/plugins`,
 

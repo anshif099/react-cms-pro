@@ -1,0 +1,25 @@
+{
+  "name": "@anshif.rainhopes/reactcms-selection",
+  "version": "2.0.0",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch"
+  },
+  "dependencies": {
+    "@anshif.rainhopes/reactcms-renderer": "*"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.17",
+    "react": "^19.2.7",
+    "tsup": "^8.2.4",
+    "typescript": "^5.5.4"
+  }
+}

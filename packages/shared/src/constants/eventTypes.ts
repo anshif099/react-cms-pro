@@ -10,9 +10,6 @@ export const EVENT_TYPES = {
   'heartbeat': 'rcms/v1/heartbeat',
   'runtime-ready': 'rcms/v1/runtime-ready',
   'regions-registered': 'rcms/v1/regions-registered',
-  'builder-structure-update': 'rcms/v1/builder-structure-update',
-  'builder-insert-request': 'rcms/v1/builder-insert-request',
-  'builder-command': 'rcms/v1/builder-command',
   'select-region': 'rcms/v1/select-region'
 } as const;
 

@@ -13,9 +13,11 @@ export const sdkService = {
     return `import { RuntimeProvider, CMSLayout, CMSNavigation } from '@anshif.rainhopes/reactcms-runtime';
 import { RouteRegistry } from '@anshif.rainhopes/reactcms-runtime';
 import { routes } from './routes'; // Your React Router routes array
+// import { pageTrees } from './reactcms.page-trees'; // Optional native-canvas manifests
 
 function App() {
   return (
+    // Add pageTrees={pageTrees} when this app exposes native-canvas manifests.
     <RuntimeProvider
       websiteId="${website.id}"
       apiKey="${website.apiKey}"
