@@ -2,14 +2,15 @@ import React, { useState, useEffect } from "react";
 import Modal from "../ui/Modal";
 import MediaUploadZone from "./MediaUploadZone";
 import { useMedia } from "../../hooks/useMedia";
-import { Search, File, Image, Film, FileText, Check } from "lucide-react";
+import { Search, Image, Film, FileText, Check, Folder, Clock, Upload } from "lucide-react";
 import Button from "../ui/Button";
 
 export function MediaLibraryModal({ isOpen, onClose, onSelect, activeFolder = "root" }) {
-  const { files, fetchMedia, mediaLoading } = useMedia();
-  const [activeTab, setActiveTab] = useState("select");
+  const { files, folders, fetchMedia, mediaLoading } = useMedia();
+  const [activeTab, setActiveTab] = useState("library");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedFolder, setSelectedFolder] = useState(activeFolder);
 
   // Load media on open
   useEffect(() => {
@@ -24,6 +25,13 @@ export function MediaLibraryModal({ isOpen, onClose, onSelect, activeFolder = "r
       }
     }
   }, [isOpen, fetchMedia, files.length]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setActiveTab("library");
+    setSelectedFile(null);
+    setSelectedFolder(activeFolder);
+  }, [activeFolder, isOpen]);
 
   const handleSelect = (file) => {
     setSelectedFile(file);
@@ -51,46 +59,75 @@ export function MediaLibraryModal({ isOpen, onClose, onSelect, activeFolder = "r
 
   const websiteId = window.location.pathname.match(/\/content\/([^/]+)/)?.[1] || null;
 
-  const filteredFiles = files.filter(f => 
+  const matchingFiles = files.filter(f =>
     f.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (f.alt && f.alt.toLowerCase().includes(searchTerm.toLowerCase()))
   );
+  const filteredFiles = activeTab === "recent"
+    ? [...matchingFiles]
+      .sort((a, b) => Number(b.updatedAt || b.createdAt || 0) - Number(a.updatedAt || a.createdAt || 0))
+      .slice(0, 24)
+    : activeTab === "folders"
+      ? matchingFiles.filter((file) => (file.folder || "root") === selectedFolder)
+      : matchingFiles;
+
+  const tabs = [
+    { id: "library", label: "Library", icon: Image },
+    { id: "recent", label: "Recent", icon: Clock },
+    { id: "folders", label: "Folders", icon: Folder },
+    { id: "upload", label: "Upload", icon: Upload }
+  ];
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="CMS Media Asset Picker"
+      title="Media Library"
       size="lg"
     >
       <div className="space-y-4 text-left">
         {/* Tabs Bar */}
         <div className="flex border-b border-admin-border dark:border-slate-800 pb-1 gap-4">
-          <button
-            onClick={() => setActiveTab("select")}
-            className={`pb-2 text-xs font-bold uppercase border-b-2 transition-all cursor-pointer ${
-              activeTab === "select"
-                ? "border-primary text-primary"
-                : "border-transparent text-slate-400 hover:text-white"
-            }`}
-          >
-            Select Existing Asset
-          </button>
-          <button
-            onClick={() => setActiveTab("upload")}
-            className={`pb-2 text-xs font-bold uppercase border-b-2 transition-all cursor-pointer ${
-              activeTab === "upload"
-                ? "border-primary text-primary"
-                : "border-transparent text-slate-400 hover:text-white"
-            }`}
-          >
-            Upload New File
-          </button>
+          {tabs.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setActiveTab(id)}
+              className={`pb-2 text-xs font-bold uppercase border-b-2 transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeTab === id
+                  ? "border-primary text-primary"
+                  : "border-transparent text-slate-400 hover:text-white"
+              }`}
+            >
+              <Icon className="w-3.5 h-3.5" />
+              {label}
+            </button>
+          ))}
         </div>
 
-        {/* Tab 1: Selection Grid */}
-        {activeTab === "select" && (
+        {/* Library, recent files, and folder browser */}
+        {activeTab !== "upload" && (
           <div className="space-y-4">
+            {activeTab === "folders" && (
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {folders.map((folder) => (
+                  <button
+                    key={folder}
+                    type="button"
+                    onClick={() => setSelectedFolder(folder)}
+                    className={`h-8 px-3 rounded-lg border text-[11px] font-semibold flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                      selectedFolder === folder
+                        ? "border-blue-500 bg-blue-500/10 text-blue-300"
+                        : "border-slate-800 bg-slate-950/30 text-slate-500 hover:text-white"
+                    }`}
+                  >
+                    <Folder className="w-3.5 h-3.5" />
+                    {folder === "root" ? "Root" : folder}
+                  </button>
+                ))}
+              </div>
+            )}
+
             {/* Search */}
             <div className="relative">
               <Search className="absolute left-3 top-2.5 w-4 h-4 text-admin-secondary pointer-events-none" />
@@ -188,7 +225,7 @@ export function MediaLibraryModal({ isOpen, onClose, onSelect, activeFolder = "r
             {websiteId ? (
               <MediaUploadZone
                 websiteId={websiteId}
-                folder={activeFolder}
+                folder={selectedFolder}
                 onUploadSuccess={handleUploadSuccess}
               />
             ) : (

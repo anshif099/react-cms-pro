@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { 
   ShieldAlert, 
   ArrowRight, 
@@ -226,6 +226,13 @@ export function SEODashboardPage() {
                         <p className="text-[11px] text-slate-400 mt-0.5 font-mono">Page: {issue.pageTitle}</p>
                       </div>
                     </div>
+                    <Link
+                      to={`/content/${websiteId}/pages/${issue.pageId}/editor?mode=edit`}
+                      className="text-xs font-bold text-primary hover:text-primary-hover flex items-center gap-1 self-start sm:self-auto shrink-0 hover:underline"
+                    >
+                      <span>Fix Visually</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </Link>
                   </Card>
                 ))}
               </div>

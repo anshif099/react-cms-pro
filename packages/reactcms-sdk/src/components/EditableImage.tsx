@@ -9,6 +9,7 @@ export interface ImageValue {
   alt?: string;
   width?: string;
   height?: string;
+  objectFit?: React.CSSProperties['objectFit'];
   offsetX?: number;
   offsetY?: number;
 }
@@ -53,6 +54,7 @@ export function EditableImage({
   if (isObj) {
     if (value.width) imgStyle.width = value.width;
     if (value.height) imgStyle.height = value.height;
+    if (value.objectFit) imgStyle.objectFit = value.objectFit;
   }
   const vw = typeof window !== 'undefined' ? window.innerWidth : 1280;
   const offX = isDragging ? dragOffset.x : ((isObj ? value.offsetX : 0) || dragOffset.x || 0);
@@ -209,7 +211,7 @@ export function EditableImage({
       }}
       data-rcms-region={regionId}
       data-rcms-type="image"
+      data-rcms-label={label}
     />
   );
 }
-

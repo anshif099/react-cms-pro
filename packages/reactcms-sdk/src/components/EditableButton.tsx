@@ -8,6 +8,10 @@ export interface ButtonValue {
   text: string;
   href?: string;
   variant?: string;
+  size?: 'sm' | 'md' | 'lg';
+  color?: string;
+  radius?: number;
+  shadow?: 'none' | 'sm' | 'md' | 'lg';
 }
 
 export interface EditableButtonProps {
@@ -42,6 +46,36 @@ export function EditableButton({
 
   const btnText = typeof value === 'string' ? value : value?.text || '';
   const btnHref = typeof value === 'object' ? value?.href : undefined;
+  const buttonStyle: React.CSSProperties = { ...style };
+  if (typeof value === 'object' && value) {
+    if (value.color) {
+      if (value.variant === 'outline' || value.variant === 'ghost') {
+        buttonStyle.backgroundColor = 'transparent';
+        buttonStyle.color = value.color;
+        buttonStyle.border = value.variant === 'outline' ? `1px solid ${value.color}` : '1px solid transparent';
+      } else {
+        buttonStyle.backgroundColor = value.color;
+        buttonStyle.color = '#ffffff';
+      }
+    }
+    if (value.radius !== undefined) buttonStyle.borderRadius = `${value.radius}px`;
+    if (value.size) {
+      buttonStyle.padding = value.size === 'lg'
+        ? '14px 24px'
+        : value.size === 'sm'
+          ? '8px 14px'
+          : '11px 20px';
+    }
+    if (value.shadow) {
+      buttonStyle.boxShadow = value.shadow === 'none'
+        ? 'none'
+        : value.shadow === 'lg'
+          ? '0 20px 40px rgba(15,23,42,.2)'
+          : value.shadow === 'sm'
+            ? '0 4px 10px rgba(15,23,42,.1)'
+            : '0 10px 25px rgba(15,23,42,.15)';
+    }
+  }
 
   const handleClick = (e: React.MouseEvent) => {
     if (editMode && cms?.websiteId) {
@@ -68,7 +102,7 @@ export function EditableButton({
 
   if (!editMode) {
     return (
-      <Tag {...tagProps} className={className} style={style} onClick={onClick}>
+      <Tag {...tagProps} className={className} style={buttonStyle} onClick={onClick}>
         {btnText}
       </Tag>
     );
@@ -79,7 +113,7 @@ export function EditableButton({
       {...tagProps}
       className={`rcms-editable-region rcms-editable-button ${className}`}
       style={{
-        ...style,
+        ...buttonStyle,
         outline: '2px dashed #3b82f6',
         outlineOffset: '2px',
         cursor: 'pointer',
@@ -87,6 +121,7 @@ export function EditableButton({
       onClick={handleClick}
       data-rcms-region={regionId}
       data-rcms-type="button"
+      data-rcms-label={label}
     >
       {btnText}
     </Tag>

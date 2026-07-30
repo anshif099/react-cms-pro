@@ -413,6 +413,7 @@ export function EditableText({
       }}
       data-rcms-region={regionId}
       data-rcms-type="text"
+      data-rcms-label={label}
     >
       {displayValue}
 
@@ -557,4 +558,3 @@ export function EditableText({
     </Component>
   );
 }
-

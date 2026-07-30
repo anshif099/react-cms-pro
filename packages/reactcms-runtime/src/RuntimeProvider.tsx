@@ -11,6 +11,8 @@ import { registerEditableRegions } from './registration/registerEditableRegions'
 import { HeartbeatService } from './heartbeat/heartbeatService';
 import { reportVersions } from './version/versionReporter';
 import { setupRuntimeMessageHandler } from './messaging/runtimeMessageHandler';
+import { BuilderSections } from './BuilderSections';
+import { VisualEditingLayer } from './VisualEditingLayer';
 
 export interface RuntimeProviderProps {
   websiteId: string;
@@ -285,6 +287,8 @@ export function RuntimeProvider({
     window.location.search.includes('rcms_edit') ||
     window.self !== window.top
   );
+  const isEmbeddedBuilder = typeof window !== 'undefined'
+    && window.location.search.includes('rcms_embed');
 
   return (
     <RuntimeContext.Provider
@@ -305,9 +309,11 @@ export function RuntimeProvider({
       >
         <CMSProvider websiteId={websiteId} apiKey={apiKey} environment="production">
           {children}
+          <BuilderSections websiteId={websiteId} />
+          <VisualEditingLayer websiteId={websiteId} apiKey={apiKey} />
 
           {/* Top Admin Header Bar in Preview Mode */}
-          {isPreviewMode && (
+          {isPreviewMode && !isEmbeddedBuilder && (
             <>
               <div
                 style={{

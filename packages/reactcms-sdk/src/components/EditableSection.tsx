@@ -29,6 +29,15 @@ export function EditableSection({
   const [value] = useEditable<Record<string, unknown>>(regionId, defaultValue, 'section', label);
   const editMode = cms?.editMode || false;
   const pageId = page?.currentPage?.id || 'global';
+  const sectionStyle: React.CSSProperties = { ...style };
+  if (typeof value.background === 'string') sectionStyle.background = value.background;
+  if (typeof value.paddingY === 'number') {
+    sectionStyle.paddingTop = `${value.paddingY}px`;
+    sectionStyle.paddingBottom = `${value.paddingY}px`;
+  }
+  if (value.layout === 'flex') sectionStyle.display = 'flex';
+  if (value.layout === 'grid') sectionStyle.display = 'grid';
+  if (value.layout === 'full') sectionStyle.width = '100%';
 
   const handleClick = (e: React.MouseEvent) => {
     if (editMode && cms?.websiteId) {
@@ -53,14 +62,14 @@ export function EditableSection({
   };
 
   if (!editMode) {
-    return <Component className={className} style={style}>{children}</Component>;
+    return <Component className={className} style={sectionStyle}>{children}</Component>;
   }
 
   return (
     <Component
       className={`rcms-editable-region rcms-editable-section ${className}`}
       style={{
-        ...style,
+        ...sectionStyle,
         outline: '2px dashed #3b82f6',
         outlineOffset: '4px',
         position: 'relative',
@@ -69,6 +78,7 @@ export function EditableSection({
       onClick={handleClick}
       data-rcms-region={regionId}
       data-rcms-type="section"
+      data-rcms-label={label}
     >
       {children}
     </Component>

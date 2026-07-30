@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
-import { Search, FileText, Trash2, Globe, RefreshCw } from "lucide-react";
+import { useNavigate, useParams } from "react-router-dom";
+import { Edit3, Eye, Search, FileText, Trash2, Globe, RefreshCw } from "lucide-react";
 import { usePages } from "../../hooks/usePages";
 import { useLocale } from "../../hooks/useLocale";
 import { useWebsites } from "../../hooks/useWebsites";
@@ -13,6 +13,7 @@ import ManualRouteImportModal from "../../components/websites/ManualRouteImportM
 
 export function PagesListPage() {
   const { websiteId } = useParams();
+  const navigate = useNavigate();
   const { pages, pageLoading, fetchPages, deletePage } = usePages();
   const { selectWebsite, selectedWebsite } = useWebsites();
   const { activeLocales, activeLocale, setLocale } = useLocale(websiteId);
@@ -119,7 +120,7 @@ export function PagesListPage() {
             <span>Pages</span>
           </h2>
           <p className="text-sm text-admin-secondary">
-            Manage synced pages and site structure on <span className="font-semibold text-admin-text">{selectedWebsite.name}</span>
+            View, edit, and publish connected pages visually on <span className="font-semibold text-admin-text">{selectedWebsite.name}</span>
           </p>
         </div>
         <div className="flex gap-3">
@@ -243,6 +244,26 @@ export function PagesListPage() {
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-1.5">
+                    {/* Preview the connected website without editor controls */}
+                    <button
+                      onClick={() => navigate(`/content/${websiteId}/pages/${page.id}/editor?mode=preview`)}
+                      className="p-1.5 rounded-lg hover:bg-slate-850 text-admin-secondary hover:text-white transition-colors cursor-pointer"
+                      title={`View ${displayTitle}`}
+                      aria-label={`View ${displayTitle}`}
+                    >
+                      <Eye className="w-4 h-4" />
+                    </button>
+
+                    {/* Open the primary visual editing experience */}
+                    <button
+                      onClick={() => navigate(`/content/${websiteId}/pages/${page.id}/editor?mode=edit`)}
+                      className="p-1.5 rounded-lg hover:bg-blue-500/10 text-admin-secondary hover:text-blue-400 transition-colors cursor-pointer"
+                      title={`Edit ${displayTitle}`}
+                      aria-label={`Edit ${displayTitle}`}
+                    >
+                      <Edit3 className="w-4 h-4" />
+                    </button>
+
                     {/* Delete Page */}
                     <button
                       onClick={() => handleDelete(page.id, displayTitle)}

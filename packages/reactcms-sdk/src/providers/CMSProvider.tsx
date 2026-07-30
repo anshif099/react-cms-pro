@@ -24,10 +24,10 @@ export function CMSProvider({
     if (typeof window !== 'undefined') {
       try {
         const isIframe = window.self !== window.top;
-        const search = window.location.search;
-        if (isIframe || search.includes('rcms_preview') || search.includes('rcms_edit')) {
-          return true;
-        }
+        const params = new URLSearchParams(window.location.search);
+        if (params.has('rcms_edit')) return true;
+        if (params.has('rcms_preview')) return false;
+        if (isIframe) return true;
       } catch {
         return true;
       }
@@ -36,7 +36,14 @@ export function CMSProvider({
   });
   const [isConnected, setIsConnected] = useState(false);
   const [currentPage] = useState<Page | null>(null);
-  const [locale, setLocale] = useState('en');
+  const [locale, setLocale] = useState(() => {
+    if (typeof window === 'undefined') return 'en';
+    try {
+      return new URLSearchParams(window.location.search).get('rcms_locale') || 'en';
+    } catch {
+      return 'en';
+    }
+  });
   const [theme, setTheme] = useState<ThemeTokens | null>(null);
   const [menus, setMenus] = useState<Record<string, NavMenu>>({});
   const [seo, setSEO] = useState<PageSEO | null>(null);

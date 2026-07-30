@@ -49,7 +49,9 @@ export function SearchPage() {
   };
 
   const handleNavigate = (item) => {
-    if (item.type === "media") {
+    if (item.type === "page") {
+      navigate(`/content/${websiteId}/pages/${item.id}/editor?mode=edit`);
+    } else if (item.type === "media") {
       navigate(`/content/${websiteId}/media`);
     }
   };
@@ -139,12 +141,8 @@ export function SearchPage() {
           {filteredResults.map((item) => (
             <div
               key={item.id}
-              onClick={item.type === "media" ? () => handleNavigate(item) : undefined}
-              className={`flex items-center justify-between p-3.5 border border-admin-border dark:border-slate-800 bg-slate-900/30 rounded-xl transition-all group ${
-                item.type === "media"
-                  ? "hover:bg-slate-900/50 hover:border-slate-700 cursor-pointer"
-                  : ""
-              }`}
+              onClick={() => handleNavigate(item)}
+              className="flex items-center justify-between p-3.5 border border-admin-border dark:border-slate-800 bg-slate-900/30 rounded-xl transition-all group hover:bg-slate-900/50 hover:border-slate-700 cursor-pointer"
             >
               <div className="flex items-center gap-3.5 text-left min-w-0 flex-1 pr-4">
                 <div className="w-10 h-10 bg-slate-950/40 border border-slate-850 rounded-xl flex items-center justify-center flex-shrink-0">
@@ -170,9 +168,7 @@ export function SearchPage() {
                 <span className="text-[10px] text-admin-secondary hidden sm:inline-block">
                   Updated: {item.updatedAt ? new Date(item.updatedAt).toLocaleDateString() : "N/A"}
                 </span>
-                {item.type === "media" && (
-                  <ArrowRight className="w-4 h-4 text-slate-650 group-hover:text-primary transition-colors flex-shrink-0" />
-                )}
+                <ArrowRight className="w-4 h-4 text-slate-650 group-hover:text-primary transition-colors flex-shrink-0" />
               </div>
             </div>
           ))}

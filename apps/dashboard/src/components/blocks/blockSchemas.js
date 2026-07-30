@@ -346,6 +346,207 @@ export const BLOCK_SCHEMAS = [
     fields: [
       { key: "code", label: "Raw HTML / Embedded Script", type: "textarea", localized: false }
     ]
+  },
+  {
+    type: "button",
+    label: "Button",
+    icon: "MousePointerClick",
+    category: "actions",
+    description: "Standalone action button with link, style, size, radius, and color controls.",
+    fields: [
+      { key: "label", label: "Button Label", type: "text", localized: true, defaultValue: "Learn More" },
+      { key: "url", label: "Button URL", type: "url", localized: false, defaultValue: "#" },
+      {
+        key: "variant",
+        label: "Variant",
+        type: "select",
+        localized: false,
+        defaultValue: "primary",
+        options: [
+          { value: "primary", label: "Primary" },
+          { value: "secondary", label: "Secondary" },
+          { value: "outline", label: "Outline" },
+          { value: "ghost", label: "Ghost" }
+        ]
+      },
+      {
+        key: "size",
+        label: "Size",
+        type: "select",
+        localized: false,
+        defaultValue: "md",
+        options: [
+          { value: "sm", label: "Small" },
+          { value: "md", label: "Medium" },
+          { value: "lg", label: "Large" }
+        ]
+      },
+      { key: "color", label: "Button Color", type: "color", localized: false, defaultValue: "#2563eb" },
+      { key: "radius", label: "Corner Radius", type: "number", localized: false, defaultValue: 10 }
+    ]
+  },
+  {
+    type: "video",
+    label: "Video",
+    icon: "Video",
+    category: "content",
+    description: "Responsive hosted or embedded video with poster, caption, and playback controls.",
+    fields: [
+      { key: "url", label: "Video URL", type: "url", localized: false },
+      { key: "poster", label: "Poster Image", type: "image", localized: false },
+      { key: "caption", label: "Video Caption", type: "text", localized: true },
+      { key: "autoplay", label: "Autoplay", type: "boolean", localized: false },
+      { key: "controls", label: "Show Controls", type: "boolean", localized: false, defaultValue: true }
+    ]
+  },
+  {
+    type: "columns",
+    label: "Columns",
+    icon: "Columns3",
+    category: "layout",
+    description: "Responsive multi-column layout for grouping content and reusable components.",
+    fields: [
+      {
+        key: "columns",
+        label: "Column Count",
+        type: "select",
+        localized: false,
+        defaultValue: "2",
+        options: [
+          { value: "2", label: "2 Columns" },
+          { value: "3", label: "3 Columns" },
+          { value: "4", label: "4 Columns" }
+        ]
+      },
+      { key: "gap", label: "Column Gap", type: "number", localized: false, defaultValue: 24 },
+      {
+        key: "items",
+        label: "Column Content",
+        type: "array",
+        localized: true,
+        fields: [
+          { key: "title", label: "Title", type: "text" },
+          { key: "text", label: "Content", type: "textarea" }
+        ]
+      }
+    ]
+  },
+  {
+    type: "container",
+    label: "Container",
+    icon: "Box",
+    category: "layout",
+    description: "Constrained layout wrapper with background, width, padding, and nested content.",
+    fields: [
+      { key: "title", label: "Container Title", type: "text", localized: true },
+      { key: "text", label: "Container Content", type: "textarea", localized: true },
+      { key: "maxWidth", label: "Maximum Width", type: "number", localized: false, defaultValue: 1120 },
+      { key: "padding", label: "Padding", type: "number", localized: false, defaultValue: 32 },
+      { key: "background", label: "Background", type: "color", localized: false, defaultValue: "#ffffff" }
+    ]
+  },
+  {
+    type: "accordion",
+    label: "Accordion",
+    icon: "ListCollapse",
+    category: "content",
+    description: "Expandable content panels for product details, documentation, or disclosures.",
+    fields: [
+      { key: "title", label: "Accordion Title", type: "text", localized: true },
+      {
+        key: "items",
+        label: "Accordion Items",
+        type: "array",
+        localized: true,
+        fields: [
+          { key: "title", label: "Panel Title", type: "text" },
+          { key: "content", label: "Panel Content", type: "textarea" }
+        ]
+      }
+    ]
+  },
+  {
+    type: "services",
+    label: "Services",
+    icon: "BriefcaseBusiness",
+    category: "commerce",
+    description: "Service offering cards with icons, descriptions, and destination links.",
+    fields: [
+      { key: "title", label: "Section Title", type: "text", localized: true, defaultValue: "Our Services" },
+      { key: "subtitle", label: "Section Subtitle", type: "textarea", localized: true },
+      {
+        key: "items",
+        label: "Services",
+        type: "array",
+        localized: true,
+        fields: [
+          { key: "title", label: "Service Name", type: "text" },
+          { key: "description", label: "Description", type: "textarea" },
+          { key: "url", label: "Link URL", type: "url" }
+        ]
+      }
+    ]
+  },
+  {
+    type: "blog-posts",
+    label: "Blog Posts",
+    icon: "Newspaper",
+    category: "content",
+    description: "Recent or curated post cards ready for a future content-source connector.",
+    fields: [
+      { key: "title", label: "Section Title", type: "text", localized: true, defaultValue: "Latest Articles" },
+      { key: "source", label: "Content Source", type: "text", localized: false, defaultValue: "latest" },
+      { key: "limit", label: "Number of Posts", type: "number", localized: false, defaultValue: 3 },
+      {
+        key: "items",
+        label: "Manual Posts",
+        type: "array",
+        localized: true,
+        fields: [
+          { key: "title", label: "Post Title", type: "text" },
+          { key: "excerpt", label: "Excerpt", type: "textarea" },
+          { key: "image", label: "Image", type: "image" },
+          { key: "url", label: "Post URL", type: "url" }
+        ]
+      }
+    ]
+  },
+  {
+    type: "map",
+    label: "Google Map",
+    icon: "MapPinned",
+    category: "content",
+    description: "Embedded map section using an address or Google Maps embed URL.",
+    fields: [
+      { key: "title", label: "Map Title", type: "text", localized: true },
+      { key: "address", label: "Address", type: "text", localized: true },
+      { key: "embedUrl", label: "Google Maps Embed URL", type: "url", localized: false },
+      { key: "height", label: "Map Height", type: "number", localized: false, defaultValue: 420 }
+    ]
+  },
+  {
+    type: "newsletter",
+    label: "Newsletter",
+    icon: "Send",
+    category: "actions",
+    description: "Email signup callout ready for provider and plugin integrations.",
+    fields: [
+      { key: "title", label: "Title", type: "text", localized: true, defaultValue: "Stay in the loop" },
+      { key: "subtitle", label: "Description", type: "textarea", localized: true },
+      { key: "placeholder", label: "Email Placeholder", type: "text", localized: true, defaultValue: "you@example.com" },
+      { key: "buttonText", label: "Button Label", type: "text", localized: true, defaultValue: "Subscribe" }
+    ]
+  },
+  {
+    type: "custom-react",
+    label: "Custom React Component",
+    icon: "Braces",
+    category: "content",
+    description: "Reference a component registered by the connected ReactCMS Runtime.",
+    fields: [
+      { key: "componentId", label: "Registered Component ID", type: "text", localized: false },
+      { key: "propsJson", label: "Component Props (JSON)", type: "textarea", localized: false, defaultValue: "{}" }
+    ]
   }
 ];
 

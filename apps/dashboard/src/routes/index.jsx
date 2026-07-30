@@ -57,6 +57,7 @@ const PluginsPage = safeLazy(() => import("../pages/content/PluginsPage"));
 const NavigationPage = safeLazy(() => import("../pages/content/NavigationPage"));
 const LayoutsPage = safeLazy(() => import("../pages/content/LayoutsPage"));
 const EditableRegionsPage = safeLazy(() => import("../pages/content/EditableRegionsPage"));
+const VisualBuilderPage = safeLazy(() => import("../pages/content/VisualBuilderPage"));
 
 const lazyLoad = (Component) => (
   <Suspense fallback={<div className="p-6"><LoadingSkeleton variant="card" /></div>}>
@@ -73,6 +74,17 @@ export const routesConfig = [
       <PublicRoute>
         <LoginPage />
       </PublicRoute>
+    )
+  },
+
+  // Full-screen connected-site visual builder
+  {
+    path: "/content/:websiteId/pages/:pageId/editor",
+    errorElement: <RouteErrorBoundary />,
+    element: (
+      <ProtectedRoute>
+        {lazyLoad(VisualBuilderPage)}
+      </ProtectedRoute>
     )
   },
   

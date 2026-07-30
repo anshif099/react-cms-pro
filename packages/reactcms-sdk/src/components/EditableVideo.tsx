@@ -76,6 +76,7 @@ export function EditableVideo({
       onClick={handleClick}
       data-rcms-region={regionId}
       data-rcms-type="video"
+      data-rcms-label={label}
     >
       {isEmbed ? (
         <iframe src={videoUrl} title={label} className={className} style={{ ...style, pointerEvents: 'none' }} />

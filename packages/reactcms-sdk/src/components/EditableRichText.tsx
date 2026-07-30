@@ -69,6 +69,7 @@ export function EditableRichText({
       dangerouslySetInnerHTML={{ __html: value }}
       data-rcms-region={regionId}
       data-rcms-type="richtext"
+      data-rcms-label={label}
     />
   );
 }

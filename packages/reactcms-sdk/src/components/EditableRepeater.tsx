@@ -64,6 +64,7 @@ export function EditableRepeater<T = unknown>({
       onClick={handleClick}
       data-rcms-region={regionId}
       data-rcms-type="repeater"
+      data-rcms-label={label}
     >
       {children(items)}
     </div>
