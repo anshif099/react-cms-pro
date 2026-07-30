@@ -287,6 +287,19 @@ export const NativeCanvas = forwardRef<NativeCanvasHandle, NativeCanvasProps>(fu
               Drag an element here or choose Add Element
             </div>
           )}
+          {tree.children.length === 0 && mode !== 'edit' && (
+            <div style={{
+              minHeight: '520px',
+              display: 'grid',
+              placeItems: 'center',
+              padding: '32px',
+              color: '#64748b',
+              textAlign: 'center',
+              font: '600 14px Inter,system-ui,sans-serif',
+            }}>
+              This page has no published or draft components yet.
+            </div>
+          )}
         </div>
       </div>
 

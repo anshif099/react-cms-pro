@@ -32,6 +32,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { useToast } from "../../hooks/useToast";
 import revisionService from "../../services/revisionService";
 import themeService from "../../services/themeService";
+import pageConversionService from "../../services/pageConversionService";
 import visualBuilderService, {
   createVisualNode
 } from "../../services/visualBuilderService";
@@ -59,7 +60,28 @@ function buildInitialTree(page, document, locale, pageKey) {
     });
   }
 
-  return regionsToPageTree(document.regions || {}, {
+  if (Object.keys(document.regions || {}).length) {
+    return regionsToPageTree(document.regions, {
+      id: pageKey,
+      title: localeData.title || page.title,
+      locale
+    });
+  }
+
+  if (page.isImported) {
+    const migratedBlocks = pageConversionService.getRouteBlocks(
+      page.route || `/${page.slug || ""}`
+    );
+    if (migratedBlocks.length) {
+      return blocksToPageTree(migratedBlocks, {
+        id: pageKey,
+        title: localeData.title || page.title,
+        locale
+      });
+    }
+  }
+
+  return regionsToPageTree({}, {
     id: pageKey,
     title: localeData.title || page.title,
     locale
@@ -338,7 +360,16 @@ export function VisualBuilderPage() {
       setNativeLoading(true);
       setLoadError("");
       try {
-        const { draft } = await visualBuilderService.loadNativePage(websiteId, pageKey);
+        const { draft } = await visualBuilderService.loadNativePage(
+          websiteId,
+          pageKey,
+          {
+            pageId,
+            routeId: selectedPage.routeId,
+            slug: selectedPage.slug,
+            route: selectedPage.route
+          }
+        );
         if (cancelled) return;
         const localeData = selectedPage.locales?.[activeLocale] || {};
         const tree = buildInitialTree(selectedPage, draft, activeLocale, pageKey);

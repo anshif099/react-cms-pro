@@ -226,11 +226,29 @@ export const visualBuilderService = {
     return clean || "home";
   },
 
-  async loadNativePage(websiteId, pageKey) {
-    const [draftSnapshot, publishedSnapshot, registeredTreeSnapshot] = await Promise.all([
+  async loadNativePage(websiteId, pageKey, pageIdentity = {}) {
+    const registryKeys = Array.from(new Set([
+      pageKey,
+      pageIdentity.pageId,
+      pageIdentity.routeId,
+      pageIdentity.slug,
+      pageIdentity.route
+    ]
+      .filter(Boolean)
+      .map((value) => String(value).split("?")[0].replace(/^\/+|\/+$/g, "") || "home")));
+
+    const [
+      draftSnapshot,
+      publishedSnapshot,
+      registeredTreeSnapshot,
+      registeredRegionSnapshots
+    ] = await Promise.all([
       get(ref(database, paths.contentDraft(websiteId, pageKey))),
       get(ref(database, paths.contentPublished(websiteId, pageKey))),
-      get(ref(database, paths.registryPageTree(websiteId, pageKey)))
+      get(ref(database, paths.registryPageTree(websiteId, pageKey))),
+      Promise.all(registryKeys.map((key) => (
+        get(ref(database, paths.registryRegions(websiteId, key)))
+      )))
     ]);
 
     const published = publishedSnapshot.exists()
@@ -243,6 +261,13 @@ export const visualBuilderService = {
       && isPageComponentTree(registeredTreeSnapshot.val())
       ? registeredTreeSnapshot.val()
       : null;
+    const registeredRegions = registeredRegionSnapshots.reduce((all, snapshot) => {
+      if (!snapshot.exists()) return all;
+      return {
+        ...all,
+        ...decodeFirebaseObject(snapshot.val())
+      };
+    }, {});
 
     return {
       published,
@@ -250,7 +275,11 @@ export const visualBuilderService = {
         ...draftDocument,
         tree: draftDocument.tree || published.tree || registeredTree,
         blocks: draftDocument.blocks.length ? draftDocument.blocks : published.blocks,
-        regions: { ...published.regions, ...draftDocument.regions }
+        regions: {
+          ...registeredRegions,
+          ...published.regions,
+          ...draftDocument.regions
+        }
       }
     };
   },

@@ -8,38 +8,117 @@ function labelFromType(type: string) {
     .join(' ');
 }
 
-function inferRegionNode(regionId: string, value: any): ComponentNode {
+function inferRegionNode(regionId: string, value: any, locale = 'en'): ComponentNode {
   const clean = regionId.toLowerCase();
+  const definition = value
+    && typeof value === 'object'
+    && value.id
+    && value.type
+    ? value
+    : null;
+  const actualValue = definition
+    ? definition.defaultValue ?? definition.value ?? ''
+    : value;
+  const declaredType = String(definition?.type || '').toLowerCase();
   let type = 'paragraph';
   let props: Record<string, any> = {
-    locales: { en: { text: typeof value === 'string' ? value : JSON.stringify(value) } },
+    locales: {
+      [locale]: {
+        text: typeof actualValue === 'string'
+          ? actualValue
+          : actualValue?.text ?? JSON.stringify(actualValue),
+      },
+    },
   };
 
-  if (clean.includes('heading') || clean.includes('title')) {
-    type = 'heading';
-    props = { locales: { en: { text: value?.text ?? value ?? '' } }, level: 'h2' };
-  } else if (clean.includes('image') || clean.includes('logo') || value?.src) {
+  if (
+    declaredType === 'section'
+    || declaredType === 'container'
+  ) {
+    type = declaredType;
+    props = {
+      design: typeof actualValue === 'object' ? actualValue : {},
+    };
+  } else if (
+    declaredType === 'image'
+    || clean.includes('image')
+    || clean.includes('logo')
+    || actualValue?.src
+  ) {
     type = 'image';
     props = {
-      src: value?.src ?? value ?? '',
-      locales: { en: { alt: value?.alt ?? labelFromType(regionId) } },
+      src: actualValue?.src ?? actualValue ?? '',
+      width: actualValue?.width,
+      height: actualValue?.height,
+      objectFit: actualValue?.objectFit,
+      locales: {
+        [locale]: {
+          alt: actualValue?.alt ?? definition?.label ?? labelFromType(regionId),
+        },
+      },
     };
-  } else if (clean.includes('button') || clean.includes('cta') || value?.href) {
+  } else if (
+    declaredType === 'button'
+    || clean.includes('button')
+    || clean.includes('cta')
+    || actualValue?.href
+  ) {
     type = 'button';
     props = {
-      url: value?.href ?? value?.url ?? '#',
-      color: value?.color ?? '#2563eb',
-      locales: { en: { label: value?.text ?? value?.label ?? value ?? 'Learn More' } },
+      url: actualValue?.href ?? actualValue?.url ?? '#',
+      color: actualValue?.color ?? '#2563eb',
+      locales: {
+        [locale]: {
+          label: actualValue?.text
+            ?? actualValue?.label
+            ?? actualValue
+            ?? 'Learn More',
+        },
+      },
+    };
+  } else if (declaredType === 'video') {
+    type = 'video';
+    props = {
+      url: actualValue?.url ?? actualValue?.src ?? actualValue ?? '',
+      poster: actualValue?.poster,
+      controls: actualValue?.controls ?? true,
+    };
+  } else if (declaredType === 'repeater' && Array.isArray(actualValue)) {
+    type = 'cards';
+    props = {
+      locales: {
+        [locale]: {
+          title: definition?.label || labelFromType(regionId),
+          cards: actualValue,
+        },
+      },
+    };
+  } else if (
+    declaredType === 'heading'
+    || clean.includes('heading')
+    || clean.includes('title')
+  ) {
+    type = 'heading';
+    props = {
+      locales: {
+        [locale]: {
+          text: actualValue?.text ?? actualValue ?? '',
+        },
+      },
+      level: actualValue?.level || 'h2',
     };
   }
 
   return {
     id: `region_${regionId.replace(/[^a-zA-Z0-9_-]/g, '_')}`,
     type,
-    label: labelFromType(regionId),
+    label: definition?.label || labelFromType(regionId),
     props,
     children: [],
-    metadata: { regionId },
+    metadata: {
+      regionId,
+      ...(definition ? { regionDefinition: definition } : {}),
+    },
   };
 }
 
@@ -96,8 +175,9 @@ export function regionsToPageTree(
   regions: Record<string, any>,
   options: { id?: string; title?: string; locale?: string } = {},
 ): PageComponentTree {
+  const locale = options.locale || 'en';
   const regionNodes = Object.entries(regions || {}).map(([id, value]) => (
-    inferRegionNode(id, value)
+    inferRegionNode(id, value, locale)
   ));
 
   return {
@@ -105,7 +185,7 @@ export function regionsToPageTree(
     type: 'page',
     version: 2,
     title: options.title,
-    locale: options.locale || 'en',
+    locale,
     children: regionNodes.length
       ? [{
         id: 'imported_content',
