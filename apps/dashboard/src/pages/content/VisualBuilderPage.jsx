@@ -9,12 +9,17 @@ import React, {
 } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
+  AlertCircle,
   ChevronRight,
+  Code2,
+  Eye,
   FileCode2,
   GitBranch,
   KeyRound,
   Loader2,
+  MousePointer2,
   Palette,
+  RefreshCw,
   Ruler
 } from "lucide-react";
 import { NativeCanvas, CANVAS_DEVICE_WIDTHS } from "@anshif.rainhopes/reactcms-canvas";
@@ -39,6 +44,11 @@ import websiteService from "../../services/websiteService";
 import sourceCredentialService from "../../services/sourceCredentialService";
 import sourceProviderService from "../../services/sourceProviderService";
 import pageService from "../../services/pageService";
+import {
+  buildConnectedPageUrl,
+  createRuntimeMessage,
+  patchEditableRegionSource
+} from "../../services/sourceVisualPatchService";
 import {
   generateReactPageSource,
   patchReactStateRouter,
@@ -72,42 +82,444 @@ function ConnectedSourceWorkspace({
   onWriteTokenChange,
   onBack,
   onChange,
+  onVisualChange,
   onSave,
   onPublish
 }) {
   const isPreview = mode === "preview";
   const isGitHub = website?.connection?.provider === "github";
+  const iframeRef = useRef(null);
+  const [workspaceMode, setWorkspaceMode] = useState("visual");
+  const [device, setDevice] = useState("desktop");
+  const [customWidth, setCustomWidth] = useState(960);
+  const [frameLoading, setFrameLoading] = useState(true);
+  const [frameVersion, setFrameVersion] = useState(0);
+  const [runtimeConnected, setRuntimeConnected] = useState(false);
+  const [selectedRegion, setSelectedRegion] = useState(null);
+  const [visualError, setVisualError] = useState("");
+  const [liveRouteError, setLiveRouteError] = useState("");
+
+  const livePageUrl = useMemo(
+    () => buildConnectedPageUrl(website, page, isPreview ? "preview" : "edit"),
+    [isPreview, page, website]
+  );
+  const liveOrigin = useMemo(() => {
+    try {
+      return livePageUrl ? new URL(livePageUrl).origin : "";
+    } catch {
+      return "";
+    }
+  }, [livePageUrl]);
+  const canvasWidth = device === "custom"
+    ? customWidth
+    : CANVAS_DEVICE_WIDTHS[device] || 1440;
+
+  const sendRuntimeMessage = useCallback((type, payload = {}) => {
+    iframeRef.current?.contentWindow?.postMessage(
+      createRuntimeMessage(type, payload),
+      liveOrigin || "*"
+    );
+  }, [liveOrigin]);
+
+  const applyVisualValue = useCallback((region, value, sendToRuntime = true) => {
+    const result = onVisualChange({
+      regionId: region.regionId,
+      type: region.type,
+      pageId: region.pageId,
+      value
+    });
+    if (!result?.changed) {
+      setVisualError(
+        result?.error
+        || "This region is rendered by another source component and cannot be written to this page file."
+      );
+      return false;
+    }
+
+    setVisualError("");
+    setSelectedRegion((current) => current ? { ...current, value } : current);
+    if (sendToRuntime) {
+      sendRuntimeMessage("rcms/v1/field-update", {
+        pageId: region.pageId,
+        regionId: region.regionId,
+        value
+      });
+    }
+    return true;
+  }, [onVisualChange, sendRuntimeMessage]);
+
+  useEffect(() => {
+    setWorkspaceMode("visual");
+    setSelectedRegion(null);
+    setVisualError("");
+    setFrameLoading(true);
+  }, [page?.id, isPreview]);
+
+  useEffect(() => {
+    if (!livePageUrl) return undefined;
+    let cancelled = false;
+    setLiveRouteError("");
+
+    fetch(livePageUrl, {
+      method: "GET",
+      mode: "cors",
+      cache: "no-store"
+    })
+      .then((response) => {
+        if (cancelled || response.ok) return;
+        setLiveRouteError(
+          `The connected host returned HTTP ${response.status} for this page route. `
+          + "Redeploy the connected project with its SPA rewrite/fallback enabled, then reload the canvas."
+        );
+      })
+      .catch(() => {
+        // Some connected hosts allow framing but not cross-origin fetches.
+        // In that case the iframe remains the source of truth.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [livePageUrl, frameVersion]);
+
+  useEffect(() => {
+    if (!livePageUrl) return undefined;
+    const handleRuntimeMessage = (event) => {
+      if (event.source !== iframeRef.current?.contentWindow) return;
+      if (liveOrigin && event.origin !== liveOrigin) return;
+      const message = event.data;
+      if (
+        !message
+        || typeof message !== "object"
+        || message.rcms !== true
+        || message.version !== "v1"
+      ) return;
+
+      if (message.type === "rcms/v1/runtime-ready") {
+        setRuntimeConnected(true);
+        sendRuntimeMessage(
+          isPreview ? "rcms/v1/exit-edit-mode" : "rcms/v1/enter-edit-mode"
+        );
+        return;
+      }
+
+      if (!isPreview && message.type === "rcms/v1/region-selected") {
+        setSelectedRegion(message.payload || null);
+        setVisualError("");
+        return;
+      }
+
+      if (!isPreview && message.type === "rcms/v1/field-update") {
+        const payload = message.payload || {};
+        if (!payload.regionId) return;
+        setSelectedRegion((current) => ({
+          ...(current || {}),
+          ...payload
+        }));
+        applyVisualValue(payload, payload.value, false);
+      }
+    };
+
+    window.addEventListener("message", handleRuntimeMessage);
+    return () => window.removeEventListener("message", handleRuntimeMessage);
+  }, [
+    applyVisualValue,
+    isPreview,
+    liveOrigin,
+    livePageUrl,
+    sendRuntimeMessage
+  ]);
+
+  const handleFrameLoad = () => {
+    setFrameLoading(false);
+    setRuntimeConnected(false);
+    sendRuntimeMessage(
+      isPreview ? "rcms/v1/exit-edit-mode" : "rcms/v1/enter-edit-mode"
+    );
+  };
+
+  const updateSelectedField = (field, nextFieldValue) => {
+    if (!selectedRegion) return;
+    const currentValue = selectedRegion.value;
+    let nextValue;
+
+    if (selectedRegion.type === "text" && field === "text") {
+      nextValue = currentValue && typeof currentValue === "object"
+        ? { ...currentValue, text: nextFieldValue }
+        : nextFieldValue;
+    } else {
+      const base = currentValue && typeof currentValue === "object"
+        ? { ...currentValue }
+        : {};
+      nextValue = { ...base, [field]: nextFieldValue };
+    }
+    applyVisualValue(selectedRegion, nextValue);
+  };
+
+  const renderVisualInspector = () => {
+    if (!selectedRegion) {
+      return (
+        <aside className="w-[320px] flex-shrink-0 border-l border-slate-800 bg-[#0b1120] grid place-items-center p-7 text-center">
+          <div>
+            <MousePointer2 className="w-8 h-8 mx-auto text-blue-400" />
+            <h2 className="mt-4 text-sm font-bold text-white">Select a page element</h2>
+            <p className="mt-2 text-[11px] leading-5 text-slate-500">
+              Click an outlined text, image, button, or section in the live canvas.
+            </p>
+            {!runtimeConnected && (
+              <p className="mt-4 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-[10px] leading-4 text-amber-200/70">
+                Waiting for the ReactCMS editing bridge. The live page still previews normally,
+                but visual selection requires its SDK components.
+              </p>
+            )}
+          </div>
+        </aside>
+      );
+    }
+
+    const value = selectedRegion.value;
+    const textValue = typeof value === "object" && value !== null
+      ? value.text || ""
+      : value || "";
+
+    return (
+      <aside className="w-[320px] flex-shrink-0 border-l border-slate-800 bg-[#0b1120] overflow-y-auto">
+        <div className="h-12 px-4 border-b border-slate-800 flex items-center">
+          <div className="min-w-0">
+            <p className="text-[10px] uppercase tracking-wider font-bold text-blue-400">
+              {selectedRegion.type || "region"}
+            </p>
+            <p className="text-xs font-semibold text-white truncate">
+              {selectedRegion.regionId}
+            </p>
+          </div>
+        </div>
+        <div className="p-4 space-y-4">
+          {selectedRegion.type === "text" && (
+            <label className="block">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                Text
+              </span>
+              <textarea
+                value={textValue}
+                onChange={(event) => updateSelectedField("text", event.target.value)}
+                rows="5"
+                className="mt-2 w-full resize-y rounded-lg border border-slate-800 bg-[#070b14] p-3 text-xs leading-5 text-slate-200 outline-none focus:border-blue-500"
+              />
+            </label>
+          )}
+
+          {selectedRegion.type === "button" && (
+            <>
+              <label className="block">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  Label
+                </span>
+                <input
+                  value={value?.text || ""}
+                  onChange={(event) => updateSelectedField("text", event.target.value)}
+                  className="mt-2 h-9 w-full rounded-lg border border-slate-800 bg-[#070b14] px-3 text-xs text-slate-200 outline-none focus:border-blue-500"
+                />
+              </label>
+              <label className="block">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  URL
+                </span>
+                <input
+                  value={value?.href || ""}
+                  onChange={(event) => updateSelectedField("href", event.target.value)}
+                  className="mt-2 h-9 w-full rounded-lg border border-slate-800 bg-[#070b14] px-3 text-xs text-slate-200 outline-none focus:border-blue-500"
+                />
+              </label>
+            </>
+          )}
+
+          {selectedRegion.type === "image" && (
+            <>
+              <label className="block">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  Image URL
+                </span>
+                <input
+                  value={typeof value === "string" ? value : value?.src || ""}
+                  onChange={(event) => updateSelectedField("src", event.target.value)}
+                  className="mt-2 h-9 w-full rounded-lg border border-slate-800 bg-[#070b14] px-3 text-xs text-slate-200 outline-none focus:border-blue-500"
+                />
+              </label>
+              <label className="block">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  Alt text
+                </span>
+                <input
+                  value={typeof value === "object" ? value?.alt || "" : ""}
+                  onChange={(event) => updateSelectedField("alt", event.target.value)}
+                  className="mt-2 h-9 w-full rounded-lg border border-slate-800 bg-[#070b14] px-3 text-xs text-slate-200 outline-none focus:border-blue-500"
+                />
+              </label>
+            </>
+          )}
+
+          {selectedRegion.type === "section" && (
+            <>
+              <label className="block">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  Background
+                </span>
+                <input
+                  value={value?.background || ""}
+                  onChange={(event) => updateSelectedField("background", event.target.value)}
+                  placeholder="#ffffff or CSS background"
+                  className="mt-2 h-9 w-full rounded-lg border border-slate-800 bg-[#070b14] px-3 text-xs text-slate-200 outline-none focus:border-blue-500"
+                />
+              </label>
+              <label className="block">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  Vertical padding
+                </span>
+                <input
+                  type="number"
+                  min="0"
+                  value={value?.paddingY ?? ""}
+                  onChange={(event) => updateSelectedField(
+                    "paddingY",
+                    event.target.value === "" ? 0 : Number(event.target.value)
+                  )}
+                  className="mt-2 h-9 w-full rounded-lg border border-slate-800 bg-[#070b14] px-3 text-xs text-slate-200 outline-none focus:border-blue-500"
+                />
+              </label>
+            </>
+          )}
+
+          {!["text", "button", "image", "section"].includes(selectedRegion.type) && (
+            <p className="rounded-lg border border-slate-800 bg-slate-950/40 p-3 text-[11px] leading-5 text-slate-500">
+              This SDK region can be selected, but its visual controls are not available yet.
+              Use the Code tab for this component.
+            </p>
+          )}
+
+          {visualError && (
+            <div className="flex gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
+              <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-400" />
+              <p className="text-[10px] leading-4 text-amber-200/70">
+                {visualError} Open Code to edit the component that owns it.
+              </p>
+            </div>
+          )}
+
+          <div className="rounded-lg border border-emerald-500/15 bg-emerald-500/5 p-3">
+            <p className="text-[10px] leading-4 text-emerald-200/70">
+              Supported changes update this page&apos;s JSX immediately. Use Update Git
+              when the page is ready to deploy.
+            </p>
+          </div>
+        </div>
+      </aside>
+    );
+  };
 
   return (
     <div className="h-screen min-h-0 bg-[#070b14] text-slate-200 flex flex-col overflow-hidden">
       <VisualBuilderToolbar
         mode={mode}
         page={page}
-        device="desktop"
+        device={device}
         saveStatus={saveStatus}
         saving={saving}
         publishing={publishing}
         canUndo={false}
         canRedo={false}
         onBack={onBack}
-        onDeviceChange={() => {}}
+        onDeviceChange={setDevice}
         onUndo={() => {}}
         onRedo={() => {}}
         onSave={onSave}
         onPublish={onPublish}
         onSettings={() => {}}
+        showSettings={false}
+        publishLabel={isGitHub ? "Update Git" : "Update cPanel"}
       />
 
       <div className="h-11 px-4 border-b border-slate-800 bg-[#0a101d] flex items-center gap-3">
-        <FileCode2 className="w-4 h-4 text-blue-400" />
-        <code className="text-[11px] text-slate-300 truncate">{page.sourceFile}</code>
-        <span className="ml-auto flex items-center gap-1.5 text-[10px] text-slate-500">
-          <GitBranch className="w-3.5 h-3.5" />
-          {website?.connection?.branch || website?.connection?.provider}
-        </span>
+        {!isPreview ? (
+          <div className="flex items-center rounded-lg border border-slate-800 bg-slate-950/50 p-0.5">
+            <button
+              type="button"
+              onClick={() => setWorkspaceMode("visual")}
+              className={`h-7 px-3 rounded-md flex items-center gap-1.5 text-[10px] font-bold cursor-pointer ${
+                workspaceMode === "visual"
+                  ? "bg-blue-600 text-white"
+                  : "text-slate-500 hover:text-white"
+              }`}
+            >
+              <Eye className="w-3.5 h-3.5" />
+              Visual
+            </button>
+            <button
+              type="button"
+              onClick={() => setWorkspaceMode("code")}
+              className={`h-7 px-3 rounded-md flex items-center gap-1.5 text-[10px] font-bold cursor-pointer ${
+                workspaceMode === "code"
+                  ? "bg-blue-600 text-white"
+                  : "text-slate-500 hover:text-white"
+              }`}
+            >
+              <Code2 className="w-3.5 h-3.5" />
+              Code
+            </button>
+          </div>
+        ) : (
+          <>
+            <Eye className="w-4 h-4 text-blue-400" />
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              Live page preview
+            </span>
+          </>
+        )}
+
+        {workspaceMode === "code" && !isPreview && (
+          <>
+            <span className="h-4 w-px bg-slate-800" />
+            <FileCode2 className="w-3.5 h-3.5 text-slate-500" />
+            <code className="text-[10px] text-slate-400 truncate">{page.sourceFile}</code>
+          </>
+        )}
+
+        <div className="ml-auto flex items-center gap-3">
+          {workspaceMode === "visual" && device === "custom" && (
+            <label className="flex items-center gap-1.5">
+              <Ruler className="w-3 h-3 text-slate-600" />
+              <input
+                type="number"
+                min="280"
+                max="1920"
+                value={customWidth}
+                onChange={(event) => setCustomWidth(Number(event.target.value))}
+                className="w-16 h-6 rounded border border-slate-800 bg-slate-950/50 px-1.5 text-[10px] text-slate-300 outline-none focus:border-blue-500"
+              />
+            </label>
+          )}
+          {workspaceMode === "visual" && (
+            <button
+              type="button"
+              onClick={() => {
+                setFrameLoading(true);
+                setFrameVersion((current) => current + 1);
+              }}
+              className="h-7 px-2.5 rounded-lg border border-slate-800 text-[9px] font-bold text-slate-500 hover:text-white hover:bg-slate-900 flex items-center gap-1.5 cursor-pointer"
+              title="Reload live page"
+            >
+              <RefreshCw className="w-3 h-3" />
+              Reload
+            </button>
+          )}
+          <span className="flex items-center gap-1.5 text-[10px] text-slate-500">
+            <GitBranch className="w-3.5 h-3.5" />
+            {website?.connection?.branch || website?.connection?.provider}
+          </span>
+        </div>
       </div>
 
-      {!isPreview && isGitHub && (
+      {!isPreview && isGitHub && workspaceMode === "code" && (
         <div className="px-4 py-2 border-b border-slate-800 bg-slate-950/40 flex items-center gap-2">
           <KeyRound className="w-3.5 h-3.5 text-slate-500" />
           <input
@@ -121,29 +533,96 @@ function ConnectedSourceWorkspace({
         </div>
       )}
 
-      <main className="flex-1 min-h-0 p-4 bg-[#080d18]">
-        {loading ? (
-          <div className="h-full grid place-items-center">
-            <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
-          </div>
-        ) : error ? (
-          <div className="h-full grid place-items-center">
-            <div className="max-w-lg rounded-xl border border-rose-500/20 bg-rose-500/5 p-6 text-center">
-              <p className="text-sm font-bold text-white">Connected source could not be loaded</p>
-              <p className="mt-2 text-xs leading-5 text-slate-500">{error}</p>
+      {workspaceMode === "visual" || isPreview ? (
+        <div className="flex-1 min-h-0 flex">
+          <main className="flex-1 min-w-0 min-h-0 overflow-auto bg-[#080d18] p-4">
+            {!livePageUrl ? (
+              <div className="h-full grid place-items-center">
+                <div className="max-w-lg rounded-xl border border-rose-500/20 bg-rose-500/5 p-6 text-center">
+                  <p className="text-sm font-bold text-white">Live page URL is not configured</p>
+                  <p className="mt-2 text-xs leading-5 text-slate-500">
+                    Add the connected site&apos;s live domain to open its real route in Preview.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div
+                className="relative mx-auto h-full min-h-[560px] overflow-hidden rounded-xl border border-slate-700 bg-white shadow-2xl shadow-black/40"
+                style={{ width: `${canvasWidth}px`, maxWidth: device === "desktop" ? "none" : "100%" }}
+              >
+                {frameLoading && (
+                  <div className="absolute inset-0 z-10 grid place-items-center bg-white">
+                    <div className="text-center">
+                      <Loader2 className="w-6 h-6 animate-spin text-blue-600 mx-auto" />
+                      <p className="mt-3 text-xs font-semibold text-slate-500">
+                        Loading live page…
+                      </p>
+                    </div>
+                  </div>
+                )}
+                {liveRouteError && !frameLoading && (
+                  <div className="absolute inset-0 z-20 grid place-items-center bg-[#080d18] p-8">
+                    <div className="max-w-md rounded-xl border border-amber-500/20 bg-amber-500/5 p-6 text-center">
+                      <AlertCircle className="mx-auto h-7 w-7 text-amber-400" />
+                      <p className="mt-3 text-sm font-bold text-white">
+                        The live page route is not deployed
+                      </p>
+                      <p className="mt-2 text-[11px] leading-5 text-slate-400">
+                        {liveRouteError}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLiveRouteError("");
+                          setFrameLoading(true);
+                          setFrameVersion((current) => current + 1);
+                        }}
+                        className="mt-4 h-8 rounded-lg bg-blue-600 px-3 text-[10px] font-bold text-white cursor-pointer"
+                      >
+                        Reload live route
+                      </button>
+                    </div>
+                  </div>
+                )}
+                <iframe
+                  key={`${livePageUrl}:${frameVersion}`}
+                  ref={iframeRef}
+                  src={livePageUrl}
+                  title={`${page.title} live visual canvas`}
+                  onLoad={handleFrameLoad}
+                  className="block h-full min-h-[700px] w-full border-0 bg-white"
+                  sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
+                  allow="clipboard-read; clipboard-write"
+                />
+              </div>
+            )}
+          </main>
+          {!isPreview && renderVisualInspector()}
+        </div>
+      ) : (
+        <main className="flex-1 min-h-0 p-4 bg-[#080d18]">
+          {loading ? (
+            <div className="h-full grid place-items-center">
+              <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
             </div>
-          </div>
-        ) : (
-          <textarea
-            value={content}
-            onChange={(event) => onChange(event.target.value)}
-            readOnly={isPreview}
-            spellCheck="false"
-            aria-label={`Source code for ${page.title}`}
-            className="w-full h-full resize-none rounded-xl border border-slate-800 bg-[#050914] p-5 font-mono text-[12px] leading-5 text-slate-300 outline-none focus:border-blue-500 read-only:cursor-default"
-          />
-        )}
-      </main>
+          ) : error ? (
+            <div className="h-full grid place-items-center">
+              <div className="max-w-lg rounded-xl border border-rose-500/20 bg-rose-500/5 p-6 text-center">
+                <p className="text-sm font-bold text-white">Connected source could not be loaded</p>
+                <p className="mt-2 text-xs leading-5 text-slate-500">{error}</p>
+              </div>
+            </div>
+          ) : (
+            <textarea
+              value={content}
+              onChange={(event) => onChange(event.target.value)}
+              spellCheck="false"
+              aria-label={`Source code for ${page.title}`}
+              className="w-full h-full resize-none rounded-xl border border-slate-800 bg-[#050914] p-5 font-mono text-[12px] leading-5 text-slate-300 outline-none focus:border-blue-500"
+            />
+          )}
+        </main>
+      )}
     </div>
   );
 }
@@ -897,6 +1376,19 @@ export function VisualBuilderPage() {
     }
   };
 
+  const patchSourceFromVisual = useCallback((change) => {
+    const result = patchEditableRegionSource(
+      sourceContent,
+      change.regionId,
+      change.value
+    );
+    if (result.changed) {
+      setSourceContent(result.content);
+      setSourceSaveStatus("unsaved");
+    }
+    return result;
+  }, [sourceContent]);
+
   if (isConnectedSourcePage) {
     return (
       <ConnectedSourceWorkspace
@@ -916,6 +1408,7 @@ export function VisualBuilderPage() {
           setSourceContent(content);
           setSourceSaveStatus("unsaved");
         }}
+        onVisualChange={patchSourceFromVisual}
         onSave={saveSourceDraft}
         onPublish={publishSource}
       />

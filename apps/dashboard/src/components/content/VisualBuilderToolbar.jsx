@@ -59,7 +59,9 @@ export function VisualBuilderToolbar({
   onRedo,
   onSave,
   onPublish,
-  onSettings
+  onSettings,
+  showSettings = true,
+  publishLabel = "Publish"
 }) {
   const isPreview = mode === "preview";
   const title = page?.title || "Current Page";
@@ -146,14 +148,16 @@ export function VisualBuilderToolbar({
 
           <SaveState status={saveStatus} />
 
-          <button
-            type="button"
-            onClick={onSettings}
-            className="w-9 h-9 rounded-lg border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900 flex items-center justify-center cursor-pointer"
-            title="Page Settings"
-          >
-            <Settings className="w-4 h-4" />
-          </button>
+          {showSettings && (
+            <button
+              type="button"
+              onClick={onSettings}
+              className="w-9 h-9 rounded-lg border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900 flex items-center justify-center cursor-pointer"
+              title="Page Settings"
+            >
+              <Settings className="w-4 h-4" />
+            </button>
+          )}
 
           <Button
             variant="secondary"
@@ -174,7 +178,7 @@ export function VisualBuilderToolbar({
             className="gap-1.5 bg-blue-600 hover:bg-blue-500"
           >
             <Cloud className="w-3.5 h-3.5" />
-            Publish
+            {publishLabel}
           </Button>
         </>
       )}
