@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { rewritePreviewHtml } from "./live-preview";
+import { rewritePreviewHtml } from "../../api/live-preview";
 
 describe("live preview HTML rewriting", () => {
   it("boots the requested route before the connected React bundle", () => {
