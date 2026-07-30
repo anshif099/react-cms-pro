@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Save, Globe, Eye, Terminal, Info } from "lucide-react";
+import { ArrowLeft, Save, Globe, Terminal, Info } from "lucide-react";
 import { usePages } from "../../hooks/usePages";
 import { useLocale } from "../../hooks/useLocale";
 import { useWebsites } from "../../hooks/useWebsites";
@@ -242,15 +242,6 @@ export function PageEditorPage() {
               </button>
             ))}
           </div>
-
-          <Button
-            onClick={() => navigate(`/content/${websiteId}/preview/${pageId}`)}
-            variant="secondary"
-            className="gap-1.5 py-1.5 text-xs border-slate-800"
-          >
-            <Eye className="w-3.5 h-3.5" />
-            Live Preview
-          </Button>
 
           <Button
             onClick={handleSaveDraft}

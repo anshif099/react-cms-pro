@@ -50,7 +50,6 @@ const ContentTypeEditorPage = safeLazy(() => import("../pages/content/ContentTyp
 const MediaLibraryPage = safeLazy(() => import("../pages/content/MediaLibraryPage"));
 const GlobalContentPage = safeLazy(() => import("../pages/content/GlobalContentPage"));
 const SearchPage = safeLazy(() => import("../pages/content/SearchPage"));
-const LivePreviewPage = safeLazy(() => import("../pages/content/LivePreviewPage"));
 const CMSSettingsPage = safeLazy(() => import("../pages/content/CMSSettingsPage"));
 const SEODashboardPage = safeLazy(() => import("../pages/content/SEODashboardPage"));
 const ThemeManagerPage = safeLazy(() => import("../pages/content/ThemeManagerPage"));
@@ -58,7 +57,6 @@ const PluginsPage = safeLazy(() => import("../pages/content/PluginsPage"));
 const NavigationPage = safeLazy(() => import("../pages/content/NavigationPage"));
 const LayoutsPage = safeLazy(() => import("../pages/content/LayoutsPage"));
 const EditableRegionsPage = safeLazy(() => import("../pages/content/EditableRegionsPage"));
-const VisualEditorPage = safeLazy(() => import("../pages/content/VisualEditorPage"));
 
 const lazyLoad = (Component) => (
   <Suspense fallback={<div className="p-6"><LoadingSkeleton variant="card" /></div>}>
@@ -78,26 +76,6 @@ export const routesConfig = [
     )
   },
   
-  // Full-screen Visual Editor & Live Preview (Protected, no Sidebar/DashboardLayout)
-  {
-    path: "/content/:websiteId/pages/:pageId/editor",
-    errorElement: <RouteErrorBoundary />,
-    element: (
-      <ProtectedRoute>
-        {lazyLoad(VisualEditorPage)}
-      </ProtectedRoute>
-    )
-  },
-  {
-    path: "/content/:websiteId/preview/:pageId",
-    errorElement: <RouteErrorBoundary />,
-    element: (
-      <ProtectedRoute>
-        {lazyLoad(VisualEditorPage)}
-      </ProtectedRoute>
-    )
-  },
-
   // App Shell Layout (Protected Routes)
   {
     path: "/",
@@ -154,10 +132,6 @@ export const routesConfig = [
               {
                 path: "new",
                 element: lazyLoad(PageEditorPage)
-              },
-              {
-                path: ":pageId",
-                element: lazyLoad(VisualEditorPage)
               }
             ]
           },

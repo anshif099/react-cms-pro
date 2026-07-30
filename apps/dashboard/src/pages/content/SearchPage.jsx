@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Search, FileText, Image, Globe, ArrowRight, CornerDownRight, HelpCircle } from "lucide-react";
+import { Search, FileText, Image, ArrowRight, HelpCircle } from "lucide-react";
 import { useSearch } from "../../hooks/useSearch";
 import { useWebsites } from "../../hooks/useWebsites";
 import { useLocale } from "../../hooks/useLocale";
@@ -11,7 +11,7 @@ export function SearchPage() {
   const { websiteId } = useParams();
   const navigate = useNavigate();
 
-  const { results, query, searching, search, clearSearch } = useSearch();
+  const { results, searching, search } = useSearch();
   const { selectedWebsite, selectWebsite } = useWebsites();
   const { activeLocale } = useLocale(websiteId);
 
@@ -48,15 +48,8 @@ export function SearchPage() {
     return <HelpCircle className="w-4.5 h-4.5 text-slate-400" />;
   };
 
-  const getStatusColor = (status) => {
-    if (status === "published") return "bg-emerald-500/10 text-emerald-400 border-emerald-500/25";
-    return "bg-amber-500/10 text-amber-400 border-amber-500/25";
-  };
-
   const handleNavigate = (item) => {
-    if (item.type === "page") {
-      navigate(`/content/${websiteId}/pages/${item.id}/editor`);
-    } else if (item.type === "media") {
+    if (item.type === "media") {
       navigate(`/content/${websiteId}/media`);
     }
   };
@@ -146,8 +139,12 @@ export function SearchPage() {
           {filteredResults.map((item) => (
             <div
               key={item.id}
-              onClick={() => handleNavigate(item)}
-              className="flex items-center justify-between p-3.5 border border-admin-border dark:border-slate-800 bg-slate-900/30 hover:bg-slate-900/50 hover:border-slate-700 rounded-xl cursor-pointer transition-all group"
+              onClick={item.type === "media" ? () => handleNavigate(item) : undefined}
+              className={`flex items-center justify-between p-3.5 border border-admin-border dark:border-slate-800 bg-slate-900/30 rounded-xl transition-all group ${
+                item.type === "media"
+                  ? "hover:bg-slate-900/50 hover:border-slate-700 cursor-pointer"
+                  : ""
+              }`}
             >
               <div className="flex items-center gap-3.5 text-left min-w-0 flex-1 pr-4">
                 <div className="w-10 h-10 bg-slate-950/40 border border-slate-850 rounded-xl flex items-center justify-center flex-shrink-0">
@@ -173,7 +170,9 @@ export function SearchPage() {
                 <span className="text-[10px] text-admin-secondary hidden sm:inline-block">
                   Updated: {item.updatedAt ? new Date(item.updatedAt).toLocaleDateString() : "N/A"}
                 </span>
-                <ArrowRight className="w-4 h-4 text-slate-650 group-hover:text-primary transition-colors flex-shrink-0" />
+                {item.type === "media" && (
+                  <ArrowRight className="w-4 h-4 text-slate-650 group-hover:text-primary transition-colors flex-shrink-0" />
+                )}
               </div>
             </div>
           ))}

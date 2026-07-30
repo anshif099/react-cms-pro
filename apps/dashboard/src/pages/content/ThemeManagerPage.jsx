@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { Sliders, Save, RefreshCw, Palette, Type, ShieldCheck, Settings } from "lucide-react";
+import { Save, Palette, Type, ShieldCheck, Settings } from "lucide-react";
 import themeService from "../../services/themeService";
 import { useToast } from "../../hooks/useToast";
 import Button from "../../components/ui/Button";
@@ -9,7 +9,7 @@ import Input from "../../components/ui/Input";
 import ImagePicker from "../../components/ui/ImagePicker";
 import ColorPicker from "../../components/ui/ColorPicker";
 
-import visualEditService from "../../services/visualEditService";
+import themePreviewService from "../../services/themePreviewService";
 import { useWebsites } from "../../hooks/useWebsites";
 
 export function ThemeManagerPage() {
@@ -54,7 +54,7 @@ export function ThemeManagerPage() {
       if (selectedWebsite?.domain) {
         const iframes = document.querySelectorAll("iframe");
         iframes.forEach((frame) => {
-          visualEditService.sendThemeUpdate(frame, selectedWebsite.domain, websiteId, themeData);
+          themePreviewService.sendThemeUpdate(frame, websiteId, themeData);
         });
       }
 

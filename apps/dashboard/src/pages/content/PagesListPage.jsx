@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { Plus, Search, FileText, ExternalLink, Trash2, Edit3, Eye, Settings, Globe, RefreshCw, ArrowRight, Sliders } from "lucide-react";
+import { useParams } from "react-router-dom";
+import { Search, FileText, Trash2, Globe, RefreshCw } from "lucide-react";
 import { usePages } from "../../hooks/usePages";
 import { useLocale } from "../../hooks/useLocale";
 import { useWebsites } from "../../hooks/useWebsites";
@@ -8,32 +8,17 @@ import { useWebsiteSync } from "../../hooks/useWebsiteSync";
 import Table, { TableRow, TableCell } from "../../components/ui/Table";
 import Button from "../../components/ui/Button";
 import Card from "../../components/ui/Card";
-import Modal from "../../components/ui/Modal";
-import Input from "../../components/ui/Input";
 import EmptyState from "../../components/ui/EmptyState";
-import Badge from "../../components/ui/Badge";
-import PageTemplateSelector from "../../components/content/PageTemplateSelector";
 import ManualRouteImportModal from "../../components/websites/ManualRouteImportModal";
 
 export function PagesListPage() {
   const { websiteId } = useParams();
-  const navigate = useNavigate();
-  const { pages, pageLoading, fetchPages, createPage, deletePage } = usePages();
+  const { pages, pageLoading, fetchPages, deletePage } = usePages();
   const { selectWebsite, selectedWebsite } = useWebsites();
   const { activeLocales, activeLocale, setLocale } = useLocale(websiteId);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [wizardStep, setWizardStep] = useState(1);
-  const [selectedTemplate, setSelectedTemplate] = useState("blank");
-  const [newPageTitle, setNewPageTitle] = useState("");
-  const [newPageSlug, setNewPageSlug] = useState("");
-  const [newPagePrompt, setNewPagePrompt] = useState("");
-  const [newPageKeywords, setNewPageKeywords] = useState("");
-  const [newPageMetaTitle, setNewPageMetaTitle] = useState("");
-  const [newPageMetaDesc, setNewPageMetaDesc] = useState("");
-  const [creating, setCreating] = useState(false);
 
   const { sync, importManual, syncLoading } = useWebsiteSync(websiteId);
   const [showManualSync, setShowManualSync] = useState(false);
@@ -51,50 +36,6 @@ export function PagesListPage() {
       fetchPages(websiteId);
     }
   }, [websiteId, selectWebsite, fetchPages]);
-
-  // Auto slug generation
-  const handleTitleChange = (e) => {
-    const val = e.target.value;
-    setNewPageTitle(val);
-    setNewPageSlug(val.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""));
-    setNewPageMetaTitle(val);
-  };
-
-  const handleCreatePage = async (e) => {
-    if (e) e.preventDefault();
-    if (!newPageTitle.trim()) return;
-
-    setCreating(true);
-    try {
-      const created = await createPage(websiteId, {
-        title: newPageTitle,
-        slug: newPageSlug || "untitled",
-        template: selectedTemplate,
-        prompt: newPagePrompt,
-        keywords: newPageKeywords,
-        metaTitle: newPageMetaTitle || newPageTitle,
-        metaDescription: newPageMetaDesc || newPagePrompt,
-        source: newPagePrompt ? "generated" : (selectedTemplate === "blank" ? "cms" : "generated")
-      });
-      setIsCreateOpen(false);
-      setNewPageTitle("");
-      setNewPageSlug("");
-      setNewPagePrompt("");
-      setNewPageKeywords("");
-      setNewPageMetaTitle("");
-      setNewPageMetaDesc("");
-      setSelectedTemplate("blank");
-      setWizardStep(1);
-
-      if (created?.id) {
-        navigate(`/content/${websiteId}/pages/${created.id}/editor`);
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setCreating(false);
-    }
-  };
 
   const handleDelete = async (pageId, title) => {
     if (window.confirm(`Are you sure you want to permanently delete the page "${title}"?`)) {
@@ -178,7 +119,7 @@ export function PagesListPage() {
             <span>Pages</span>
           </h2>
           <p className="text-sm text-admin-secondary">
-            Manage site structure, edit schemas, and preview drafts on <span className="font-semibold text-admin-text">{selectedWebsite.name}</span>
+            Manage synced pages and site structure on <span className="font-semibold text-admin-text">{selectedWebsite.name}</span>
           </p>
         </div>
         <div className="flex gap-3">
@@ -274,17 +215,11 @@ export function PagesListPage() {
             return (
               <TableRow key={page.id}>
                 <TableCell className="font-semibold text-admin-text flex items-center gap-2.5">
-                  <div 
-                    onClick={() => navigate(`/content/${websiteId}/pages/${page.id}/editor`)}
-                    className="w-8 h-8 rounded-lg bg-slate-950/20 border border-slate-800/40 flex items-center justify-center text-primary flex-shrink-0 cursor-pointer hover:bg-primary/20 transition-colors"
-                  >
+                  <div className="w-8 h-8 rounded-lg bg-slate-950/20 border border-slate-800/40 flex items-center justify-center text-primary flex-shrink-0">
                     <FileText className="w-4 h-4" />
                   </div>
-                  <div 
-                    onClick={() => navigate(`/content/${websiteId}/pages/${page.id}/editor`)}
-                    className="cursor-pointer group"
-                  >
-                    <span className="block text-sm font-semibold group-hover:text-primary transition-colors">{displayTitle}</span>
+                  <div>
+                    <span className="block text-sm font-semibold">{displayTitle}</span>
                     <span className="block text-[10px] text-admin-secondary font-mono mt-0.5">
                       {page.route || `/${displaySlug}`}
                     </span>
@@ -308,33 +243,6 @@ export function PagesListPage() {
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-1.5">
-                    {/* Open Visual Editor */}
-                    <button
-                      onClick={() => navigate(`/content/${websiteId}/pages/${page.id}/editor`)}
-                      className="p-1.5 rounded-lg hover:bg-slate-850 text-primary hover:text-white transition-colors cursor-pointer bg-primary/10 border border-primary/20"
-                      title="Open Visual Editor"
-                    >
-                      <Sliders className="w-4 h-4" />
-                    </button>
-
-                    {/* View Preview */}
-                    <button
-                      onClick={() => navigate(`/content/${websiteId}/pages/${page.id}/editor`)}
-                      className="p-1.5 rounded-lg hover:bg-slate-850 text-admin-secondary hover:text-admin-text transition-colors cursor-pointer"
-                      title="Live Preview"
-                    >
-                      <Eye className="w-4 h-4" />
-                    </button>
-
-                    {/* Edit Page */}
-                    <button
-                      onClick={() => navigate(`/content/${websiteId}/pages/${page.id}/editor`)}
-                      className="p-1.5 rounded-lg hover:bg-slate-850 text-admin-secondary hover:text-primary transition-colors cursor-pointer"
-                      title="Edit Page in Visual Editor"
-                    >
-                      <Edit3 className="w-4 h-4" />
-                    </button>
-
                     {/* Delete Page */}
                     <button
                       onClick={() => handleDelete(page.id, displayTitle)}

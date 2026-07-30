@@ -154,7 +154,7 @@ export const pageConversionService = {
         alignment: "center"
       }),
       generateBlock("paragraph", {
-        text: "<p>Start customizing your newly created CMS section blocks using the visual editor.</p>"
+        text: "<p>Start customizing your newly created CMS section blocks using the page tools.</p>"
       }),
       generateBlock("cta", {
         title: "Have any questions?",
