@@ -1,5 +1,6 @@
 import React, { createContext, useState, useContext, useEffect, useCallback } from "react";
 import websiteService from "../services/websiteService";
+import sourceCredentialService from "../services/sourceCredentialService";
 
 const WebsiteContext = createContext(null);
 
@@ -71,6 +72,7 @@ export function WebsiteProvider({ children }) {
   const deleteWebsite = useCallback(async (id) => {
     try {
       await websiteService.delete(id);
+      sourceCredentialService.clear(id);
       await refreshWebsites();
       setSelectedWebsite(prev => {
         if (prev && prev.id === id) {

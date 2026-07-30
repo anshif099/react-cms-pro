@@ -1,5 +1,5 @@
 import { database } from "../lib/firebase";
-import { ref, get, set, push, remove, onValue, serverTimestamp } from "firebase/database";
+import { ref, get, set, push, remove, onValue, update, serverTimestamp } from "firebase/database";
 import contentSyncService from "./contentSyncService";
 import revisionService from "./revisionService";
 import searchService from "./searchService";
@@ -40,6 +40,18 @@ export const pageService = {
       console.error(`Failed to fetch page ${pageId}:`, error);
       throw error;
     }
+  },
+
+  async updateSourceMetadata(websiteId, pageId, data) {
+    await update(ref(database, `pages/${websiteId}/${pageId}`), {
+      sourceProvider: data.sourceProvider || null,
+      sourceFile: data.sourceFile || null,
+      sourceRouterFile: data.sourceRouterFile || null,
+      sourceRevision: data.sourceRevision || null,
+      sourceWriteback: true,
+      updatedAt: serverTimestamp()
+    });
+    return this.getById(websiteId, pageId);
   },
 
   async create(websiteId, data) {

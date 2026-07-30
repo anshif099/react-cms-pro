@@ -1,8 +1,12 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "functions": {
+    "api/cpanel.js": {
+      "maxDuration": 60
+    }
+  },
   "rewrites": [
     { "source": "/:path*", "destination": "/index.html" }
   ]
 }
-

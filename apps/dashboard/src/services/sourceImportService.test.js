@@ -52,6 +52,8 @@ describe("GitHub source authentication", () => {
     expect(imported.manifest.tokenIgnored).toBe(true);
     expect(imported.manifest.rootIgnored).toBe(true);
     expect(imported.manifest.rootDirectory).toBe("");
+    expect(imported.archive).toBeNull();
+    expect(sourceImportService.persistCodebase).toBeUndefined();
     expect(imported.routes).toEqual([
       expect.objectContaining({ path: "/contact", title: "Contact Us" })
     ]);

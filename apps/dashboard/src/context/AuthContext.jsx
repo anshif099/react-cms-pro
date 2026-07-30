@@ -66,28 +66,29 @@ export function AuthProvider({ children }) {
   }, []);
 
   const login = async (email, password) => {
+    // The built-in local administrator must not call Firebase Auth. This
+    // project can run with Firebase Email/Password authentication disabled.
+    if (email === "admin@reactcms.local" && password === "ReactCMS@2026") {
+      sessionStorage.setItem("reactcms_local_session", "true");
+      const adminProfile = {
+        uid: "admin_local",
+        email: "admin@reactcms.local",
+        name: "Admin User",
+        role: "Administrator",
+        company: "ReactCMS Ltd.",
+        phone: "+1 (555) 019-2834"
+      };
+      setUser(adminProfile);
+      setIsAuthenticated(true);
+      return { success: true, user: adminProfile };
+    }
+
     try {
       const result = await authService.login(email, password);
       return { success: true, user: result.user };
     } catch (error) {
       console.warn("Firebase Auth login failed, checking local credentials fallback:", error);
       
-      // Fallback for admin credentials to bypass Firebase Auth if not configured/enabled
-      if (email === "admin@reactcms.local" && password === "ReactCMS@2026") {
-        sessionStorage.setItem("reactcms_local_session", "true");
-        const adminProfile = {
-          uid: "admin_local",
-          email: "admin@reactcms.local",
-          name: "Admin User",
-          role: "Administrator",
-          company: "ReactCMS Ltd.",
-          phone: "+1 (555) 019-2834"
-        };
-        setUser(adminProfile);
-        setIsAuthenticated(true);
-        return { success: true, user: adminProfile };
-      }
-
       let message = "An unexpected error occurred.";
       if (error.code === "auth/invalid-credential" || error.code === "auth/wrong-password" || error.code === "auth/user-not-found") {
         message = "Invalid email or password.";

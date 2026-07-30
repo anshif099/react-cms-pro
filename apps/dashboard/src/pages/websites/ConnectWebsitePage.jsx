@@ -7,8 +7,7 @@ import {
   Archive,
   ArrowLeft,
   FolderGit2,
-  Info,
-  UploadCloud
+  Info
 } from "lucide-react";
 import { useWebsites } from "../../hooks/useWebsites";
 import { useToast } from "../../hooks/useToast";
@@ -17,6 +16,7 @@ import { Input } from "../../components/ui/Input";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import sourceImportService from "../../services/sourceImportService";
+import sourceCredentialService from "../../services/sourceCredentialService";
 
 const connectSchema = zod.object({
   name: zod.string().min(2, "Website name must be at least 2 characters"),
@@ -26,6 +26,9 @@ const connectSchema = zod.object({
   branch: zod.string().optional(),
   rootDirectory: zod.string().optional(),
   githubToken: zod.string().optional(),
+  cpanelEndpoint: zod.string().optional(),
+  cpanelUsername: zod.string().optional(),
+  cpanelToken: zod.string().optional(),
   ownerName: zod.string().min(2, "Owner name is required"),
   ownerEmail: zod.string().email("Enter a valid owner email")
 }).superRefine((data, context) => {
@@ -36,18 +39,41 @@ const connectSchema = zod.object({
       message: "GitHub repository URL is required"
     });
   }
+  if (data.connectionProvider === "cpanel") {
+    if (!data.cpanelEndpoint?.trim()) {
+      context.addIssue({
+        code: "custom",
+        path: ["cpanelEndpoint"],
+        message: "cPanel URL is required"
+      });
+    }
+    if (!data.cpanelUsername?.trim()) {
+      context.addIssue({
+        code: "custom",
+        path: ["cpanelUsername"],
+        message: "cPanel username is required"
+      });
+    }
+    if (!data.cpanelToken?.trim()) {
+      context.addIssue({
+        code: "custom",
+        path: ["cpanelToken"],
+        message: "cPanel API token is required"
+      });
+    }
+  }
 });
 
 export function ConnectWebsitePage() {
   const {
     createWebsite,
+    deleteWebsite,
     importRoutes,
     updateWebsite
   } = useWebsites();
   const { user } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
-  const [archiveFile, setArchiveFile] = useState(null);
   const [connecting, setConnecting] = useState(false);
   const [progress, setProgress] = useState("");
 
@@ -67,6 +93,9 @@ export function ConnectWebsitePage() {
       branch: "",
       rootDirectory: "",
       githubToken: "",
+      cpanelEndpoint: "",
+      cpanelUsername: "",
+      cpanelToken: "",
       ownerName: "",
       ownerEmail: ""
     }
@@ -84,11 +113,6 @@ export function ConnectWebsitePage() {
   }, [reset, user]);
 
   const onSubmit = async (data) => {
-    if (data.connectionProvider === "cpanel" && !archiveFile) {
-      toast.error("Choose the ZIP source backup downloaded from cPanel.");
-      return;
-    }
-
     setConnecting(true);
     setProgress("Preparing source import...");
     let createdWebsite = null;
@@ -101,9 +125,11 @@ export function ConnectWebsitePage() {
           token: data.githubToken,
           onProgress: setProgress
         })
-        : await sourceImportService.importCPanelArchive({
-          file: archiveFile,
-          rootDirectory: data.rootDirectory,
+        : await sourceImportService.importCPanel({
+          endpoint: data.cpanelEndpoint,
+          username: data.cpanelUsername,
+          token: data.cpanelToken,
+          rootDirectory: data.rootDirectory || "public_html",
           onProgress: setProgress
         });
       if (imported.manifest.tokenIgnored) {
@@ -129,15 +155,32 @@ export function ConnectWebsitePage() {
           branch: imported.manifest.branch,
           rootDirectory: imported.manifest.rootDirectory,
           sourceRevision: imported.manifest.revision,
-          authentication: imported.manifest.authentication
+          authentication: imported.manifest.authentication,
+          endpoint: data.connectionProvider === "cpanel"
+            ? data.cpanelEndpoint
+            : null,
+          sourceMode: "provider",
+          sourceStorage: data.connectionProvider
         }
       });
 
-      const codebase = await sourceImportService.persistCodebase(
-        createdWebsite.id,
-        imported,
-        setProgress
-      );
+      if (
+        data.connectionProvider === "github"
+        && data.githubToken?.trim()
+        && !imported.manifest.tokenIgnored
+      ) {
+        sourceCredentialService.rememberGitHub(
+          createdWebsite.id,
+          data.githubToken
+        );
+      }
+      if (data.connectionProvider === "cpanel") {
+        sourceCredentialService.rememberCPanel(createdWebsite.id, {
+          endpoint: data.cpanelEndpoint,
+          username: data.cpanelUsername,
+          token: data.cpanelToken
+        });
+      }
 
       setProgress(`Importing ${imported.routes.length} discovered pages...`);
       await importRoutes(
@@ -161,7 +204,18 @@ export function ConnectWebsitePage() {
           rootDirectory: imported.manifest.rootDirectory,
           sourceRevision: imported.manifest.revision,
           authentication: imported.manifest.authentication,
-          artifactPath: codebase.artifactPath,
+          endpoint: data.connectionProvider === "cpanel"
+            ? data.cpanelEndpoint
+            : null,
+          sourceMode: "provider",
+          sourceStorage: data.connectionProvider,
+          writebackEnabled: (
+            data.connectionProvider === "cpanel"
+            || (
+              Boolean(data.githubToken?.trim())
+              && !imported.manifest.tokenIgnored
+            )
+          ),
           fileCount: imported.manifest.fileCount,
           routeCount: imported.routes.length,
           importedAt: Date.now()
@@ -176,14 +230,10 @@ export function ConnectWebsitePage() {
       console.error("Source connection failed", error);
       if (createdWebsite) {
         try {
-          await updateWebsite(createdWebsite.id, {
-            status: "error",
-            connectionHealth: "error",
-            "connection/status": "error",
-            "connection/error": error.message
-          });
-        } catch (updateError) {
-          console.error("Could not persist import failure", updateError);
+          sourceCredentialService.clear(createdWebsite.id);
+          await deleteWebsite(createdWebsite.id);
+        } catch (rollbackError) {
+          console.error("Could not roll back incomplete website connection", rollbackError);
         }
       }
       toast.error(error.message || "Website source could not be imported.");
@@ -247,9 +297,9 @@ export function ConnectWebsitePage() {
                   {...register("connectionProvider")}
                 />
                 <Archive className="w-6 h-6 text-admin-text" />
-                <span className="block mt-3 text-sm font-bold text-admin-text">cPanel Source Backup</span>
+                <span className="block mt-3 text-sm font-bold text-admin-text">cPanel Live Connection</span>
                 <span className="block mt-1 text-xs leading-5 text-admin-secondary">
-                  Import a ZIP created in cPanel File Manager without sharing cPanel credentials.
+                  Read and publish files through the account's cPanel UAPI.
                 </span>
               </label>
             </div>
@@ -285,7 +335,7 @@ export function ConnectWebsitePage() {
           </Card>
 
           {provider === "github" ? (
-            <Card title="GitHub Source" subtitle="The token is held in memory for this import only and is never stored">
+            <Card title="GitHub Source" subtitle="The token stays in this browser session and is never stored in Firebase">
               <div className="space-y-5">
                 <Input
                   label="Repository URL *"
@@ -309,37 +359,44 @@ export function ConnectWebsitePage() {
                 </div>
                 <Input
                   type="password"
-                  label="Fine-grained Token (private repo only)"
-                  placeholder="Leave empty for a public repository"
-                  helperText="Triosis is public, so leave this field empty."
-                  autoComplete="off"
+                  label="GitHub Write Token"
+                  placeholder="Optional for viewing public repositories"
+                  helperText="Direct publishing requires a fine-grained token with Contents: Read and write permission."
+                  autoComplete="new-password"
                   {...register("githubToken")}
                 />
               </div>
             </Card>
           ) : (
-            <Card title="cPanel Source Backup" subtitle="In cPanel File Manager, compress the source project folder as ZIP, then select it here">
+            <Card title="cPanel Connection" subtitle="Credentials stay in this browser session and are sent only to the connected cPanel server">
               <div className="space-y-5">
-                <label className="min-h-36 rounded-xl border-2 border-dashed border-slate-700 hover:border-primary bg-slate-950/20 grid place-items-center cursor-pointer transition-colors">
-                  <input
-                    type="file"
-                    accept=".zip,application/zip"
-                    className="sr-only"
-                    onChange={(event) => setArchiveFile(event.target.files?.[0] || null)}
-                  />
-                  <span className="text-center px-6 py-5">
-                    <UploadCloud className="w-7 h-7 text-primary mx-auto" />
-                    <span className="block mt-2 text-sm font-bold text-admin-text">
-                      {archiveFile ? archiveFile.name : "Choose cPanel source ZIP"}
-                    </span>
-                    <span className="block mt-1 text-xs text-admin-secondary">
-                      Maximum compressed size: 50 MB
-                    </span>
-                  </span>
-                </label>
                 <Input
-                  label="Project Root Inside ZIP"
-                  placeholder="e.g. public_html or app (optional)"
+                  label="cPanel URL *"
+                  placeholder="https://cpanel.example.com:2083"
+                  helperText="Use the account's secure cPanel hostname."
+                  error={errors.cpanelEndpoint?.message}
+                  {...register("cpanelEndpoint")}
+                />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <Input
+                    label="cPanel Username *"
+                    placeholder="account username"
+                    error={errors.cpanelUsername?.message}
+                    {...register("cpanelUsername")}
+                  />
+                  <Input
+                    type="password"
+                    label="cPanel API Token *"
+                    placeholder="API token"
+                    autoComplete="new-password"
+                    error={errors.cpanelToken?.message}
+                    {...register("cpanelToken")}
+                  />
+                </div>
+                <Input
+                  label="Project Root"
+                  placeholder="public_html"
+                  helperText="The folder containing the deployed website source."
                   {...register("rootDirectory")}
                 />
               </div>
@@ -359,8 +416,8 @@ export function ConnectWebsitePage() {
         <div className="space-y-6">
           <Card title="What gets imported">
             <div className="space-y-3 text-xs leading-5 text-admin-secondary">
-              <p>ReactCMS stores the complete ZIP as a versioned source artifact.</p>
-              <p>Framework, source files, routes, branch, and revision are indexed for the Pages module.</p>
+              <p>The complete codebase stays in GitHub or the connected cPanel account.</p>
+              <p>ReactCMS indexes only routes, source paths, branch, and revision metadata.</p>
               <p>No SDK credentials or npm installation are generated.</p>
             </div>
           </Card>

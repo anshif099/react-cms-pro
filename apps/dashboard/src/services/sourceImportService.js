@@ -1,12 +1,10 @@
-import { unzipSync, zipSync } from "fflate";
-import { ref as databaseRef, set, serverTimestamp } from "firebase/database";
-import { getBlob, ref as storageRef, uploadBytes } from "firebase/storage";
-import { database, storage } from "../lib/firebase";
+import { unzipSync } from "fflate";
 import {
   buildSourceManifest,
   isSourceTextFile,
   normalizeSourceFiles
 } from "./sourceImportUtils";
+import sourceProviderService from "./sourceProviderService";
 
 const MAX_ARCHIVE_BYTES = 50 * 1024 * 1024;
 const MAX_EXTRACTED_BYTES = 100 * 1024 * 1024;
@@ -155,7 +153,7 @@ async function sha256(buffer) {
     .join("");
 }
 
-function archiveResult(buffer, files, metadata, filename) {
+function sourceResult(files, metadata, filename, buffer = null) {
   const manifest = buildSourceManifest(files, metadata);
   if (!manifest.sourceFileCount) {
     throw new Error("No source files were found in the selected repository root.");
@@ -166,11 +164,103 @@ function archiveResult(buffer, files, metadata, filename) {
     );
   }
   return {
-    archive: new Blob([buffer], { type: "application/zip" }),
+    archive: buffer ? new Blob([buffer], { type: "application/zip" }) : null,
     filename,
     manifest,
     routes: manifest.routes
   };
+}
+
+function cpanelEntries(value) {
+  if (Array.isArray(value)) return value;
+  if (Array.isArray(value?.data)) return value.data;
+  if (value && typeof value === "object") return Object.values(value);
+  return [];
+}
+
+function cpanelEntryName(entry) {
+  return String(entry?.name || entry?.file || entry?.filename || "")
+    .replaceAll("\\", "/")
+    .replace(/^\/+|\/+$/g, "");
+}
+
+function isCPanelDirectory(entry) {
+  return entry?.type === "dir"
+    || entry?.type === "directory"
+    || entry?.is_dir === 1
+    || entry?.is_dir === true;
+}
+
+async function downloadCPanelFiles(credentials, rootDirectory, onProgress) {
+  const root = String(rootDirectory || "public_html")
+    .replaceAll("\\", "/")
+    .replace(/^\/+|\/+$/g, "");
+  if (!root || root.split("/").some((segment) => segment === "..")) {
+    throw new Error("Enter a valid cPanel project root such as public_html.");
+  }
+
+  const queue = [root];
+  const files = [];
+  while (queue.length) {
+    const directory = queue.shift();
+    onProgress?.(`Reading cPanel directory ${directory}...`);
+    const listing = cpanelEntries(
+      await sourceProviderService.listCPanelFiles(credentials, directory)
+    );
+    for (const entry of listing) {
+      const name = cpanelEntryName(entry);
+      if (!name || name === "." || name === "..") continue;
+      const fullPath = `${directory}/${name}`.replace(/\/+/g, "/");
+      const relativePath = fullPath.slice(root.length).replace(/^\/+/, "");
+      if (!relativePath) continue;
+      const segments = relativePath.split("/");
+      if (segments.some((segment) => SKIPPED_SOURCE_DIRECTORIES.has(segment))) {
+        continue;
+      }
+      if (isCPanelDirectory(entry)) {
+        queue.push(fullPath);
+        continue;
+      }
+      files.push({
+        repositoryPath: fullPath,
+        path: relativePath,
+        size: Number(entry.size || entry.bytes || 0),
+        content: null
+      });
+      if (files.length > MAX_EXTRACTED_FILES) {
+        throw new Error("The cPanel project contains too many files (maximum 12,000).");
+      }
+    }
+  }
+
+  const totalBytes = files.reduce((total, file) => total + file.size, 0);
+  if (totalBytes > MAX_EXTRACTED_BYTES) {
+    throw new Error("The cPanel project exceeds the 100 MB inspection limit.");
+  }
+
+  const readableFiles = files.filter((file) => (
+    isSourceTextFile(file.path) && file.size <= MAX_TEXT_FILE_BYTES
+  ));
+  let cursor = 0;
+  const workers = Array.from(
+    { length: Math.min(6, readableFiles.length) },
+    async () => {
+      while (cursor < readableFiles.length) {
+        const index = cursor;
+        cursor += 1;
+        const file = readableFiles[index];
+        file.content = await sourceProviderService.readCPanelFile(
+          credentials,
+          file.repositoryPath
+        );
+        if ((index + 1) % 20 === 0 || index + 1 === readableFiles.length) {
+          onProgress?.(`Reading cPanel source files (${index + 1}/${readableFiles.length})...`);
+        }
+      }
+    }
+  );
+  await Promise.all(workers);
+  return files;
 }
 
 function githubTreeFiles(tree, rootDirectory) {
@@ -319,11 +409,6 @@ export const sourceImportService = {
       onProgress
     );
 
-    onProgress?.("Building the source artifact...");
-    const archiveBytes = zipSync(
-      Object.fromEntries(downloaded.map((file) => [file.path, file.bytes])),
-      { level: 6 }
-    );
     const decoder = new TextDecoder("utf-8", { fatal: false });
     const files = downloaded.map((file) => ({
       path: file.path,
@@ -332,13 +417,8 @@ export const sourceImportService = {
         ? decoder.decode(file.bytes)
         : null
     }));
-    const buffer = archiveBytes.buffer.slice(
-      archiveBytes.byteOffset,
-      archiveBytes.byteOffset + archiveBytes.byteLength
-    );
-
     onProgress?.("Inspecting framework and routes...");
-    return archiveResult(buffer, files, {
+    return sourceResult(files, {
       provider: "github",
       repository: repository.fullName,
       branch: selectedBranch,
@@ -347,7 +427,7 @@ export const sourceImportService = {
       authentication: effectiveToken ? "token" : "anonymous",
       tokenIgnored,
       rootIgnored
-    }, `${repository.repository}-${commit.sha.slice(0, 8)}.zip`);
+    }, `${repository.repository}-${commit.sha.slice(0, 8)}`);
   },
 
   async importCPanelArchive({ file, rootDirectory = "", onProgress }) {
@@ -360,49 +440,47 @@ export const sourceImportService = {
     onProgress?.("Inspecting framework and routes...");
     const revision = await sha256(buffer);
     const files = decodeArchive(buffer, rootDirectory);
-    return archiveResult(buffer, files, {
+    return sourceResult(files, {
       provider: "cpanel",
       repository: file.name,
       branch: null,
       revision,
       rootDirectory
-    }, file.name);
+    }, file.name, buffer);
   },
 
-  async persistCodebase(websiteId, imported, onProgress) {
-    const timestamp = Date.now();
-    const safeFilename = imported.filename.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const artifactPath = `source-code/${websiteId}/imports/${timestamp}_${safeFilename}`;
-    onProgress?.("Uploading the source artifact...");
-    await uploadBytes(
-      storageRef(storage, artifactPath),
-      imported.archive,
-      { contentType: "application/zip" }
-    );
-
-    onProgress?.("Saving the codebase manifest...");
-    const codebase = {
-      ...imported.manifest,
-      artifactPath,
-      active: true,
-      importedAt: serverTimestamp()
+  async importCPanel({
+    endpoint,
+    username,
+    token,
+    rootDirectory = "public_html",
+    onProgress
+  }) {
+    const credentials = {
+      endpoint: String(endpoint || "").trim(),
+      username: String(username || "").trim(),
+      token: String(token || "").trim()
     };
-    await set(databaseRef(database, `codebases/${websiteId}`), codebase);
-    return { ...codebase, importedAt: timestamp };
+    if (!credentials.endpoint || !credentials.username || !credentials.token) {
+      throw new Error("cPanel URL, username, and API token are required.");
+    }
+    onProgress?.("Connecting to cPanel File Manager...");
+    const files = await downloadCPanelFiles(credentials, rootDirectory, onProgress);
+    const revision = String(Date.now());
+    onProgress?.("Inspecting framework and routes...");
+    return sourceResult(files, {
+      provider: "cpanel",
+      repository: credentials.endpoint,
+      branch: null,
+      revision,
+      rootDirectory: rootDirectory || "public_html",
+      authentication: "api-token"
+    }, "cpanel-live-source");
   },
 
-  async downloadCodebase(artifactPath, filename = "website-source.zip") {
-    if (!artifactPath) throw new Error("The source artifact path is missing.");
-    const blob = await getBlob(storageRef(storage, artifactPath));
-    const href = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = href;
-    anchor.download = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    URL.revokeObjectURL(href);
-  }
+  // Source archives intentionally remain with the connected provider.
+  // ReactCMS inspects them in memory to discover routes, but never uploads a
+  // customer's repository or cPanel files into the ReactCMS Firebase project.
 };
 
 export default sourceImportService;

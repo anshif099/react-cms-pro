@@ -10,6 +10,9 @@ import React, {
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   ChevronRight,
+  FileCode2,
+  GitBranch,
+  KeyRound,
   Loader2,
   Palette,
   Ruler
@@ -32,6 +35,16 @@ import { useAuth } from "../../hooks/useAuth";
 import { useToast } from "../../hooks/useToast";
 import revisionService from "../../services/revisionService";
 import themeService from "../../services/themeService";
+import websiteService from "../../services/websiteService";
+import sourceCredentialService from "../../services/sourceCredentialService";
+import sourceProviderService from "../../services/sourceProviderService";
+import pageService from "../../services/pageService";
+import {
+  generateReactPageSource,
+  patchReactStateRouter,
+  reactPageComponentName,
+  reactPageSourcePath
+} from "../../services/sourceGenerationService";
 import visualBuilderService, {
   createVisualNode
 } from "../../services/visualBuilderService";
@@ -40,6 +53,100 @@ import NativeLayersPanel from "../../components/content/NativeLayersPanel";
 
 const NativeInspector = lazy(() => import("../../components/content/NativeInspector"));
 const VisualPageSettingsModal = lazy(() => import("../../components/content/VisualPageSettingsModal"));
+
+function sourceDraftKey(websiteId, pageId) {
+  return `reactcms_source_draft:${websiteId}:${pageId}`;
+}
+
+function ConnectedSourceWorkspace({
+  mode,
+  page,
+  website,
+  content,
+  loading,
+  error,
+  saveStatus,
+  saving,
+  publishing,
+  writeToken,
+  onWriteTokenChange,
+  onBack,
+  onChange,
+  onSave,
+  onPublish
+}) {
+  const isPreview = mode === "preview";
+  const isGitHub = website?.connection?.provider === "github";
+
+  return (
+    <div className="h-screen min-h-0 bg-[#070b14] text-slate-200 flex flex-col overflow-hidden">
+      <VisualBuilderToolbar
+        mode={mode}
+        page={page}
+        device="desktop"
+        saveStatus={saveStatus}
+        saving={saving}
+        publishing={publishing}
+        canUndo={false}
+        canRedo={false}
+        onBack={onBack}
+        onDeviceChange={() => {}}
+        onUndo={() => {}}
+        onRedo={() => {}}
+        onSave={onSave}
+        onPublish={onPublish}
+        onSettings={() => {}}
+      />
+
+      <div className="h-11 px-4 border-b border-slate-800 bg-[#0a101d] flex items-center gap-3">
+        <FileCode2 className="w-4 h-4 text-blue-400" />
+        <code className="text-[11px] text-slate-300 truncate">{page.sourceFile}</code>
+        <span className="ml-auto flex items-center gap-1.5 text-[10px] text-slate-500">
+          <GitBranch className="w-3.5 h-3.5" />
+          {website?.connection?.branch || website?.connection?.provider}
+        </span>
+      </div>
+
+      {!isPreview && isGitHub && (
+        <div className="px-4 py-2 border-b border-slate-800 bg-slate-950/40 flex items-center gap-2">
+          <KeyRound className="w-3.5 h-3.5 text-slate-500" />
+          <input
+            type="password"
+            value={writeToken}
+            onChange={(event) => onWriteTokenChange(event.target.value)}
+            placeholder="GitHub Contents: Read and write token (kept for this browser session)"
+            autoComplete="new-password"
+            className="h-8 flex-1 rounded-lg border border-slate-800 bg-[#080d18] px-3 text-[11px] text-slate-200 outline-none focus:border-blue-500"
+          />
+        </div>
+      )}
+
+      <main className="flex-1 min-h-0 p-4 bg-[#080d18]">
+        {loading ? (
+          <div className="h-full grid place-items-center">
+            <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+          </div>
+        ) : error ? (
+          <div className="h-full grid place-items-center">
+            <div className="max-w-lg rounded-xl border border-rose-500/20 bg-rose-500/5 p-6 text-center">
+              <p className="text-sm font-bold text-white">Connected source could not be loaded</p>
+              <p className="mt-2 text-xs leading-5 text-slate-500">{error}</p>
+            </div>
+          </div>
+        ) : (
+          <textarea
+            value={content}
+            onChange={(event) => onChange(event.target.value)}
+            readOnly={isPreview}
+            spellCheck="false"
+            aria-label={`Source code for ${page.title}`}
+            className="w-full h-full resize-none rounded-xl border border-slate-800 bg-[#050914] p-5 font-mono text-[12px] leading-5 text-slate-300 outline-none focus:border-blue-500 read-only:cursor-default"
+          />
+        )}
+      </main>
+    </div>
+  );
+}
 
 function buildInitialTree(page, document, locale, pageKey) {
   const localeData = page.locales?.[locale] || {};
@@ -324,6 +431,14 @@ export function VisualBuilderPage() {
   const [publishing, setPublishing] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [themeTokens, setThemeTokens] = useState(null);
+  const [sourceWebsite, setSourceWebsite] = useState(null);
+  const [sourceContent, setSourceContent] = useState("");
+  const [sourceLoading, setSourceLoading] = useState(false);
+  const [sourceError, setSourceError] = useState("");
+  const [sourceSaveStatus, setSourceSaveStatus] = useState("saved");
+  const [sourceSaving, setSourceSaving] = useState(false);
+  const [sourcePublishing, setSourcePublishing] = useState(false);
+  const [sourceWriteToken, setSourceWriteToken] = useState("");
 
   const treeRef = useRef(null);
   const pageRef = useRef(null);
@@ -351,6 +466,69 @@ export function VisualBuilderPage() {
   useEffect(() => {
     pageRef.current = selectedPage;
   }, [selectedPage]);
+
+  useEffect(() => {
+    if (!websiteId) return undefined;
+    let cancelled = false;
+    websiteService.getById(websiteId)
+      .then((website) => {
+        if (cancelled) return;
+        setSourceWebsite(website);
+        setSourceWriteToken(
+          sourceCredentialService.get(websiteId).token || ""
+        );
+      })
+      .catch((error) => {
+        if (!cancelled) console.error("Connected website could not be loaded", error);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [websiteId]);
+
+  const isConnectedSourcePage = Boolean(
+    selectedPage?.isImported
+    && selectedPage?.nativeArtifactStatus === "source-only"
+    && selectedPage?.sourceFile
+  );
+
+  useEffect(() => {
+    if (!isConnectedSourcePage || !websiteId || !pageId) return undefined;
+    let cancelled = false;
+    const loadSource = async () => {
+      setSourceLoading(true);
+      setSourceError("");
+      try {
+        const website = await websiteService.getById(websiteId);
+        if (!website) throw new Error("The connected website record was not found.");
+        const source = await sourceProviderService.readFile(
+          website,
+          selectedPage.sourceFile
+        );
+        if (cancelled) return;
+        const draft = sessionStorage.getItem(sourceDraftKey(websiteId, pageId));
+        setSourceWebsite(website);
+        setSourceContent(draft ?? source.content);
+        setSourceWriteToken(
+          sourceCredentialService.get(websiteId).token || ""
+        );
+        setSourceSaveStatus(draft === null ? "saved" : "unsaved");
+      } catch (error) {
+        if (!cancelled) setSourceError(error.message || "Source file could not be loaded.");
+      } finally {
+        if (!cancelled) setSourceLoading(false);
+      }
+    };
+    loadSource();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    isConnectedSourcePage,
+    pageId,
+    selectedPage?.sourceFile,
+    websiteId
+  ]);
 
   useEffect(() => {
     settingsRef.current = pageSettings;
@@ -496,18 +674,89 @@ export function VisualBuilderPage() {
       if (!saved) return;
       const page = pageRef.current;
       const currentPageKey = visualBuilderService.resolvePageKey(page);
+
+      let providerResult = null;
+      let generatedSourceFile = null;
+      if (sourceWebsite?.connection?.sourceMode === "provider") {
+        const framework = String(sourceWebsite.framework || "").toLowerCase();
+        if (!framework.includes("react") && !framework.includes("vite")) {
+          throw new Error(
+            "Automatic new-page source generation currently supports connected React/Vite projects."
+          );
+        }
+        const credentials = sourceCredentialService.get(websiteId);
+        if (
+          sourceWebsite.connection.provider === "github"
+          && !credentials.token
+        ) {
+          throw new Error(
+            "Enter a GitHub token with Contents: Read and write permission when connecting the website."
+          );
+        }
+
+        generatedSourceFile = reactPageSourcePath(
+          settingsRef.current.slug || page.slug
+        );
+        const component = reactPageComponentName(
+          settingsRef.current.slug || page.slug
+        );
+        const componentSource = generateReactPageSource({
+          title: settingsRef.current.title || page.title,
+          slug: settingsRef.current.slug || page.slug,
+          blocks: pageTreeToBlocks(treeRef.current),
+          locale: activeLocale
+        });
+        const routerFile = "src/App.jsx";
+        const router = await sourceProviderService.readFile(
+          sourceWebsite,
+          routerFile
+        );
+        const routerSource = patchReactStateRouter(router.content, {
+          title: settingsRef.current.title || page.title,
+          slug: settingsRef.current.slug || page.slug,
+          component,
+          importPath: `./pages/${component}.jsx`
+        });
+        providerResult = await sourceProviderService.writeFiles(
+          sourceWebsite,
+          [
+            { path: generatedSourceFile, content: componentSource },
+            { path: routerFile, content: routerSource }
+          ],
+          `Publish ${settingsRef.current.title || page.title} from ReactCMS`
+        );
+      }
+
       await visualBuilderService.publish({
         websiteId,
         pageId,
         pageKey: currentPageKey,
         routeId: page?.routeId || page?.slug
       });
+      if (providerResult) {
+        await pageService.updateSourceMetadata(websiteId, pageId, {
+          sourceProvider: providerResult.provider,
+          sourceFile: generatedSourceFile,
+          sourceRouterFile: "src/App.jsx",
+          sourceRevision: providerResult.revision
+        });
+      }
       setSelectedPage((current) => current ? {
         ...current,
+        sourceProvider: providerResult?.provider || current.sourceProvider,
+        sourceFile: generatedSourceFile || current.sourceFile,
+        sourceRouterFile: providerResult ? "src/App.jsx" : current.sourceRouterFile,
+        sourceRevision: providerResult?.revision || current.sourceRevision,
         status: "published",
         publishedAt: Date.now()
       } : current);
-      toast.success("Native page published. Connected runtimes will refresh automatically.");
+      toast.success(
+        providerResult?.provider === "github"
+          ? "Page committed to GitHub. The connected deployment can now rebuild."
+          : providerResult?.provider === "cpanel"
+            ? "Page source and route saved directly to cPanel."
+            : "Native page published. Connected runtimes will refresh automatically."
+      );
     } catch (error) {
       console.error(error);
       toast.error(error.message || "Page publish failed.");
@@ -587,6 +836,91 @@ export function VisualBuilderPage() {
       toast.error("Revision could not be restored.");
     }
   };
+
+  const saveSourceDraft = async () => {
+    setSourceSaving(true);
+    setSourceSaveStatus("saving");
+    try {
+      sessionStorage.setItem(
+        sourceDraftKey(websiteId, pageId),
+        sourceContent
+      );
+      setSourceSaveStatus("saved");
+      toast.success("Source draft saved in this browser session.");
+      return true;
+    } catch (error) {
+      setSourceSaveStatus("error");
+      toast.error(error.message || "Source draft could not be saved.");
+      return false;
+    } finally {
+      setSourceSaving(false);
+    }
+  };
+
+  const publishSource = async () => {
+    if (!sourceWebsite) return;
+    setSourcePublishing(true);
+    try {
+      if (
+        sourceWebsite.connection?.provider === "github"
+        && sourceWriteToken.trim()
+      ) {
+        sourceCredentialService.rememberGitHub(
+          websiteId,
+          sourceWriteToken
+        );
+      }
+      const result = await sourceProviderService.writeFile(
+        sourceWebsite,
+        selectedPage.sourceFile,
+        sourceContent,
+        `Update ${selectedPage.title} from ReactCMS`
+      );
+      sessionStorage.removeItem(sourceDraftKey(websiteId, pageId));
+      setSourceSaveStatus("saved");
+      setSelectedPage((current) => current ? {
+        ...current,
+        sourceRevision: result.revision,
+        status: "published",
+        publishedAt: Date.now()
+      } : current);
+      toast.success(
+        result.provider === "github"
+          ? "Committed to GitHub. The connected deployment can now rebuild."
+          : "Saved directly to cPanel."
+      );
+    } catch (error) {
+      console.error(error);
+      toast.error(error.message || "Connected source publish failed.");
+    } finally {
+      setSourcePublishing(false);
+    }
+  };
+
+  if (isConnectedSourcePage) {
+    return (
+      <ConnectedSourceWorkspace
+        mode={mode}
+        page={selectedPage}
+        website={sourceWebsite}
+        content={sourceContent}
+        loading={pageLoading || sourceLoading}
+        error={sourceError}
+        saveStatus={sourceSaveStatus}
+        saving={sourceSaving}
+        publishing={sourcePublishing}
+        writeToken={sourceWriteToken}
+        onWriteTokenChange={setSourceWriteToken}
+        onBack={() => navigate(`/content/${websiteId}/pages`)}
+        onChange={(content) => {
+          setSourceContent(content);
+          setSourceSaveStatus("unsaved");
+        }}
+        onSave={saveSourceDraft}
+        onPublish={publishSource}
+      />
+    );
+  }
 
   if ((pageLoading || nativeLoading || !initialTree || selectedPage?.id !== pageId) && !loadError) {
     return (
