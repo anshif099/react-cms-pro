@@ -4,6 +4,9 @@
   "functions": {
     "api/cpanel.js": {
       "maxDuration": 60
+    },
+    "api/live-preview.js": {
+      "maxDuration": 30
     }
   },
   "rewrites": [

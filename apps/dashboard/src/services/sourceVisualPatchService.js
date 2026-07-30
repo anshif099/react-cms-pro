@@ -187,18 +187,18 @@ export function buildConnectedPageUrl(website, page, mode = "preview") {
 
   try {
     const url = new URL(domain);
-    const basePath = url.pathname.replace(/\/+$/, "");
+    if (url.protocol !== "https:") return "";
     const pageRoute = page?.route
       || (page?.slug === "home" ? "/" : `/${String(page?.slug || "").replace(/^\/+/, "")}`);
     const normalizedRoute = pageRoute === "/"
       ? "/"
       : `/${String(pageRoute).replace(/^\/+|\/+$/g, "")}`;
-
-    url.pathname = `${basePath}${normalizedRoute}`.replace(/\/{2,}/g, "/");
-    url.search = "";
-    url.hash = "";
-    url.searchParams.set(mode === "edit" ? "rcms_edit" : "rcms_preview", "1");
-    return url.toString();
+    const parameters = new URLSearchParams({
+      target: url.toString(),
+      route: normalizedRoute,
+      mode: mode === "edit" ? "edit" : "preview"
+    });
+    return `/api/live-preview?${parameters.toString()}`;
   } catch {
     return "";
   }

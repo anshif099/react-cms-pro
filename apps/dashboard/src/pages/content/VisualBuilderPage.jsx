@@ -105,7 +105,9 @@ function ConnectedSourceWorkspace({
   );
   const liveOrigin = useMemo(() => {
     try {
-      return livePageUrl ? new URL(livePageUrl).origin : "";
+      return livePageUrl
+        ? new URL(livePageUrl, window.location.origin).origin
+        : "";
     } catch {
       return "";
     }
@@ -117,9 +119,9 @@ function ConnectedSourceWorkspace({
   const sendRuntimeMessage = useCallback((type, payload = {}) => {
     iframeRef.current?.contentWindow?.postMessage(
       createRuntimeMessage(type, payload),
-      liveOrigin || "*"
+      "*"
     );
-  }, [liveOrigin]);
+  }, []);
 
   const applyVisualValue = useCallback((region, value, sendToRuntime = true) => {
     const result = onVisualChange({
@@ -165,11 +167,12 @@ function ConnectedSourceWorkspace({
       mode: "cors",
       cache: "no-store"
     })
-      .then((response) => {
+      .then(async (response) => {
         if (cancelled || response.ok) return;
+        const payload = await response.json().catch(() => null);
         setLiveRouteError(
-          `The connected host returned HTTP ${response.status} for this page route. `
-          + "Redeploy the connected project with its SPA rewrite/fallback enabled, then reload the canvas."
+          payload?.error
+          || `ReactCMS could not prepare the connected page (HTTP ${response.status}).`
         );
       })
       .catch(() => {
@@ -186,7 +189,11 @@ function ConnectedSourceWorkspace({
     if (!livePageUrl) return undefined;
     const handleRuntimeMessage = (event) => {
       if (event.source !== iframeRef.current?.contentWindow) return;
-      if (liveOrigin && event.origin !== liveOrigin) return;
+      if (
+        liveOrigin
+        && event.origin !== liveOrigin
+        && event.origin !== "null"
+      ) return;
       const message = event.data;
       if (
         !message
@@ -565,7 +572,7 @@ function ConnectedSourceWorkspace({
                     <div className="max-w-md rounded-xl border border-amber-500/20 bg-amber-500/5 p-6 text-center">
                       <AlertCircle className="mx-auto h-7 w-7 text-amber-400" />
                       <p className="mt-3 text-sm font-bold text-white">
-                        The live page route is not deployed
+                        The live page could not be prepared
                       </p>
                       <p className="mt-2 text-[11px] leading-5 text-slate-400">
                         {liveRouteError}
@@ -591,7 +598,7 @@ function ConnectedSourceWorkspace({
                   title={`${page.title} live visual canvas`}
                   onLoad={handleFrameLoad}
                   className="block h-full min-h-[700px] w-full border-0 bg-white"
-                  sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
+                  sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
                   allow="clipboard-read; clipboard-write"
                 />
               </div>

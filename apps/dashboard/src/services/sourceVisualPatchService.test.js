@@ -64,7 +64,9 @@ describe("connected visual routes", () => {
       { domain: "https://triosis.vercel.app/" },
       { route: "/our-team", slug: "our-team" },
       "preview"
-    )).toBe("https://triosis.vercel.app/our-team?rcms_preview=1");
+    )).toBe(
+      "/api/live-preview?target=https%3A%2F%2Ftriosis.vercel.app%2F&route=%2Four-team&mode=preview"
+    );
   });
 
   it("creates an edit bridge URL and a broadcast runtime message", () => {
@@ -72,7 +74,9 @@ describe("connected visual routes", () => {
       { domain: "https://example.com/site" },
       { route: "/contact" },
       "edit"
-    )).toBe("https://example.com/site/contact?rcms_edit=1");
+    )).toBe(
+      "/api/live-preview?target=https%3A%2F%2Fexample.com%2Fsite&route=%2Fcontact&mode=edit"
+    );
     expect(createRuntimeMessage("rcms/v1/enter-edit-mode", {}).websiteId).toBe("");
   });
 });
