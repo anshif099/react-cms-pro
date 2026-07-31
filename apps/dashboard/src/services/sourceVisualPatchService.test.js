@@ -65,7 +65,17 @@ describe("connected visual routes", () => {
       { route: "/our-team", slug: "our-team" },
       "preview"
     )).toBe(
-      "/our-team?__rcms_canvas=1&target=https%3A%2F%2Ftriosis.vercel.app%2F&mode=preview&rcms_preview=1"
+      "/api/live-preview?target=https%3A%2F%2Ftriosis.vercel.app%2F&route=%2Four-team&mode=preview"
+    );
+  });
+
+  it("sends the Home route directly to the live preview API", () => {
+    expect(buildConnectedPageUrl(
+      { domain: "https://triosis.vercel.app/" },
+      { route: "/", slug: "home" },
+      "preview"
+    )).toBe(
+      "/api/live-preview?target=https%3A%2F%2Ftriosis.vercel.app%2F&route=%2F&mode=preview"
     );
   });
 
@@ -75,7 +85,7 @@ describe("connected visual routes", () => {
       { route: "/contact" },
       "edit"
     )).toBe(
-      "/contact?__rcms_canvas=1&target=https%3A%2F%2Fexample.com%2Fsite&mode=edit&rcms_edit=1"
+      "/api/live-preview?target=https%3A%2F%2Fexample.com%2Fsite&route=%2Fcontact&mode=edit"
     );
     expect(createRuntimeMessage("rcms/v1/enter-edit-mode", {}).websiteId).toBe("");
   });

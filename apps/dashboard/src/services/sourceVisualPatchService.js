@@ -194,12 +194,11 @@ export function buildConnectedPageUrl(website, page, mode = "preview") {
       ? "/"
       : `/${String(pageRoute).replace(/^\/+|\/+$/g, "")}`;
     const parameters = new URLSearchParams({
-      __rcms_canvas: "1",
       target: url.toString(),
-      mode: mode === "edit" ? "edit" : "preview",
-      [mode === "edit" ? "rcms_edit" : "rcms_preview"]: "1"
+      route: normalizedRoute,
+      mode: mode === "edit" ? "edit" : "preview"
     });
-    return `${normalizedRoute}?${parameters.toString()}`;
+    return `/api/live-preview?${parameters.toString()}`;
   } catch {
     return "";
   }
