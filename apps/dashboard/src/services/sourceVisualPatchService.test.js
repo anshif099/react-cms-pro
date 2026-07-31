@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildConnectedPageUrl,
   createRuntimeMessage,
+  discoverLocalSourceImports,
   mergeRegionSelection,
   patchEditableRegionSource
 } from "./sourceVisualPatchService";
@@ -56,6 +57,61 @@ describe("source visual patches", () => {
     expect(result.changed).toBe(false);
     expect(result.content).toBe(source);
     expect(result.error).toContain("not declared");
+  });
+
+  it("patches a repeated image region through its backing collection item", () => {
+    const source = `
+      const servicesData = [
+        { num: '01', title: 'Digital Marketing', image: img5 },
+        { num: '02', title: 'Social Media', image: img6 }
+      ];
+      {servicesData.map((service) => (
+        <EditableImage
+          regionId={\`services.\${service.num}.image\`}
+          defaultValue={{ src: service.image, alt: service.title }}
+        />
+      ))}
+    `;
+    const result = patchEditableRegionSource(
+      source,
+      "services.01.image",
+      { src: "https://cdn.example.com/new.jpg", alt: "Digital Marketing" }
+    );
+
+    expect(result.changed).toBe(true);
+    expect(result.dynamic).toBe(true);
+    expect(result.content).toContain(
+      `num: '01', title: 'Digital Marketing', image: "https://cdn.example.com/new.jpg"`
+    );
+    expect(result.content).toContain(`num: '02', title: 'Social Media', image: img6`);
+  });
+});
+
+describe("connected source imports", () => {
+  it("resolves local component imports and ignores styles and packages", () => {
+    const imports = discoverLocalSourceImports(
+      "src/pages/home.jsx",
+      `
+        import React from "react";
+        import Services from "../components/Services.jsx";
+        import Footer from "../components/Footer";
+        import "./home.css";
+      `
+    );
+
+    expect(imports).toEqual([
+      {
+        specifier: "../components/Services.jsx",
+        candidates: ["src/components/Services.jsx"]
+      },
+      {
+        specifier: "../components/Footer",
+        candidates: expect.arrayContaining([
+          "src/components/Footer.jsx",
+          "src/components/Footer.tsx"
+        ])
+      }
+    ]);
   });
 });
 

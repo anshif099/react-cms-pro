@@ -47,6 +47,7 @@ import pageService from "../../services/pageService";
 import {
   buildConnectedPageUrl,
   createRuntimeMessage,
+  discoverLocalSourceImports,
   mergeRegionSelection,
   patchEditableRegionSource
 } from "../../services/sourceVisualPatchService";
@@ -68,6 +69,50 @@ const VisualPageSettingsModal = lazy(() => import("../../components/content/Visu
 
 function sourceDraftKey(websiteId, pageId) {
   return `reactcms_source_draft:${websiteId}:${pageId}`;
+}
+
+function sourceFilesDraftKey(websiteId, pageId) {
+  return `reactcms_source_files_draft:${websiteId}:${pageId}`;
+}
+
+async function loadConnectedSourceGraph(website, entryPath, entryContent) {
+  const files = { [entryPath]: entryContent };
+  const attempted = new Set([entryPath]);
+  const processed = new Set();
+  const queue = [entryPath];
+  const maxSourceFiles = 48;
+
+  while (queue.length && Object.keys(files).length < maxSourceFiles) {
+    const importerPath = queue.shift();
+    if (processed.has(importerPath)) continue;
+    processed.add(importerPath);
+
+    const imports = discoverLocalSourceImports(
+      importerPath,
+      files[importerPath] || ""
+    );
+    const loadedImports = await Promise.all(imports.map(async ({ candidates }) => {
+      for (const candidate of candidates) {
+        if (Object.prototype.hasOwnProperty.call(files, candidate)) return null;
+        if (attempted.has(candidate)) continue;
+        attempted.add(candidate);
+        try {
+          const source = await sourceProviderService.readFile(website, candidate);
+          return { path: candidate, content: source.content };
+        } catch {
+          // Extensionless imports are tried against each supported source extension.
+        }
+      }
+      return null;
+    }));
+
+    loadedImports.filter(Boolean).forEach(({ path, content }) => {
+      files[path] = content;
+      queue.push(path);
+    });
+  }
+
+  return files;
 }
 
 function ConnectedSourceWorkspace({
@@ -1105,6 +1150,8 @@ export function VisualBuilderPage() {
   const regionsRef = useRef({});
   const changeVersionRef = useRef(0);
   const loadedIdentityRef = useRef("");
+  const sourceFilesRef = useRef({});
+  const sourceDirtyPathsRef = useRef(new Set());
 
   const pageKey = useMemo(
     () => visualBuilderService.resolvePageKey(selectedPage),
@@ -1157,6 +1204,8 @@ export function VisualBuilderPage() {
     const loadSource = async () => {
       setSourceLoading(true);
       setSourceError("");
+      sourceFilesRef.current = {};
+      sourceDirtyPathsRef.current = new Set();
       try {
         const website = await websiteService.getById(websiteId);
         if (!website) throw new Error("The connected website record was not found.");
@@ -1164,14 +1213,42 @@ export function VisualBuilderPage() {
           website,
           selectedPage.sourceFile
         );
+        const sourceFiles = await loadConnectedSourceGraph(
+          website,
+          selectedPage.sourceFile,
+          source.content
+        );
         if (cancelled) return;
-        const draft = sessionStorage.getItem(sourceDraftKey(websiteId, pageId));
+        const legacyDraft = sessionStorage.getItem(
+          sourceDraftKey(websiteId, pageId)
+        );
+        let fileDrafts = {};
+        try {
+          fileDrafts = JSON.parse(
+            sessionStorage.getItem(sourceFilesDraftKey(websiteId, pageId)) || "{}"
+          );
+        } catch {
+          fileDrafts = {};
+        }
+        if (legacyDraft !== null) {
+          fileDrafts[selectedPage.sourceFile] = legacyDraft;
+        }
+        const nextSourceFiles = {
+          ...sourceFiles,
+          ...fileDrafts
+        };
+        sourceFilesRef.current = nextSourceFiles;
+        sourceDirtyPathsRef.current = new Set(Object.keys(fileDrafts));
         setSourceWebsite(website);
-        setSourceContent(draft ?? source.content);
+        setSourceContent(
+          nextSourceFiles[selectedPage.sourceFile] || source.content
+        );
         setSourceWriteToken(
           sourceCredentialService.get(websiteId).token || ""
         );
-        setSourceSaveStatus(draft === null ? "saved" : "unsaved");
+        setSourceSaveStatus(
+          Object.keys(fileDrafts).length ? "unsaved" : "saved"
+        );
       } catch (error) {
         if (!cancelled) setSourceError(error.message || "Source file could not be loaded.");
       } finally {
@@ -1500,12 +1577,19 @@ export function VisualBuilderPage() {
     setSourceSaving(true);
     setSourceSaveStatus("saving");
     try {
-      sessionStorage.setItem(
-        sourceDraftKey(websiteId, pageId),
-        sourceContent
+      const dirtyFiles = Object.fromEntries(
+        Array.from(sourceDirtyPathsRef.current).map((path) => [
+          path,
+          sourceFilesRef.current[path]
+        ])
       );
+      sessionStorage.setItem(
+        sourceFilesDraftKey(websiteId, pageId),
+        JSON.stringify(dirtyFiles)
+      );
+      sessionStorage.removeItem(sourceDraftKey(websiteId, pageId));
       setSourceSaveStatus("saved");
-      toast.success("Source draft saved in this browser session.");
+      toast.success("Source file drafts saved in this browser session.");
       return true;
     } catch (error) {
       setSourceSaveStatus("error");
@@ -1529,13 +1613,22 @@ export function VisualBuilderPage() {
           sourceWriteToken
         );
       }
-      const result = await sourceProviderService.writeFile(
+      const dirtyPaths = Array.from(sourceDirtyPathsRef.current);
+      const pathsToPublish = dirtyPaths.length
+        ? dirtyPaths
+        : [selectedPage.sourceFile];
+      const result = await sourceProviderService.writeFiles(
         sourceWebsite,
-        selectedPage.sourceFile,
-        sourceContent,
+        pathsToPublish.map((path) => ({
+          path,
+          content: sourceFilesRef.current[path]
+            ?? (path === selectedPage.sourceFile ? sourceContent : "")
+        })),
         `Update ${selectedPage.title} from ReactCMS`
       );
       sessionStorage.removeItem(sourceDraftKey(websiteId, pageId));
+      sessionStorage.removeItem(sourceFilesDraftKey(websiteId, pageId));
+      sourceDirtyPathsRef.current = new Set();
       setSourceSaveStatus("saved");
       setSelectedPage((current) => current ? {
         ...current,
@@ -1545,7 +1638,7 @@ export function VisualBuilderPage() {
       } : current);
       toast.success(
         result.provider === "github"
-          ? "Committed to GitHub. The connected deployment can now rebuild."
+          ? `${pathsToPublish.length} source file${pathsToPublish.length === 1 ? "" : "s"} committed to GitHub. The connected deployment can now rebuild.`
           : "Saved directly to cPanel."
       );
     } catch (error) {
@@ -1557,17 +1650,35 @@ export function VisualBuilderPage() {
   };
 
   const patchSourceFromVisual = useCallback((change) => {
-    const result = patchEditableRegionSource(
-      sourceContent,
-      change.regionId,
-      change.value
-    );
-    if (result.changed) {
-      setSourceContent(result.content);
+    for (const [path, content] of Object.entries(sourceFilesRef.current)) {
+      const result = patchEditableRegionSource(
+        content,
+        change.regionId,
+        change.value
+      );
+      if (!result.changed) continue;
+
+      sourceFilesRef.current = {
+        ...sourceFilesRef.current,
+        [path]: result.content
+      };
+      sourceDirtyPathsRef.current.add(path);
+      if (path === selectedPage.sourceFile) {
+        setSourceContent(result.content);
+      }
       setSourceSaveStatus("unsaved");
+      return {
+        ...result,
+        sourceFile: path
+      };
     }
-    return result;
-  }, [sourceContent]);
+
+    return {
+      content: "",
+      changed: false,
+      error: `Region "${change.regionId}" was not found in the loaded page components.`
+    };
+  }, [selectedPage?.sourceFile]);
 
   if (isConnectedSourcePage) {
     return (
@@ -1585,6 +1696,11 @@ export function VisualBuilderPage() {
         onWriteTokenChange={setSourceWriteToken}
         onBack={() => navigate(`/content/${websiteId}/pages`)}
         onChange={(content) => {
+          sourceFilesRef.current = {
+            ...sourceFilesRef.current,
+            [selectedPage.sourceFile]: content
+          };
+          sourceDirtyPathsRef.current.add(selectedPage.sourceFile);
           setSourceContent(content);
           setSourceSaveStatus("unsaved");
         }}
