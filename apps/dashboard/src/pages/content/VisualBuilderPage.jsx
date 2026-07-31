@@ -61,6 +61,7 @@ import visualBuilderService, {
 } from "../../services/visualBuilderService";
 import VisualBuilderToolbar from "../../components/content/VisualBuilderToolbar";
 import NativeLayersPanel from "../../components/content/NativeLayersPanel";
+import ImagePicker from "../../components/ui/ImagePicker";
 
 const NativeInspector = lazy(() => import("../../components/content/NativeInspector"));
 const VisualPageSettingsModal = lazy(() => import("../../components/content/VisualPageSettingsModal"));
@@ -418,16 +419,12 @@ function ConnectedSourceWorkspace({
 
           {selectedRegion.type === "image" && (
             <>
-              <label className="block">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                  Image URL
-                </span>
-                <input
-                  value={typeof value === "string" ? value : value?.src || ""}
-                  onChange={(event) => updateSelectedField("src", event.target.value)}
-                  className="mt-2 h-9 w-full rounded-lg border border-slate-800 bg-[#070b14] px-3 text-xs text-slate-200 outline-none focus:border-blue-500"
-                />
-              </label>
+              <ImagePicker
+                label="Image URL"
+                value={typeof value === "string" ? value : value?.src || ""}
+                onChange={(url) => updateSelectedField("src", url)}
+                placeholder="Enter URL or choose/upload an image"
+              />
               <label className="block">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
                   Alt text
