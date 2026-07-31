@@ -47,6 +47,7 @@ import pageService from "../../services/pageService";
 import {
   buildConnectedPageUrl,
   createRuntimeMessage,
+  mergeRegionSelection,
   patchEditableRegionSource
 } from "../../services/sourceVisualPatchService";
 import {
@@ -247,7 +248,10 @@ function ConnectedSourceWorkspace({
       }
 
       if (!isPreview && message.type === "rcms/v1/region-selected") {
-        setSelectedRegion(message.payload || null);
+        setSelectedRegion((current) => mergeRegionSelection(
+          current,
+          message.payload
+        ));
         setVisualError("");
         return;
       }
@@ -286,17 +290,37 @@ function ConnectedSourceWorkspace({
     const currentValue = selectedRegion.value;
     let nextValue;
 
-    if (selectedRegion.type === "text" && field === "text") {
+    if (selectedRegion.type === "richtext" && field === "html") {
+      nextValue = nextFieldValue;
+    } else if (selectedRegion.type === "text" && field === "text") {
       nextValue = currentValue && typeof currentValue === "object"
         ? { ...currentValue, text: nextFieldValue }
         : nextFieldValue;
     } else {
-      const base = currentValue && typeof currentValue === "object"
+      let base = currentValue && typeof currentValue === "object"
         ? { ...currentValue }
         : {};
+      if (typeof currentValue === "string") {
+        if (selectedRegion.type === "image") base = { src: currentValue };
+        if (selectedRegion.type === "button") base = { text: currentValue };
+        if (selectedRegion.type === "video") base = { url: currentValue };
+      }
       nextValue = { ...base, [field]: nextFieldValue };
     }
     applyVisualValue(selectedRegion, nextValue);
+  };
+
+  const updateRepeaterJson = (rawValue) => {
+    try {
+      const nextValue = JSON.parse(rawValue);
+      if (!Array.isArray(nextValue)) {
+        throw new Error("Repeater content must be a JSON array.");
+      }
+      setVisualError("");
+      applyVisualValue(selectedRegion, nextValue);
+    } catch (error) {
+      setVisualError(error.message || "Repeater content is not valid JSON.");
+    }
   };
 
   const renderVisualInspector = () => {
@@ -352,6 +376,21 @@ function ConnectedSourceWorkspace({
             </label>
           )}
 
+          {selectedRegion.type === "richtext" && (
+            <label className="block">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                HTML content
+              </span>
+              <textarea
+                value={typeof value === "string" ? value : value?.html || ""}
+                onChange={(event) => updateSelectedField("html", event.target.value)}
+                rows="8"
+                spellCheck="false"
+                className="mt-2 w-full resize-y rounded-lg border border-slate-800 bg-[#070b14] p-3 font-mono text-[11px] leading-5 text-slate-200 outline-none focus:border-blue-500"
+              />
+            </label>
+          )}
+
           {selectedRegion.type === "button" && (
             <>
               <label className="block">
@@ -399,6 +438,72 @@ function ConnectedSourceWorkspace({
                   className="mt-2 h-9 w-full rounded-lg border border-slate-800 bg-[#070b14] px-3 text-xs text-slate-200 outline-none focus:border-blue-500"
                 />
               </label>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                    Width
+                  </span>
+                  <input
+                    value={typeof value === "object" ? value?.width || "" : ""}
+                    onChange={(event) => updateSelectedField("width", event.target.value)}
+                    placeholder="100% or 320px"
+                    className="mt-2 h-9 w-full rounded-lg border border-slate-800 bg-[#070b14] px-3 text-xs text-slate-200 outline-none focus:border-blue-500"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                    Height
+                  </span>
+                  <input
+                    value={typeof value === "object" ? value?.height || "" : ""}
+                    onChange={(event) => updateSelectedField("height", event.target.value)}
+                    placeholder="auto or 240px"
+                    className="mt-2 h-9 w-full rounded-lg border border-slate-800 bg-[#070b14] px-3 text-xs text-slate-200 outline-none focus:border-blue-500"
+                  />
+                </label>
+              </div>
+              <label className="block">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  Image fit
+                </span>
+                <select
+                  value={typeof value === "object" ? value?.objectFit || "" : ""}
+                  onChange={(event) => updateSelectedField("objectFit", event.target.value)}
+                  className="mt-2 h-9 w-full rounded-lg border border-slate-800 bg-[#070b14] px-3 text-xs text-slate-200 outline-none focus:border-blue-500"
+                >
+                  <option value="">Default</option>
+                  <option value="cover">Cover</option>
+                  <option value="contain">Contain</option>
+                  <option value="fill">Fill</option>
+                  <option value="none">None</option>
+                </select>
+              </label>
+            </>
+          )}
+
+          {selectedRegion.type === "video" && (
+            <>
+              <label className="block">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  Video URL
+                </span>
+                <input
+                  value={typeof value === "string" ? value : value?.url || ""}
+                  onChange={(event) => updateSelectedField("url", event.target.value)}
+                  placeholder="Video, YouTube, or Vimeo URL"
+                  className="mt-2 h-9 w-full rounded-lg border border-slate-800 bg-[#070b14] px-3 text-xs text-slate-200 outline-none focus:border-blue-500"
+                />
+              </label>
+              <label className="block">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  Title
+                </span>
+                <input
+                  value={typeof value === "object" ? value?.title || "" : ""}
+                  onChange={(event) => updateSelectedField("title", event.target.value)}
+                  className="mt-2 h-9 w-full rounded-lg border border-slate-800 bg-[#070b14] px-3 text-xs text-slate-200 outline-none focus:border-blue-500"
+                />
+              </label>
             </>
           )}
 
@@ -433,10 +538,37 @@ function ConnectedSourceWorkspace({
             </>
           )}
 
-          {!["text", "button", "image", "section"].includes(selectedRegion.type) && (
+          {selectedRegion.type === "repeater" && (
+            <label className="block">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                Items (JSON)
+              </span>
+              <textarea
+                key={`${selectedRegion.regionId}:${JSON.stringify(value)}`}
+                defaultValue={JSON.stringify(Array.isArray(value) ? value : [], null, 2)}
+                onBlur={(event) => updateRepeaterJson(event.target.value)}
+                rows="14"
+                spellCheck="false"
+                className="mt-2 w-full resize-y rounded-lg border border-slate-800 bg-[#070b14] p-3 font-mono text-[10px] leading-5 text-slate-200 outline-none focus:border-blue-500"
+              />
+              <span className="mt-2 block text-[9px] leading-4 text-slate-600">
+                Changes apply when this field loses focus.
+              </span>
+            </label>
+          )}
+
+          {![
+            "text",
+            "richtext",
+            "button",
+            "image",
+            "video",
+            "section",
+            "repeater"
+          ].includes(selectedRegion.type) && (
             <p className="rounded-lg border border-slate-800 bg-slate-950/40 p-3 text-[11px] leading-5 text-slate-500">
-              This SDK region can be selected, but its visual controls are not available yet.
-              Use the Code tab for this component.
+              This element does not expose editable ReactCMS source metadata.
+              Wrap it with an Editable component before changing it visually.
             </p>
           )}
 

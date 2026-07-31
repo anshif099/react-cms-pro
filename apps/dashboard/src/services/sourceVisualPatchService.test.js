@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildConnectedPageUrl,
   createRuntimeMessage,
+  mergeRegionSelection,
   patchEditableRegionSource
 } from "./sourceVisualPatchService";
 
@@ -55,6 +56,25 @@ describe("source visual patches", () => {
     expect(result.changed).toBe(false);
     expect(result.content).toBe(source);
     expect(result.error).toContain("not declared");
+  });
+});
+
+describe("connected region selections", () => {
+  it("preserves editable metadata when a style-only selection follows", () => {
+    const complete = {
+      regionId: "hero.title",
+      type: "text",
+      pageId: "home",
+      value: "Strategic Digital Solutions"
+    };
+
+    expect(mergeRegionSelection(complete, {
+      regionId: "hero.title",
+      computedStyle: { fontSize: "72px" }
+    })).toEqual({
+      ...complete,
+      computedStyle: { fontSize: "72px" }
+    });
   });
 });
 

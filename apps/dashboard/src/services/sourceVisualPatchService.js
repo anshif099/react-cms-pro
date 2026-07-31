@@ -181,6 +181,19 @@ export function patchEditableRegionSource(source, regionId, value) {
   };
 }
 
+export function mergeRegionSelection(current, payload) {
+  if (!payload?.regionId) return current || null;
+  if (!current || current.regionId !== payload.regionId) return payload;
+
+  return {
+    ...current,
+    ...payload,
+    type: payload.type || current.type,
+    pageId: payload.pageId || current.pageId,
+    value: payload.value === undefined ? current.value : payload.value
+  };
+}
+
 export function buildConnectedPageUrl(website, page, mode = "preview") {
   const domain = String(website?.domain || "").trim();
   if (!domain) return "";
