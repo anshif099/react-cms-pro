@@ -123,6 +123,7 @@ function runtimeBootstrap(origin, route) {
 (function () {
   var sourceOrigin = ${JSON.stringify(origin)};
   var previewRoute = ${JSON.stringify(route)};
+  var embeddedEditorToolbarHidden = false;
   try { history.replaceState(null, "", previewRoute); } catch (_) {}
 
   function absoluteSourceUrl(value) {
@@ -161,13 +162,38 @@ function runtimeBootstrap(origin, route) {
     }
   }
 
+  function hideEmbeddedEditorToolbar() {
+    if (embeddedEditorToolbarHidden || !document.body) return;
+
+    var labels = document.querySelectorAll("span");
+    var label = Array.prototype.find.call(labels, function (element) {
+      return (element.textContent || "").indexOf("ReactCMS Visual Editor") !== -1;
+    });
+    if (!label) return;
+
+    var toolbar = label;
+    while (toolbar && toolbar !== document.body) {
+      var style = window.getComputedStyle(toolbar);
+      if (style.position === "fixed" && style.top === "0px") break;
+      toolbar = toolbar.parentElement;
+    }
+    if (!toolbar || toolbar === document.body) return;
+
+    toolbar.setAttribute("data-rcms-embedded-toolbar", "hidden");
+    toolbar.style.setProperty("display", "none", "important");
+    document.body.style.setProperty("margin-top", "0px", "important");
+    embeddedEditorToolbarHidden = true;
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     repairTree(document.documentElement);
+    hideEmbeddedEditorToolbar();
     new MutationObserver(function (mutations) {
       mutations.forEach(function (mutation) {
         repairTree(mutation.target);
         mutation.addedNodes.forEach(repairTree);
       });
+      hideEmbeddedEditorToolbar();
     }).observe(document.documentElement, {
       childList: true,
       subtree: true,

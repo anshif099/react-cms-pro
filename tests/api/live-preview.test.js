@@ -40,4 +40,18 @@ describe("live preview HTML rewriting", () => {
     expect(result).not.toContain('href="/old/"');
     expect(result).toContain('<base href="https://example.com/sub/">');
   });
+
+  it("suppresses legacy editor chrome inside the connected page canvas", () => {
+    const result = rewritePreviewHtml(
+      "<html><head></head><body><div id=\"root\"></div></body></html>",
+      "https://example.com/",
+      "/services?rcms_preview=1"
+    );
+
+    expect(result).toContain('"ReactCMS Visual Editor"');
+    expect(result).toContain('data-rcms-embedded-toolbar');
+    expect(result).toContain(
+      'document.body.style.setProperty("margin-top", "0px", "important")'
+    );
+  });
 });
