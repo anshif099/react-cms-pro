@@ -126,6 +126,33 @@ function runtimeBootstrap(origin, route) {
   var embeddedEditorToolbarHidden = false;
   try { history.replaceState(null, "", previewRoute); } catch (_) {}
 
+  function blockUnsafeFrameNavigation() {
+    try {
+      var descriptor = Object.getOwnPropertyDescriptor(
+        HTMLIFrameElement.prototype,
+        "src"
+      );
+      if (!descriptor || !descriptor.get || !descriptor.set) return;
+
+      Object.defineProperty(HTMLIFrameElement.prototype, "src", {
+        configurable: descriptor.configurable,
+        enumerable: descriptor.enumerable,
+        get: function () {
+          return descriptor.get.call(this);
+        },
+        set: function (value) {
+          var target = String(value || "").trim().toLowerCase();
+          descriptor.set.call(
+            this,
+            target.indexOf("javascript:") === 0 ? "about:blank" : value
+          );
+        }
+      });
+    } catch (_) {}
+  }
+
+  blockUnsafeFrameNavigation();
+
   function absoluteSourceUrl(value) {
     if (!value || typeof value !== "string") return value;
     if (value.slice(0, 2) === "//") return "https:" + value;

@@ -67,4 +67,18 @@ describe("live preview HTML rewriting", () => {
       'document.body.style.setProperty("margin-top", "0px", "important")'
     );
   });
+
+  it("blocks javascript iframe navigation without granting preview same-origin access", () => {
+    const result = rewritePreviewHtml(
+      "<html><head></head><body></body></html>",
+      "https://example.com/",
+      "/?rcms_edit=1"
+    );
+
+    expect(result).toContain("blockUnsafeFrameNavigation");
+    expect(result).toContain(
+      'target.indexOf("javascript:") === 0 ? "about:blank" : value'
+    );
+    expect(result).not.toContain("allow-same-origin");
+  });
 });

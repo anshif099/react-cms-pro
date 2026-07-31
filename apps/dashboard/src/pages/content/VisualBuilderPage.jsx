@@ -736,17 +736,23 @@ function ConnectedSourceWorkspace({
         </div>
       </div>
 
-      {!isPreview && isGitHub && workspaceMode === "code" && (
+      {!isPreview && isGitHub && (
         <div className="px-4 py-2 border-b border-slate-800 bg-slate-950/40 flex items-center gap-2">
           <KeyRound className="w-3.5 h-3.5 text-slate-500" />
+          <span className="shrink-0 text-[10px] font-bold text-slate-400">
+            Publish token
+          </span>
           <input
             type="password"
             value={writeToken}
             onChange={(event) => onWriteTokenChange(event.target.value)}
-            placeholder="GitHub Contents: Read and write token (kept for this browser session)"
+            placeholder="GitHub token with Contents: Read and write"
             autoComplete="new-password"
             className="h-8 flex-1 rounded-lg border border-slate-800 bg-[#080d18] px-3 text-[11px] text-slate-200 outline-none focus:border-blue-500"
           />
+          <span className="hidden lg:inline text-[9px] text-slate-600">
+            Kept only for this browser session
+          </span>
         </div>
       )}
 
@@ -1602,17 +1608,20 @@ export function VisualBuilderPage() {
 
   const publishSource = async () => {
     if (!sourceWebsite) return;
+    if (sourceWebsite.connection?.provider === "github") {
+      const token = sourceWriteToken.trim()
+        || sourceCredentialService.get(websiteId).token;
+      if (!token) {
+        toast.error(
+          "Enter a GitHub token with Contents: Read and write permission in the Publish token field."
+        );
+        return;
+      }
+      sourceCredentialService.rememberGitHub(websiteId, token);
+    }
+
     setSourcePublishing(true);
     try {
-      if (
-        sourceWebsite.connection?.provider === "github"
-        && sourceWriteToken.trim()
-      ) {
-        sourceCredentialService.rememberGitHub(
-          websiteId,
-          sourceWriteToken
-        );
-      }
       const dirtyPaths = Array.from(sourceDirtyPathsRef.current);
       const pathsToPublish = dirtyPaths.length
         ? dirtyPaths
