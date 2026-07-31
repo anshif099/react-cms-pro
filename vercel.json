@@ -11,6 +11,17 @@
   },
   "rewrites": [
     {
+      "source": "/",
+      "has": [
+        {
+          "type": "query",
+          "key": "__rcms_canvas",
+          "value": "1"
+        }
+      ],
+      "destination": "/api/live-preview?route=/"
+    },
+    {
       "source": "/:previewPath*",
       "has": [
         {

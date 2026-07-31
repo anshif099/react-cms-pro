@@ -1,7 +1,20 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import { rewritePreviewHtml } from "../../api/live-preview";
 
 describe("live preview HTML rewriting", () => {
+  it("routes the Home canvas through the live preview function", () => {
+    const config = JSON.parse(
+      readFileSync(new URL("../../vercel.json", import.meta.url), "utf8")
+    );
+    const rootCanvasRewrite = config.rewrites.find(
+      (rewrite) => rewrite.source === "/"
+        && rewrite.has?.some((condition) => condition.key === "__rcms_canvas")
+    );
+
+    expect(rootCanvasRewrite?.destination).toBe("/api/live-preview?route=/");
+  });
+
   it("boots the requested route before the connected React bundle", () => {
     const result = rewritePreviewHtml(
       '<html><head></head><body><script type="module" src="/assets/app.js"></script></body></html>',
