@@ -89,9 +89,14 @@ function ConnectedSourceWorkspace({
   const isPreview = mode === "preview";
   const isGitHub = website?.connection?.provider === "github";
   const iframeRef = useRef(null);
+  const canvasViewportRef = useRef(null);
   const [workspaceMode, setWorkspaceMode] = useState("visual");
   const [device, setDevice] = useState("desktop");
   const [customWidth, setCustomWidth] = useState(960);
+  const [canvasViewportSize, setCanvasViewportSize] = useState({
+    width: 0,
+    height: 0
+  });
   const [frameLoading, setFrameLoading] = useState(true);
   const [frameVersion, setFrameVersion] = useState(0);
   const [runtimeConnected, setRuntimeConnected] = useState(false);
@@ -115,6 +120,37 @@ function ConnectedSourceWorkspace({
   const canvasWidth = device === "custom"
     ? customWidth
     : CANVAS_DEVICE_WIDTHS[device] || 1440;
+  const availableCanvasWidth = Math.max(0, canvasViewportSize.width - 32);
+  const availableCanvasHeight = Math.max(0, canvasViewportSize.height - 32);
+  const canvasScale = availableCanvasWidth > 0
+    ? Math.min(1, availableCanvasWidth / canvasWidth)
+    : 1;
+  const canvasFrameHeight = Math.max(
+    700,
+    canvasScale > 0 ? availableCanvasHeight / canvasScale : 700
+  );
+
+  useEffect(() => {
+    const viewport = canvasViewportRef.current;
+    if (!viewport || (workspaceMode !== "visual" && !isPreview)) return undefined;
+
+    const updateViewportSize = () => {
+      setCanvasViewportSize({
+        width: viewport.clientWidth,
+        height: viewport.clientHeight
+      });
+    };
+    updateViewportSize();
+
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", updateViewportSize);
+      return () => window.removeEventListener("resize", updateViewportSize);
+    }
+
+    const observer = new ResizeObserver(updateViewportSize);
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, [isPreview, workspaceMode]);
 
   const sendRuntimeMessage = useCallback((type, payload = {}) => {
     iframeRef.current?.contentWindow?.postMessage(
@@ -542,7 +578,10 @@ function ConnectedSourceWorkspace({
 
       {workspaceMode === "visual" || isPreview ? (
         <div className="flex-1 min-h-0 flex">
-          <main className="flex-1 min-w-0 min-h-0 overflow-auto bg-[#080d18] p-4">
+          <main
+            ref={canvasViewportRef}
+            className="flex-1 min-w-0 min-h-0 overflow-auto bg-[#080d18] p-4"
+          >
             {!livePageUrl ? (
               <div className="h-full grid place-items-center">
                 <div className="max-w-lg rounded-xl border border-rose-500/20 bg-rose-500/5 p-6 text-center">
@@ -555,7 +594,12 @@ function ConnectedSourceWorkspace({
             ) : (
               <div
                 className="relative mx-auto h-full min-h-[560px] overflow-hidden rounded-xl border border-slate-700 bg-white shadow-2xl shadow-black/40"
-                style={{ width: `${canvasWidth}px`, maxWidth: device === "desktop" ? "none" : "100%" }}
+                style={{
+                  width: `${canvasWidth}px`,
+                  height: `${canvasFrameHeight}px`,
+                  maxWidth: "none",
+                  zoom: canvasScale
+                }}
               >
                 {frameLoading && (
                   <div className="absolute inset-0 z-10 grid place-items-center bg-white">
@@ -597,7 +641,7 @@ function ConnectedSourceWorkspace({
                   src={livePageUrl}
                   title={`${page.title} live visual canvas`}
                   onLoad={handleFrameLoad}
-                  className="block h-full min-h-[700px] w-full border-0 bg-white"
+                  className="block h-full w-full border-0 bg-white"
                   sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
                   allow="clipboard-read; clipboard-write"
                 />
