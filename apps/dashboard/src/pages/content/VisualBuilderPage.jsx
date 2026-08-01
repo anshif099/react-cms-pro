@@ -1729,10 +1729,17 @@ export function VisualBuilderPage() {
     setSourcePublishing(true);
     try {
       const dirtyPaths = Array.from(sourceDirtyPathsRef.current);
-      const result = dirtyPaths.length
+      const provider = sourceWebsite.connection?.provider;
+      const directHostingProvider = provider === "sftp" || provider === "cpanel";
+      const publishPaths = dirtyPaths.length
+        ? dirtyPaths
+        : directHostingProvider && selectedPage.sourceFile
+          ? [selectedPage.sourceFile]
+          : [];
+      const result = publishPaths.length
         ? await sourceProviderService.writeFiles(
           sourceWebsite,
-          dirtyPaths.map((path) => ({
+          publishPaths.map((path) => ({
             path,
             content: sourceFilesRef.current[path]
               ?? (path === selectedPage.sourceFile ? sourceContent : "")
@@ -1740,7 +1747,7 @@ export function VisualBuilderPage() {
           `Update ${selectedPage.title} from ReactCMS`
         )
         : {
-          provider: sourceWebsite.connection?.provider,
+          provider,
           revision: selectedPage.sourceRevision || null,
           files: []
         };
@@ -1771,13 +1778,13 @@ export function VisualBuilderPage() {
         result.provider === "github"
           ? `${dirtyPaths.length} source file${dirtyPaths.length === 1 ? "" : "s"} committed to GitHub. The connected deployment can now rebuild.`
           : result.provider === "sftp"
-            ? dirtyPaths.length
-              ? `Verified ${dirtyPaths.length} StackCP source file${dirtyPaths.length === 1 ? "" : "s"}${result.runtimeRebound ? ", connected the live runtime" : ""}${result.cacheBusted ? ", and refreshed the deployed asset cache" : ""}.`
+            ? publishPaths.length
+              ? `Verified ${publishPaths.length} StackCP source file${publishPaths.length === 1 ? "" : "s"}${result.runtimeRebound ? ", connected the live runtime" : ""}${result.cacheBusted ? ", and refreshed the deployed asset cache" : ""}.`
               : contentPublished
                 ? "Published the saved page content; no source files had pending changes."
                 : "Marked the page published; no source files had pending changes."
-            : dirtyPaths.length
-              ? `Verified ${dirtyPaths.length} cPanel source file${dirtyPaths.length === 1 ? "" : "s"}${result.runtimeRebound ? ", connected the live runtime" : ""}${result.cacheBusted ? ", and refreshed the deployed asset cache" : ""}.`
+            : publishPaths.length
+              ? `Verified ${publishPaths.length} cPanel source file${publishPaths.length === 1 ? "" : "s"}${result.runtimeRebound ? ", connected the live runtime" : ""}${result.cacheBusted ? ", and refreshed the deployed asset cache" : ""}.`
               : contentPublished
                 ? "Published the saved page content; no source files had pending changes."
                 : "Marked the page published; no source files had pending changes."
