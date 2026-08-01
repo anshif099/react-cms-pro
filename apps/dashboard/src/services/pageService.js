@@ -7,6 +7,25 @@ import activityLogService from "./activityLogService";
 import { pageConversionService } from "./pageConversionService";
 
 export const pageService = {
+  async markPublished(websiteId, pageId, routeId = "") {
+    const publishedAt = Date.now();
+    const operations = [
+      update(ref(database, `pages/${websiteId}/${pageId}`), {
+        status: "published",
+        publishedAt,
+        updatedAt: serverTimestamp()
+      })
+    ];
+    if (routeId) {
+      operations.push(update(ref(database, `registry/${websiteId}/routes/${routeId}`), {
+        published: true,
+        updatedAt: publishedAt
+      }));
+    }
+    await Promise.all(operations);
+    return publishedAt;
+  },
+
   async getAll(websiteId) {
     try {
       const pagesRef = ref(database, `pages/${websiteId}`);

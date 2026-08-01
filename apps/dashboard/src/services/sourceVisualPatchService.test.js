@@ -51,6 +51,30 @@ describe("source visual patches", () => {
     );
   });
 
+  it("patches editable values in a deployed Vite bundle", () => {
+    const source = '(0,x.jsx)(X,{regionId:`hero.title`,label:`Hero Heading`,defaultValue:`Old heading`,className:`hero-heading`})';
+    const result = patchEditableRegionSource(source, "hero.title", "New heading");
+
+    expect(result.changed).toBe(true);
+    expect(result.compiled).toBe(true);
+    expect(result.content).toContain('defaultValue:"New heading"');
+  });
+
+  it("adds a compiled section default value when the bundle omitted it", () => {
+    const source = '(0,x.jsx)(Gu,{regionId:`hero.section`,label:`Hero Section`,className:`hero-section`,children:[(0,x.jsx)(X,{regionId:`hero.title`,defaultValue:`Original child heading`})]})';
+    const result = patchEditableRegionSource(source, "hero.section", {
+      background: "#101010",
+      paddingY: 48
+    });
+
+    expect(result.changed).toBe(true);
+    expect(result.compiled).toBe(true);
+    expect(result.content).toContain(
+      'defaultValue:{"background":"#101010","paddingY":48}'
+    );
+    expect(result.content).toContain('defaultValue:`Original child heading`');
+  });
+
   it("does not fabricate a patch for a region declared in another file", () => {
     const source = `<Team />`;
     const result = patchEditableRegionSource(source, "team.title", "Team");
@@ -173,7 +197,7 @@ describe("connected visual routes", () => {
       { route: "/faqs", slug: "faqs" },
       "preview"
     )).toBe(
-      "https://triosis.in/?rcms_page=faqs&rcms_preview=1"
+      "https://triosis.in/?page=faqs&rcms_preview=1"
     );
   });
 });

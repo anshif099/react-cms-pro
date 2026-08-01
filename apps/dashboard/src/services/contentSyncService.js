@@ -3,6 +3,19 @@ import { ref, set, get, remove } from "firebase/database";
 import { paths, encodeFirebaseObject } from "@anshif.rainhopes/shared";
 
 export const contentSyncService = {
+  async publishDraft(websiteId, pageSlug) {
+    const draftRef = ref(database, paths.contentDraft(websiteId, pageSlug));
+    const draftSnapshot = await get(draftRef);
+    if (!draftSnapshot.exists()) return false;
+
+    const draft = draftSnapshot.val();
+    await set(ref(database, paths.contentPublished(websiteId, pageSlug)), {
+      ...(draft && typeof draft === "object" ? draft : {}),
+      publishedAt: Date.now()
+    });
+    return true;
+  },
+
   /**
    * Publish page regions to the live published path.
    * Uses paths.contentPublished so the SDK can read them on page load.
@@ -106,4 +119,3 @@ export const contentSyncService = {
 };
 
 export default contentSyncService;
-

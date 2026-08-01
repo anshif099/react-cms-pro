@@ -204,6 +204,93 @@ function findObjectPropertyValueRange(source, property) {
   };
 }
 
+function findTopLevelObjectPropertyValueRange(source, property) {
+  let braces = 0;
+  let brackets = 0;
+  let parentheses = 0;
+
+  for (let index = 1; index < source.length - 1; index += 1) {
+    const character = source[index];
+    if (character === '"' || character === "'" || character === "`") {
+      index = scanQuotedValue(source, index, character) - 1;
+      continue;
+    }
+    if (character === "{") braces += 1;
+    else if (character === "}") braces = Math.max(0, braces - 1);
+    else if (character === "[") brackets += 1;
+    else if (character === "]") brackets = Math.max(0, brackets - 1);
+    else if (character === "(") parentheses += 1;
+    else if (character === ")") parentheses = Math.max(0, parentheses - 1);
+
+    if (braces || brackets || parentheses) continue;
+    if (!source.startsWith(property, index)) continue;
+    const before = source[index - 1] || "";
+    const after = source[index + property.length] || "";
+    if (/[A-Za-z0-9_$]/.test(before) || /[A-Za-z0-9_$]/.test(after)) continue;
+
+    let colon = index + property.length;
+    while (/\s/.test(source[colon] || "")) colon += 1;
+    if (source[colon] !== ":") continue;
+    let start = colon + 1;
+    while (/\s/.test(source[start] || "")) start += 1;
+    return { start, end: scanObjectValue(source, start) };
+  }
+
+  return null;
+}
+
+function patchCompiledRegionSource(source, regionId, value) {
+  const regionPattern = /\bregionId\s*:/g;
+  let match;
+
+  while ((match = regionPattern.exec(source))) {
+    let valueStart = match.index + match[0].length;
+    while (/\s/.test(source[valueStart] || "")) valueStart += 1;
+    const quote = source[valueStart];
+    if (quote !== '"' && quote !== "'" && quote !== "`") continue;
+
+    const valueEnd = scanQuotedValue(source, valueStart, quote);
+    const quotedRegion = source.slice(valueStart, valueEnd);
+    const staticRegion = quotedRegion.slice(1, -1);
+    if (
+      staticRegion !== regionId
+      && !dynamicRegionMatches(quotedRegion, regionId)
+    ) {
+      continue;
+    }
+
+    let objectStart = source.lastIndexOf("{", match.index);
+    let objectEnd = -1;
+    while (objectStart >= 0) {
+      const candidateEnd = scanExpressionValue(source, objectStart);
+      if (candidateEnd >= valueEnd) {
+        objectEnd = candidateEnd;
+        break;
+      }
+      objectStart = source.lastIndexOf("{", objectStart - 1);
+    }
+    if (objectStart < 0 || objectEnd < 0) continue;
+
+    const objectSource = source.slice(objectStart, objectEnd);
+    const defaultRange = findTopLevelObjectPropertyValueRange(objectSource, "defaultValue");
+    const replacement = JSON.stringify(value);
+    if (replacement === undefined) return null;
+
+    const nextObject = defaultRange
+      ? `${objectSource.slice(0, defaultRange.start)}${replacement}${objectSource.slice(defaultRange.end)}`
+      : `${objectSource.slice(0, -1)},defaultValue:${replacement}}`;
+    return {
+      content: `${source.slice(0, objectStart)}${nextObject}${source.slice(objectEnd)}`,
+      changed: nextObject !== objectSource,
+      component: "CompiledEditableRegion",
+      compiled: true,
+      error: ""
+    };
+  }
+
+  return null;
+}
+
 function collectionValue(field, value) {
   if (field === "image" && value && typeof value === "object") {
     return value.src;
@@ -303,6 +390,8 @@ export function patchEditableRegionSource(source, regionId, value) {
       );
       if (dynamicResult) return dynamicResult;
     }
+    const compiledResult = patchCompiledRegionSource(source, regionId, value);
+    if (compiledResult) return compiledResult;
     return {
       content: source,
       changed: false,
@@ -424,7 +513,7 @@ export function buildConnectedPageFallbackUrl(website, page, mode = "preview") {
     url.pathname = "/";
     url.search = "";
     url.hash = "";
-    if (routeKey) url.searchParams.set("rcms_page", routeKey);
+    if (routeKey) url.searchParams.set("page", routeKey);
     url.searchParams.set(mode === "edit" ? "rcms_edit" : "rcms_preview", "1");
     return url.toString();
   } catch {

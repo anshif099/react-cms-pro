@@ -44,6 +44,7 @@ import websiteService from "../../services/websiteService";
 import sourceCredentialService from "../../services/sourceCredentialService";
 import sourceProviderService from "../../services/sourceProviderService";
 import pageService from "../../services/pageService";
+import contentSyncService from "../../services/contentSyncService";
 import {
   buildConnectedPageFallbackUrl,
   buildConnectedPageUrl,
@@ -694,8 +695,12 @@ function ConnectedSourceWorkspace({
 
           <div className="rounded-lg border border-emerald-500/15 bg-emerald-500/5 p-3">
             <p className="text-[10px] leading-4 text-emerald-200/70">
-              Supported changes update this page&apos;s JSX immediately. Use Update Git
-              when the page is ready to deploy.
+              Supported changes update the connected source immediately. Use {isGitHub
+                ? " Update Git "
+                : isSftp
+                  ? " Update StackCP "
+                  : " Update cPanel "}
+              when the page is ready to publish live.
             </p>
           </div>
         </div>
@@ -1705,17 +1710,33 @@ export function VisualBuilderPage() {
     setSourcePublishing(true);
     try {
       const dirtyPaths = Array.from(sourceDirtyPathsRef.current);
-      const pathsToPublish = dirtyPaths.length
-        ? dirtyPaths
-        : [selectedPage.sourceFile];
-      const result = await sourceProviderService.writeFiles(
-        sourceWebsite,
-        pathsToPublish.map((path) => ({
-          path,
-          content: sourceFilesRef.current[path]
-            ?? (path === selectedPage.sourceFile ? sourceContent : "")
-        })),
-        `Update ${selectedPage.title} from ReactCMS`
+      const result = dirtyPaths.length
+        ? await sourceProviderService.writeFiles(
+          sourceWebsite,
+          dirtyPaths.map((path) => ({
+            path,
+            content: sourceFilesRef.current[path]
+              ?? (path === selectedPage.sourceFile ? sourceContent : "")
+          })),
+          `Update ${selectedPage.title} from ReactCMS`
+        )
+        : {
+          provider: sourceWebsite.connection?.provider,
+          revision: selectedPage.sourceRevision || null,
+          files: []
+        };
+      const pageSyncKey = selectedPage.route === "/"
+        ? "home"
+        : String(selectedPage.route || selectedPage.slug || "home")
+          .replace(/^\/+|\/+$/g, "") || "home";
+      const contentPublished = await contentSyncService.publishDraft(
+        websiteId,
+        pageSyncKey
+      );
+      const publishedAt = await pageService.markPublished(
+        websiteId,
+        pageId,
+        selectedPage.routeId
       );
       sessionStorage.removeItem(sourceDraftKey(websiteId, pageId));
       sessionStorage.removeItem(sourceFilesDraftKey(websiteId, pageId));
@@ -1725,14 +1746,14 @@ export function VisualBuilderPage() {
         ...current,
         sourceRevision: result.revision,
         status: "published",
-        publishedAt: Date.now()
+        publishedAt
       } : current);
       toast.success(
         result.provider === "github"
-          ? `${pathsToPublish.length} source file${pathsToPublish.length === 1 ? "" : "s"} committed to GitHub. The connected deployment can now rebuild.`
+          ? `${dirtyPaths.length} source file${dirtyPaths.length === 1 ? "" : "s"} committed to GitHub. The connected deployment can now rebuild.`
           : result.provider === "sftp"
-            ? "Saved directly to StackCP through SFTP."
-            : "Saved directly to cPanel."
+            ? `${dirtyPaths.length ? "Updated StackCP source and " : ""}${contentPublished ? "published the page edits live." : "marked the page published."}`
+            : `${dirtyPaths.length ? "Updated cPanel source and " : ""}${contentPublished ? "published the page edits live." : "marked the page published."}`
       );
     } catch (error) {
       console.error(error);
