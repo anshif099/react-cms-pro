@@ -129,6 +129,74 @@ function hasSftpCredentials(credentials) {
   );
 }
 
+const FIREBASE_PUSH_ID_PATTERN = "-[A-Za-z0-9_-]{19}";
+
+export function bindRuntimeWebsiteId(content, websiteId) {
+  const source = String(content ?? "");
+  const nextWebsiteId = String(websiteId || "").trim();
+  if (!new RegExp(`^${FIREBASE_PUSH_ID_PATTERN}$`).test(nextWebsiteId)) {
+    return { content: source, changed: false, previousWebsiteIds: [] };
+  }
+
+  const previousWebsiteIds = new Set();
+  const runtimeWebsiteId = new RegExp(
+    "(\\bwebsiteId\\s*[:=]\\s*)([\"'\\x60])(" + FIREBASE_PUSH_ID_PATTERN + ")\\2",
+    "g"
+  );
+  const updated = source.replace(
+    runtimeWebsiteId,
+    (match, prefix, quote, currentWebsiteId) => {
+      if (currentWebsiteId === nextWebsiteId) return match;
+      previousWebsiteIds.add(currentWebsiteId);
+      return `${prefix}${quote}${nextWebsiteId}${quote}`;
+    }
+  );
+
+  return {
+    content: updated,
+    changed: updated !== source,
+    previousWebsiteIds: Array.from(previousWebsiteIds)
+  };
+}
+
+export function versionLocalBuildAssets(html, version = Date.now()) {
+  const source = String(html ?? "");
+  const cacheVersion = String(version);
+  let changedReferences = 0;
+  const updated = source.replace(
+    /(\b(?:src|href)\s*=\s*)(["'])([^"']+)(\2)/gi,
+    (match, prefix, quote, resource, closingQuote) => {
+      if (
+        /^(?:[a-z][a-z\d+.-]*:)?\/\//i.test(resource)
+        || /^(?:data|blob):/i.test(resource)
+      ) return match;
+
+      const hashIndex = resource.indexOf("#");
+      const hash = hashIndex >= 0 ? resource.slice(hashIndex) : "";
+      const withoutHash = hashIndex >= 0 ? resource.slice(0, hashIndex) : resource;
+      const queryIndex = withoutHash.indexOf("?");
+      const path = queryIndex >= 0 ? withoutHash.slice(0, queryIndex) : withoutHash;
+      if (!/\.(?:js|css)$/i.test(path)) return match;
+
+      const params = new URLSearchParams(
+        queryIndex >= 0 ? withoutHash.slice(queryIndex + 1) : ""
+      );
+      params.set("rcms", cacheVersion);
+      const nextResource = `${path}?${params.toString()}${hash}`;
+      if (nextResource === resource) return match;
+      changedReferences += 1;
+      return `${prefix}${quote}${nextResource}${closingQuote}`;
+    }
+  );
+
+  return {
+    content: updated,
+    changed: updated !== source,
+    changedReferences,
+    version: cacheVersion
+  };
+}
+
 export const sourceProviderService = {
   async readGitHubFile(connection, filePath, token = "") {
     const repository = normalizeRepository(connection?.repository);
@@ -301,19 +369,82 @@ export const sourceProviderService = {
     if (!Array.isArray(files) || !files.length) {
       throw new Error("No connected source files were provided.");
     }
+    const provider = website?.connection?.provider;
+    const verifiesRemoteWrites = provider === "cpanel" || provider === "sftp";
+    const preparedFiles = files.map((file) => {
+      const binding = bindRuntimeWebsiteId(file.content, website?.id);
+      return {
+        path: file.path,
+        content: binding.content,
+        runtimeRebound: binding.changed,
+        previousWebsiteIds: binding.previousWebsiteIds
+      };
+    });
     const results = [];
-    for (const file of files) {
-      results.push(await this.writeFile(
+    for (const file of preparedFiles) {
+      const writeResult = await this.writeFile(
         website,
         file.path,
         file.content,
         message || `Publish ${file.path} from ReactCMS`
-      ));
+      );
+      if (verifiesRemoteWrites) {
+        const remote = await this.readFile(website, file.path);
+        if (String(remote?.content ?? "") !== file.content) {
+          throw new Error(
+            `The hosting server accepted ${file.path}, but read-back verification did not match.`
+          );
+        }
+      }
+      results.push({
+        ...writeResult,
+        verified: verifiesRemoteWrites,
+        runtimeRebound: file.runtimeRebound
+      });
     }
+
+    let cacheBusted = false;
+    let cacheVersion = null;
+    if (
+      verifiesRemoteWrites
+      && preparedFiles.some((file) => /\.(?:js|css)$/i.test(file.path))
+    ) {
+      const entry = await this.readFile(website, "index.html");
+      const versioned = versionLocalBuildAssets(entry.content);
+      if (versioned.changed) {
+        const writeResult = await this.writeFile(
+          website,
+          "index.html",
+          versioned.content,
+          "Refresh deployed ReactCMS assets"
+        );
+        const remote = await this.readFile(website, "index.html");
+        if (String(remote?.content ?? "") !== versioned.content) {
+          throw new Error(
+            "The hosting server accepted index.html, but cache-refresh verification did not match."
+          );
+        }
+        results.push({
+          ...writeResult,
+          verified: true,
+          cacheManifest: true
+        });
+        cacheBusted = true;
+        cacheVersion = versioned.version;
+      }
+    }
+
     return {
-      provider: results.at(-1)?.provider || website?.connection?.provider,
+      provider: results.at(-1)?.provider || provider,
       revision: results.at(-1)?.revision || null,
-      files: results
+      files: results,
+      verified: verifiesRemoteWrites,
+      cacheBusted,
+      cacheVersion,
+      runtimeRebound: preparedFiles.some((file) => file.runtimeRebound),
+      previousWebsiteIds: Array.from(new Set(
+        preparedFiles.flatMap((file) => file.previousWebsiteIds)
+      ))
     };
   }
 };

@@ -164,6 +164,16 @@ function ConnectedSourceWorkspace({
   );
   const [livePageUrl, setLivePageUrl] = useState("");
   const [routeResolving, setRouteResolving] = useState(true);
+  const renderedLivePageUrl = useMemo(() => {
+    if (!livePageUrl || frameVersion === 0) return livePageUrl;
+    try {
+      const url = new URL(livePageUrl, window.location.origin);
+      url.searchParams.set("rcms_reload", String(frameVersion));
+      return url.toString();
+    } catch {
+      return livePageUrl;
+    }
+  }, [frameVersion, livePageUrl]);
   const liveOrigin = useMemo(() => {
     try {
       return livePageUrl
@@ -399,6 +409,15 @@ function ConnectedSourceWorkspace({
     sendRuntimeMessage(
       isPreview ? "rcms/v1/exit-edit-mode" : "rcms/v1/enter-edit-mode"
     );
+  };
+
+  const publishConnectedSource = async () => {
+    const result = await onPublish();
+    if (result?.verified) {
+      setFrameLoading(true);
+      setFrameVersion((current) => current + 1);
+    }
+    return result;
   };
 
   const updateSelectedField = (field, nextFieldValue) => {
@@ -724,7 +743,7 @@ function ConnectedSourceWorkspace({
         onUndo={() => {}}
         onRedo={() => {}}
         onSave={onSave}
-        onPublish={onPublish}
+        onPublish={publishConnectedSource}
         onSettings={() => {}}
         showSettings={false}
         publishLabel={isGitHub ? "Update Git" : isSftp ? "Update StackCP" : "Update cPanel"}
@@ -899,9 +918,9 @@ function ConnectedSourceWorkspace({
                   </div>
                 )}
                 <iframe
-                  key={`${livePageUrl}:${frameVersion}`}
+                  key={`${renderedLivePageUrl}:${frameVersion}`}
                   ref={iframeRef}
-                  src={livePageUrl}
+                  src={renderedLivePageUrl}
                   title={`${page.title} live visual canvas`}
                   onLoad={handleFrameLoad}
                   className="block h-full w-full border-0 bg-white"
@@ -1752,12 +1771,22 @@ export function VisualBuilderPage() {
         result.provider === "github"
           ? `${dirtyPaths.length} source file${dirtyPaths.length === 1 ? "" : "s"} committed to GitHub. The connected deployment can now rebuild.`
           : result.provider === "sftp"
-            ? `${dirtyPaths.length ? "Updated StackCP source and " : ""}${contentPublished ? "published the page edits live." : "marked the page published."}`
-            : `${dirtyPaths.length ? "Updated cPanel source and " : ""}${contentPublished ? "published the page edits live." : "marked the page published."}`
+            ? dirtyPaths.length
+              ? `Verified ${dirtyPaths.length} StackCP source file${dirtyPaths.length === 1 ? "" : "s"}${result.runtimeRebound ? ", connected the live runtime" : ""}${result.cacheBusted ? ", and refreshed the deployed asset cache" : ""}.`
+              : contentPublished
+                ? "Published the saved page content; no source files had pending changes."
+                : "Marked the page published; no source files had pending changes."
+            : dirtyPaths.length
+              ? `Verified ${dirtyPaths.length} cPanel source file${dirtyPaths.length === 1 ? "" : "s"}${result.runtimeRebound ? ", connected the live runtime" : ""}${result.cacheBusted ? ", and refreshed the deployed asset cache" : ""}.`
+              : contentPublished
+                ? "Published the saved page content; no source files had pending changes."
+                : "Marked the page published; no source files had pending changes."
       );
+      return result;
     } catch (error) {
       console.error(error);
       toast.error(error.message || "Connected source publish failed.");
+      return null;
     } finally {
       setSourcePublishing(false);
     }

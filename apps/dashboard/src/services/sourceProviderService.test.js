@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import sourceProviderService from "./sourceProviderService";
+import sourceProviderService, {
+  bindRuntimeWebsiteId,
+  versionLocalBuildAssets
+} from "./sourceProviderService";
 
 function jsonResponse(value, status = 200) {
   return new Response(JSON.stringify(value), {
@@ -10,7 +13,83 @@ function jsonResponse(value, status = 200) {
 
 describe("connected source providers", () => {
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
+  });
+
+  it("rebinds source and compiled runtime providers to the connected website", () => {
+    const currentId = "-OyvyiRgLl6QPoiQ9edi";
+    const previousId = "-Oy2TPk_l2cl0Fe-H1h1";
+    const source = [
+      `<RuntimeProvider websiteId="${previousId}" apiKey="key">`,
+      `jsx(RuntimeProvider,{websiteId:\`${previousId}\`,apiKey:\`key\`})`,
+      `const unrelated = "${previousId}";`
+    ].join("\n");
+
+    const result = bindRuntimeWebsiteId(source, currentId);
+
+    expect(result.changed).toBe(true);
+    expect(result.previousWebsiteIds).toEqual([previousId]);
+    expect(result.content).toContain(`websiteId="${currentId}"`);
+    expect(result.content).toContain(`websiteId:\`${currentId}\``);
+    expect(result.content).toContain(`unrelated = "${previousId}"`);
+  });
+
+  it("versions local JavaScript and CSS references without changing remote assets", () => {
+    const html = [
+      '<link rel="stylesheet" href="/assets/index.css?theme=dark#app">',
+      '<script src="./assets/index.js"></script>',
+      '<script src="https://cdn.example.com/library.js"></script>',
+      '<img src="/assets/logo.png">'
+    ].join("");
+
+    const result = versionLocalBuildAssets(html, 12345);
+
+    expect(result.changedReferences).toBe(2);
+    expect(result.content).toContain('/assets/index.css?theme=dark&rcms=12345#app');
+    expect(result.content).toContain('./assets/index.js?rcms=12345');
+    expect(result.content).toContain('https://cdn.example.com/library.js');
+    expect(result.content).toContain('/assets/logo.png');
+  });
+
+  it("verifies StackCP writes, reconnects the runtime, and refreshes asset URLs", async () => {
+    const currentId = "-OyvyiRgLl6QPoiQ9edi";
+    const previousId = "-Oy2TPk_l2cl0Fe-H1h1";
+    const remoteFiles = new Map([
+      ["index.html", '<script type="module" src="/assets/index.js"></script>']
+    ]);
+    vi.spyOn(sourceProviderService, "writeFile").mockImplementation(
+      async (_website, path, content) => {
+        remoteFiles.set(path, content);
+        return { provider: "sftp", path, revision: 10, url: null };
+      }
+    );
+    vi.spyOn(sourceProviderService, "readFile").mockImplementation(
+      async (_website, path) => ({ path, content: remoteFiles.get(path) })
+    );
+
+    const result = await sourceProviderService.writeFiles(
+      {
+        id: currentId,
+        connection: { provider: "sftp", rootDirectory: "." }
+      },
+      [{
+        path: "assets/index.js",
+        content: `render({websiteId:\`${previousId}\`})`
+      }]
+    );
+
+    expect(remoteFiles.get("assets/index.js")).toContain(currentId);
+    expect(remoteFiles.get("assets/index.js")).not.toContain(previousId);
+    expect(remoteFiles.get("index.html")).toMatch(
+      /src="\/assets\/index\.js\?rcms=\d+"/
+    );
+    expect(result).toEqual(expect.objectContaining({
+      provider: "sftp",
+      verified: true,
+      runtimeRebound: true,
+      cacheBusted: true
+    }));
   });
 
   it("reads and commits the actual GitHub source file", async () => {
