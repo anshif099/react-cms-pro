@@ -530,10 +530,14 @@ export const sourceImportService = {
     if (credentials.port !== 22) {
       throw new Error("StackCP SFTP must use port 22.");
     }
+    let effectiveRoot = String(rootDirectory || "public_html")
+      .replaceAll("\\", "/")
+      .replace(/^\/+|\/+$/g, "") || "public_html";
+    let rootAdjusted = false;
     onProgress?.("Connecting to StackCP SFTP...");
-    const files = await downloadRemoteFiles(
+    const download = (selectedRoot) => downloadRemoteFiles(
       credentials,
-      rootDirectory,
+      selectedRoot,
       onProgress,
       {
         label: "StackCP SFTP",
@@ -546,6 +550,18 @@ export const sourceImportService = {
         )
       }
     );
+    let files;
+    try {
+      files = await download(effectiveRoot);
+    } catch (error) {
+      if (effectiveRoot !== "public_html" || !/not found/i.test(error.message)) {
+        throw error;
+      }
+      effectiveRoot = ".";
+      rootAdjusted = true;
+      onProgress?.("public_html is not visible; checking the FTP account root...");
+      files = await download(effectiveRoot);
+    }
     const revision = String(Date.now());
     onProgress?.("Inspecting framework and routes...");
     return sourceResult(files, {
@@ -553,8 +569,9 @@ export const sourceImportService = {
       repository: `sftp://${credentials.host}:${credentials.port}`,
       branch: null,
       revision,
-      rootDirectory: rootDirectory || "public_html",
-      authentication: "password"
+      rootDirectory: effectiveRoot,
+      authentication: "password",
+      rootAdjusted
     }, "stackcp-sftp-live-source");
   },
 

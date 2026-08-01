@@ -195,6 +195,9 @@ export function ConnectWebsitePage() {
       if (imported.manifest.rootIgnored) {
         toast.info("Project Root matched the branch name, so the repository root was used.");
       }
+      if (imported.manifest.rootAdjusted) {
+        toast.info("This FTP account opens inside the website directory, so its account root was used.");
+      }
 
       setProgress("Creating website record...");
       const endpoint = data.connectionProvider === "cpanel"
@@ -574,7 +577,7 @@ export function ConnectWebsitePage() {
                 <Input
                   label="Project Root"
                   placeholder="public_html"
-                  helperText="StackCP website files normally live in public_html."
+                  helperText="Use public_html, or . if this FTP account already opens inside the website directory. ReactCMS checks both automatically."
                   {...register("rootDirectory")}
                 />
               </div>

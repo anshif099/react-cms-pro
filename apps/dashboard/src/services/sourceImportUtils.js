@@ -345,6 +345,7 @@ export function buildSourceManifest(files, metadata = {}) {
     authentication: metadata.authentication || null,
     tokenIgnored: !!metadata.tokenIgnored,
     rootIgnored: !!metadata.rootIgnored,
+    rootAdjusted: !!metadata.rootAdjusted,
     framework,
     fileCount: files.length,
     sourceFileCount: textFiles.length,

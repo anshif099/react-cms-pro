@@ -68,18 +68,23 @@ describe("GitHub source authentication", () => {
       requests.push({ url: String(url), request });
       if (request.operation === "list" && request.parameters.directory === "public_html") {
         return jsonResponse({
+          error: "The selected StackCP project root or source file was not found."
+        }, 404);
+      }
+      if (request.operation === "list" && request.parameters.directory === ".") {
+        return jsonResponse({
           data: [
             { name: "package.json", type: "file", size: 60 },
             { name: "src", type: "directory", size: 0 }
           ]
         });
       }
-      if (request.operation === "list" && request.parameters.directory === "public_html/src") {
+      if (request.operation === "list" && request.parameters.directory === "./src") {
         return jsonResponse({
           data: [{ name: "App.jsx", type: "file", size: 80 }]
         });
       }
-      if (request.parameters.filePath === "public_html/package.json") {
+      if (request.parameters.filePath === "./package.json") {
         return jsonResponse({
           data: JSON.stringify({ dependencies: { react: "^19.0.0" } })
         });
@@ -100,8 +105,9 @@ describe("GitHub source authentication", () => {
     expect(imported.manifest).toEqual(expect.objectContaining({
       provider: "sftp",
       repository: "sftp://ftp.stackcp.com:22",
-      rootDirectory: "public_html",
-      authentication: "password"
+      rootDirectory: ".",
+      authentication: "password",
+      rootAdjusted: true
     }));
     expect(imported.routes).toEqual([
       expect.objectContaining({ path: "/contact", title: "Contact Us" })
