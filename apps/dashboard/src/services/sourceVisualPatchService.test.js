@@ -135,23 +135,23 @@ describe("connected region selections", () => {
 });
 
 describe("connected visual routes", () => {
-  it("builds the real deployed page route without exposing it in editor UI", () => {
+  it("loads the real deployed page route in preview mode", () => {
     expect(buildConnectedPageUrl(
       { domain: "https://triosis.vercel.app/" },
       { route: "/our-team", slug: "our-team" },
       "preview"
     )).toBe(
-      "/api/live-preview?target=https%3A%2F%2Ftriosis.vercel.app%2F&route=%2Four-team&mode=preview"
+      "https://triosis.vercel.app/our-team?rcms_preview=1"
     );
   });
 
-  it("sends the Home route directly to the live preview API", () => {
+  it("loads the deployed Home route instead of the proxy endpoint path", () => {
     expect(buildConnectedPageUrl(
       { domain: "https://triosis.vercel.app/" },
       { route: "/", slug: "home" },
       "preview"
     )).toBe(
-      "/api/live-preview?target=https%3A%2F%2Ftriosis.vercel.app%2F&route=%2F&mode=preview"
+      "https://triosis.vercel.app/?rcms_preview=1"
     );
   });
 
@@ -161,7 +161,7 @@ describe("connected visual routes", () => {
       { route: "/contact" },
       "edit"
     )).toBe(
-      "/api/live-preview?target=https%3A%2F%2Fexample.com%2Fsite&route=%2Fcontact&mode=edit"
+      "https://example.com/contact?rcms_edit=1"
     );
     expect(createRuntimeMessage("rcms/v1/enter-edit-mode", {}).websiteId).toBe("");
   });

@@ -401,12 +401,11 @@ export function buildConnectedPageUrl(website, page, mode = "preview") {
     const normalizedRoute = pageRoute === "/"
       ? "/"
       : `/${String(pageRoute).replace(/^\/+|\/+$/g, "")}`;
-    const parameters = new URLSearchParams({
-      target: url.toString(),
-      route: normalizedRoute,
-      mode: mode === "edit" ? "edit" : "preview"
-    });
-    return `/api/live-preview?${parameters.toString()}`;
+    url.pathname = normalizedRoute;
+    url.search = "";
+    url.hash = "";
+    url.searchParams.set(mode === "edit" ? "rcms_edit" : "rcms_preview", "1");
+    return url.toString();
   } catch {
     return "";
   }

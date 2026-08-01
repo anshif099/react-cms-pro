@@ -165,6 +165,9 @@ function ConnectedSourceWorkspace({
       return "";
     }
   }, [livePageUrl]);
+  const livePageIsCrossOrigin = Boolean(
+    liveOrigin && liveOrigin !== window.location.origin
+  );
   const canvasWidth = device === "custom"
     ? customWidth
     : CANVAS_DEVICE_WIDTHS[device] || 1440;
@@ -243,6 +246,10 @@ function ConnectedSourceWorkspace({
 
   useEffect(() => {
     if (!livePageUrl) return undefined;
+    if (livePageIsCrossOrigin) {
+      setLiveRouteError("");
+      return undefined;
+    }
     let cancelled = false;
     setLiveRouteError("");
 
@@ -267,7 +274,7 @@ function ConnectedSourceWorkspace({
     return () => {
       cancelled = true;
     };
-  }, [livePageUrl, frameVersion]);
+  }, [livePageIsCrossOrigin, livePageUrl, frameVersion]);
 
   useEffect(() => {
     if (!livePageUrl) return undefined;
@@ -823,7 +830,9 @@ function ConnectedSourceWorkspace({
                   title={`${page.title} live visual canvas`}
                   onLoad={handleFrameLoad}
                   className="block h-full w-full border-0 bg-white"
-                  sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
+                  sandbox={livePageIsCrossOrigin
+                    ? "allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
+                    : "allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"}
                   allow="clipboard-read; clipboard-write"
                 />
               </div>
