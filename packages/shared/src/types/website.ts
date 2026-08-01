@@ -1,7 +1,7 @@
 export type ConnectionHealth = 'healthy' | 'unverified' | 'error' | 'unknown';
 export type SyncStatus = 'idle' | 'syncing' | 'manual' | 'error';
 export type WebsiteStatus = 'connected' | 'importing' | 'pending' | 'disconnected' | 'error' | 'suspended';
-export type ConnectionProvider = 'github' | 'cpanel' | 'sdk';
+export type ConnectionProvider = 'github' | 'cpanel' | 'sftp' | 'sdk';
 
 export interface WebsiteSourceConnection {
   provider: ConnectionProvider;
@@ -11,6 +11,8 @@ export interface WebsiteSourceConnection {
   rootDirectory?: string;
   sourceRevision?: string;
   artifactPath?: string;
+  endpoint?: string;
+  port?: number;
   fileCount?: number;
   routeCount?: number;
   importedAt?: number;

@@ -101,6 +101,34 @@ async function cpanelRequest(credentials, operation, parameters = {}) {
   return payload.data;
 }
 
+async function sftpRequest(credentials, operation, parameters = {}) {
+  const response = await fetch("/api/sftp", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      host: credentials.host,
+      port: credentials.port || 22,
+      username: credentials.username,
+      credential: credentials.credential,
+      operation,
+      parameters
+    })
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(payload?.error || `StackCP SFTP operation failed (${response.status}).`);
+  }
+  return payload.data;
+}
+
+function hasSftpCredentials(credentials) {
+  return Boolean(
+    credentials?.host
+    && credentials?.username
+    && credentials?.credential
+  );
+}
+
 export const sourceProviderService = {
   async readGitHubFile(connection, filePath, token = "") {
     const repository = normalizeRepository(connection?.repository);
@@ -179,6 +207,28 @@ export const sourceProviderService = {
     };
   },
 
+  async listSftpFiles(credentials, directory) {
+    return sftpRequest(credentials, "list", { directory });
+  },
+
+  async readSftpFile(credentials, filePath) {
+    return sftpRequest(credentials, "read", { filePath: normalizePath(filePath) });
+  },
+
+  async writeSftpFile(credentials, filePath, content) {
+    const path = normalizePath(filePath);
+    const data = await sftpRequest(credentials, "write", {
+      filePath: path,
+      content: String(content ?? "")
+    });
+    return {
+      provider: "sftp",
+      path,
+      revision: data?.mtime || Date.now(),
+      url: null
+    };
+  },
+
   async readFile(website, filePath) {
     const connection = website?.connection || {};
     const credentials = sourceCredentialService.get(website?.id);
@@ -195,6 +245,14 @@ export const sourceProviderService = {
       }
       const path = providerPath(connection, filePath);
       const content = await this.readCPanelFile(credentials, path);
+      return { content, path };
+    }
+    if (connection.provider === "sftp") {
+      if (!hasSftpCredentials(credentials)) {
+        throw new Error("Reconnect the StackCP SFTP session before reading source files.");
+      }
+      const path = providerPath(connection, filePath);
+      const content = await this.readSftpFile(credentials, path);
       return { content, path };
     }
     throw new Error("This website is not connected to a writable source provider.");
@@ -221,6 +279,16 @@ export const sourceProviderService = {
         throw new Error("Reconnect the cPanel session before publishing.");
       }
       return this.writeCPanelFile(
+        credentials,
+        providerPath(connection, filePath),
+        content
+      );
+    }
+    if (connection.provider === "sftp") {
+      if (!hasSftpCredentials(credentials)) {
+        throw new Error("Reconnect the StackCP SFTP session before publishing.");
+      }
+      return this.writeSftpFile(
         credentials,
         providerPath(connection, filePath),
         content

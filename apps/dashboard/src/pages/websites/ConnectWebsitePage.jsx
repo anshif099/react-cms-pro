@@ -7,7 +7,8 @@ import {
   Archive,
   ArrowLeft,
   FolderGit2,
-  Info
+  Info,
+  Server
 } from "lucide-react";
 import { useWebsites } from "../../hooks/useWebsites";
 import { useToast } from "../../hooks/useToast";
@@ -21,7 +22,7 @@ import sourceCredentialService from "../../services/sourceCredentialService";
 const connectSchema = zod.object({
   name: zod.string().min(2, "Website name must be at least 2 characters"),
   domain: zod.string().min(1, "Domain URL is required").url("Enter a full URL, including https://"),
-  connectionProvider: zod.enum(["github", "cpanel"]),
+  connectionProvider: zod.enum(["github", "cpanel", "sftp"]),
   repositoryUrl: zod.string().optional(),
   branch: zod.string().optional(),
   rootDirectory: zod.string().optional(),
@@ -30,6 +31,10 @@ const connectSchema = zod.object({
   cpanelUsername: zod.string().optional(),
   cpanelAuthMethod: zod.enum(["password", "api-token"]),
   cpanelCredential: zod.string().optional(),
+  sftpHost: zod.string().optional(),
+  sftpPort: zod.string().optional(),
+  sftpUsername: zod.string().optional(),
+  sftpCredential: zod.string().optional(),
   ownerName: zod.string().min(2, "Owner name is required"),
   ownerEmail: zod.string().email("Enter a valid owner email")
 }).superRefine((data, context) => {
@@ -62,6 +67,36 @@ const connectSchema = zod.object({
         message: data.cpanelAuthMethod === "password"
           ? "cPanel password is required"
           : "cPanel API token is required"
+      });
+    }
+  }
+  if (data.connectionProvider === "sftp") {
+    if (!data.sftpHost?.trim()) {
+      context.addIssue({
+        code: "custom",
+        path: ["sftpHost"],
+        message: "StackCP SFTP hostname is required"
+      });
+    }
+    if (Number(data.sftpPort || 22) !== 22) {
+      context.addIssue({
+        code: "custom",
+        path: ["sftpPort"],
+        message: "StackCP SFTP must use port 22"
+      });
+    }
+    if (!data.sftpUsername?.trim()) {
+      context.addIssue({
+        code: "custom",
+        path: ["sftpUsername"],
+        message: "StackCP package username is required"
+      });
+    }
+    if (!data.sftpCredential?.trim()) {
+      context.addIssue({
+        code: "custom",
+        path: ["sftpCredential"],
+        message: "StackCP FTP password is required"
       });
     }
   }
@@ -100,6 +135,10 @@ export function ConnectWebsitePage() {
       cpanelUsername: "",
       cpanelAuthMethod: "password",
       cpanelCredential: "",
+      sftpHost: "ftp.stackcp.com",
+      sftpPort: "22",
+      sftpUsername: "",
+      sftpCredential: "",
       ownerName: "",
       ownerEmail: ""
     }
@@ -122,15 +161,17 @@ export function ConnectWebsitePage() {
     setProgress("Preparing source import...");
     let createdWebsite = null;
     try {
-      const imported = data.connectionProvider === "github"
-        ? await sourceImportService.importGitHub({
+      let imported;
+      if (data.connectionProvider === "github") {
+        imported = await sourceImportService.importGitHub({
           repositoryUrl: data.repositoryUrl,
           branch: data.branch,
           rootDirectory: data.rootDirectory,
           token: data.githubToken,
           onProgress: setProgress
-        })
-        : await sourceImportService.importCPanel({
+        });
+      } else if (data.connectionProvider === "cpanel") {
+        imported = await sourceImportService.importCPanel({
           endpoint: data.cpanelEndpoint,
           username: data.cpanelUsername,
           authMethod: data.cpanelAuthMethod,
@@ -138,6 +179,16 @@ export function ConnectWebsitePage() {
           rootDirectory: data.rootDirectory || "public_html",
           onProgress: setProgress
         });
+      } else {
+        imported = await sourceImportService.importSftp({
+          host: data.sftpHost,
+          port: data.sftpPort || "22",
+          username: data.sftpUsername,
+          credential: data.sftpCredential,
+          rootDirectory: data.rootDirectory || "public_html",
+          onProgress: setProgress
+        });
+      }
       if (imported.manifest.tokenIgnored) {
         toast.info("The invalid token was ignored because this repository is public.");
       }
@@ -146,11 +197,23 @@ export function ConnectWebsitePage() {
       }
 
       setProgress("Creating website record...");
+      const endpoint = data.connectionProvider === "cpanel"
+        ? data.cpanelEndpoint
+        : data.connectionProvider === "sftp"
+          ? data.sftpHost
+          : null;
+      const port = data.connectionProvider === "sftp"
+        ? Number(data.sftpPort || 22)
+        : null;
       createdWebsite = await createWebsite({
         name: data.name,
         domain: data.domain,
         framework: imported.manifest.framework,
-        hosting: data.connectionProvider === "cpanel" ? "cPanel" : "GitHub",
+        hosting: data.connectionProvider === "cpanel"
+          ? "cPanel"
+          : data.connectionProvider === "sftp"
+            ? "StackCP"
+            : "GitHub",
         ownerName: data.ownerName,
         ownerEmail: data.ownerEmail,
         connectionProvider: data.connectionProvider,
@@ -162,9 +225,8 @@ export function ConnectWebsitePage() {
           rootDirectory: imported.manifest.rootDirectory,
           sourceRevision: imported.manifest.revision,
           authentication: imported.manifest.authentication,
-          endpoint: data.connectionProvider === "cpanel"
-            ? data.cpanelEndpoint
-            : null,
+          endpoint,
+          port,
           sourceMode: "provider",
           sourceStorage: data.connectionProvider
         }
@@ -186,6 +248,14 @@ export function ConnectWebsitePage() {
           username: data.cpanelUsername,
           authMethod: data.cpanelAuthMethod,
           credential: data.cpanelCredential
+        });
+      }
+      if (data.connectionProvider === "sftp") {
+        sourceCredentialService.rememberSftp(createdWebsite.id, {
+          host: data.sftpHost,
+          port: data.sftpPort || 22,
+          username: data.sftpUsername,
+          credential: data.sftpCredential
         });
       }
 
@@ -211,13 +281,13 @@ export function ConnectWebsitePage() {
           rootDirectory: imported.manifest.rootDirectory,
           sourceRevision: imported.manifest.revision,
           authentication: imported.manifest.authentication,
-          endpoint: data.connectionProvider === "cpanel"
-            ? data.cpanelEndpoint
-            : null,
+          endpoint,
+          port,
           sourceMode: "provider",
           sourceStorage: data.connectionProvider,
           writebackEnabled: (
             data.connectionProvider === "cpanel"
+            || data.connectionProvider === "sftp"
             || (
               Boolean(data.githubToken?.trim())
               && !imported.manifest.tokenIgnored
@@ -273,7 +343,7 @@ export function ConnectWebsitePage() {
       <form onSubmit={handleSubmit(onSubmit)} className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-6">
           <Card title="Connection Method" subtitle="Choose where ReactCMS should read the website source">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <label className={`rounded-xl border p-4 cursor-pointer transition-colors ${
                 provider === "github"
                   ? "border-primary bg-primary/5"
@@ -307,6 +377,24 @@ export function ConnectWebsitePage() {
                 <span className="block mt-3 text-sm font-bold text-admin-text">cPanel Live Connection</span>
                 <span className="block mt-1 text-xs leading-5 text-admin-secondary">
                   Read and publish through cPanel UAPI. StackCP/20i requires an SFTP connection.
+                </span>
+              </label>
+
+              <label className={`rounded-xl border p-4 cursor-pointer transition-colors ${
+                provider === "sftp"
+                  ? "border-primary bg-primary/5"
+                  : "border-admin-border dark:border-slate-800 hover:border-slate-600"
+              }`}>
+                <input
+                  type="radio"
+                  value="sftp"
+                  className="sr-only"
+                  {...register("connectionProvider")}
+                />
+                <Server className="w-6 h-6 text-admin-text" />
+                <span className="block mt-3 text-sm font-bold text-admin-text">StackCP SFTP</span>
+                <span className="block mt-1 text-xs leading-5 text-admin-secondary">
+                  Connect to StackCP/20i with unlocked SFTP and the package FTP password.
                 </span>
               </label>
             </div>
@@ -374,7 +462,7 @@ export function ConnectWebsitePage() {
                 />
               </div>
             </Card>
-          ) : (
+          ) : provider === "cpanel" ? (
             <Card title="cPanel Connection" subtitle="Credentials stay in this browser session and are relayed only for requests to the connected cPanel server">
               <div className="space-y-5">
                 <Input
@@ -440,6 +528,57 @@ export function ConnectWebsitePage() {
                 />
               </div>
             </Card>
+          ) : (
+            <Card title="StackCP SFTP Connection" subtitle="The password stays in this browser session and is relayed only for StackCP SFTP requests">
+              <div className="space-y-5">
+                <div className="rounded-xl border border-amber-400/20 bg-amber-400/5 p-4 flex gap-3">
+                  <Info className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                  <p className="text-xs leading-5 text-admin-secondary">
+                    Before importing, open the hosting package in StackCP and unlock FTP/SFTP for a time period.
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-[1fr_120px] gap-5">
+                  <Input
+                    label="SFTP Host *"
+                    placeholder="ftp.stackcp.com"
+                    helperText="Use ftp.stackcp.com, or the regional StackCP hostname from FTP Details."
+                    error={errors.sftpHost?.message}
+                    {...register("sftpHost")}
+                  />
+                  <Input
+                    label="Port *"
+                    placeholder="22"
+                    inputMode="numeric"
+                    error={errors.sftpPort?.message}
+                    {...register("sftpPort")}
+                  />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <Input
+                    label="Package Username *"
+                    placeholder="example.com"
+                    helperText="For StackCP packages, this is usually the website domain."
+                    error={errors.sftpUsername?.message}
+                    {...register("sftpUsername")}
+                  />
+                  <Input
+                    type="password"
+                    label="FTP/SFTP Password *"
+                    placeholder="Rotated package FTP password"
+                    helperText="Use the password shown or reset in the package's FTP Details."
+                    autoComplete="current-password"
+                    error={errors.sftpCredential?.message}
+                    {...register("sftpCredential")}
+                  />
+                </div>
+                <Input
+                  label="Project Root"
+                  placeholder="public_html"
+                  helperText="StackCP website files normally live in public_html."
+                  {...register("rootDirectory")}
+                />
+              </div>
+            </Card>
           )}
 
           <div className="flex items-center justify-end gap-3">
@@ -455,7 +594,7 @@ export function ConnectWebsitePage() {
         <div className="space-y-6">
           <Card title="What gets imported">
             <div className="space-y-3 text-xs leading-5 text-admin-secondary">
-              <p>The complete codebase stays in GitHub or the connected cPanel account.</p>
+              <p>The complete codebase stays in GitHub or the connected hosting account.</p>
               <p>ReactCMS indexes only routes, source paths, branch, and revision metadata.</p>
               <p>No SDK credentials or npm installation are generated.</p>
             </div>

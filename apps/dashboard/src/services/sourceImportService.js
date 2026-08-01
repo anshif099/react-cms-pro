@@ -171,44 +171,54 @@ function sourceResult(files, metadata, filename, buffer = null) {
   };
 }
 
-function cpanelEntries(value) {
+function remoteEntries(value) {
   if (Array.isArray(value)) return value;
   if (Array.isArray(value?.data)) return value.data;
   if (value && typeof value === "object") return Object.values(value);
   return [];
 }
 
-function cpanelEntryName(entry) {
+function remoteEntryName(entry) {
   return String(entry?.name || entry?.file || entry?.filename || "")
     .replaceAll("\\", "/")
     .replace(/^\/+|\/+$/g, "");
 }
 
-function isCPanelDirectory(entry) {
+function isRemoteDirectory(entry) {
   return entry?.type === "dir"
     || entry?.type === "directory"
     || entry?.is_dir === 1
     || entry?.is_dir === true;
 }
 
-async function downloadCPanelFiles(credentials, rootDirectory, onProgress) {
+async function downloadRemoteFiles(
+  credentials,
+  rootDirectory,
+  onProgress,
+  {
+    label,
+    listFiles,
+    readFile,
+    workerLimit = 6
+  }
+) {
   const root = String(rootDirectory || "public_html")
     .replaceAll("\\", "/")
     .replace(/^\/+|\/+$/g, "");
   if (!root || root.split("/").some((segment) => segment === "..")) {
-    throw new Error("Enter a valid cPanel project root such as public_html.");
+    throw new Error(`Enter a valid ${label} project root such as public_html.`);
   }
 
   const queue = [root];
   const files = [];
   while (queue.length) {
     const directory = queue.shift();
-    onProgress?.(`Reading cPanel directory ${directory}...`);
-    const listing = cpanelEntries(
-      await sourceProviderService.listCPanelFiles(credentials, directory)
+    onProgress?.(`Reading ${label} directory ${directory}...`);
+    const listing = remoteEntries(
+      await listFiles(credentials, directory)
     );
     for (const entry of listing) {
-      const name = cpanelEntryName(entry);
+      const name = remoteEntryName(entry);
       if (!name || name === "." || name === "..") continue;
       const fullPath = `${directory}/${name}`.replace(/\/+/g, "/");
       const relativePath = fullPath.slice(root.length).replace(/^\/+/, "");
@@ -217,7 +227,7 @@ async function downloadCPanelFiles(credentials, rootDirectory, onProgress) {
       if (segments.some((segment) => SKIPPED_SOURCE_DIRECTORIES.has(segment))) {
         continue;
       }
-      if (isCPanelDirectory(entry)) {
+      if (isRemoteDirectory(entry)) {
         queue.push(fullPath);
         continue;
       }
@@ -228,14 +238,14 @@ async function downloadCPanelFiles(credentials, rootDirectory, onProgress) {
         content: null
       });
       if (files.length > MAX_EXTRACTED_FILES) {
-        throw new Error("The cPanel project contains too many files (maximum 12,000).");
+        throw new Error(`The ${label} project contains too many files (maximum 12,000).`);
       }
     }
   }
 
   const totalBytes = files.reduce((total, file) => total + file.size, 0);
   if (totalBytes > MAX_EXTRACTED_BYTES) {
-    throw new Error("The cPanel project exceeds the 100 MB inspection limit.");
+    throw new Error(`The ${label} project exceeds the 100 MB inspection limit.`);
   }
 
   const readableFiles = files.filter((file) => (
@@ -243,18 +253,18 @@ async function downloadCPanelFiles(credentials, rootDirectory, onProgress) {
   ));
   let cursor = 0;
   const workers = Array.from(
-    { length: Math.min(6, readableFiles.length) },
+    { length: Math.min(workerLimit, readableFiles.length) },
     async () => {
       while (cursor < readableFiles.length) {
         const index = cursor;
         cursor += 1;
         const file = readableFiles[index];
-        file.content = await sourceProviderService.readCPanelFile(
+        file.content = await readFile(
           credentials,
           file.repositoryPath
         );
         if ((index + 1) % 20 === 0 || index + 1 === readableFiles.length) {
-          onProgress?.(`Reading cPanel source files (${index + 1}/${readableFiles.length})...`);
+          onProgress?.(`Reading ${label} source files (${index + 1}/${readableFiles.length})...`);
         }
       }
     }
@@ -474,7 +484,20 @@ export const sourceImportService = {
       );
     }
     onProgress?.("Connecting to cPanel File Manager...");
-    const files = await downloadCPanelFiles(credentials, rootDirectory, onProgress);
+    const files = await downloadRemoteFiles(
+      credentials,
+      rootDirectory,
+      onProgress,
+      {
+        label: "cPanel",
+        listFiles: (connection, directory) => (
+          sourceProviderService.listCPanelFiles(connection, directory)
+        ),
+        readFile: (connection, filePath) => (
+          sourceProviderService.readCPanelFile(connection, filePath)
+        )
+      }
+    );
     const revision = String(Date.now());
     onProgress?.("Inspecting framework and routes...");
     return sourceResult(files, {
@@ -487,9 +510,57 @@ export const sourceImportService = {
     }, "cpanel-live-source");
   },
 
+  async importSftp({
+    host = "ftp.stackcp.com",
+    port = 22,
+    username,
+    credential,
+    rootDirectory = "public_html",
+    onProgress
+  }) {
+    const credentials = {
+      host: String(host || "").trim().toLowerCase(),
+      port: Number(port || 22),
+      username: String(username || "").trim(),
+      credential: String(credential || "")
+    };
+    if (!credentials.host || !credentials.username || !credentials.credential.trim()) {
+      throw new Error("StackCP SFTP host, username, and password are required.");
+    }
+    if (credentials.port !== 22) {
+      throw new Error("StackCP SFTP must use port 22.");
+    }
+    onProgress?.("Connecting to StackCP SFTP...");
+    const files = await downloadRemoteFiles(
+      credentials,
+      rootDirectory,
+      onProgress,
+      {
+        label: "StackCP SFTP",
+        workerLimit: 3,
+        listFiles: (connection, directory) => (
+          sourceProviderService.listSftpFiles(connection, directory)
+        ),
+        readFile: (connection, filePath) => (
+          sourceProviderService.readSftpFile(connection, filePath)
+        )
+      }
+    );
+    const revision = String(Date.now());
+    onProgress?.("Inspecting framework and routes...");
+    return sourceResult(files, {
+      provider: "sftp",
+      repository: `sftp://${credentials.host}:${credentials.port}`,
+      branch: null,
+      revision,
+      rootDirectory: rootDirectory || "public_html",
+      authentication: "password"
+    }, "stackcp-sftp-live-source");
+  },
+
   // Source archives intentionally remain with the connected provider.
   // ReactCMS inspects them in memory to discover routes, but never uploads a
-  // customer's repository or cPanel files into the ReactCMS Firebase project.
+  // customer's repository or connected hosting files into the ReactCMS Firebase project.
 };
 
 export default sourceImportService;

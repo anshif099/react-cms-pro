@@ -215,6 +215,7 @@ export function WebsitesPage() {
             >
               <option value="all">All Hosting</option>
               <option value="cPanel">cPanel</option>
+              <option value="StackCP">StackCP</option>
               <option value="VPS">VPS</option>
               <option value="Cloud">Cloud</option>
               <option value="Other">Other</option>
@@ -327,7 +328,7 @@ export function WebsitesPage() {
         onClose={() => setDeleteId(null)}
         onConfirm={handleDelete}
         title="Delete Website"
-        message="This permanently deletes the website, pages, drafts, published content, revisions, media, registry data, and imported source artifacts from ReactCMS. The external GitHub repository, cPanel account, and live website are not deleted."
+        message="This permanently deletes the website, pages, drafts, published content, revisions, media, registry data, and imported source artifacts from ReactCMS. The external GitHub repository, cPanel/StackCP account, and live website are not deleted."
       />
 
       <ConfirmDialog

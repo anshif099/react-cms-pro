@@ -127,4 +127,41 @@ describe("connected source providers", () => {
       credential: " password with spaces "
     }));
   });
+
+  it("uses the same-origin StackCP SFTP connector for file writes", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({
+      data: { mtime: 4321 }
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await sourceProviderService.writeSftpFile(
+      {
+        host: "ftp.stackcp.com",
+        port: 22,
+        username: "example.com",
+        credential: "ftp-password"
+      },
+      "public_html/index.html",
+      "<h1>Updated through SFTP</h1>"
+    );
+
+    expect(result).toEqual(expect.objectContaining({
+      provider: "sftp",
+      revision: 4321,
+      path: "public_html/index.html"
+    }));
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/sftp");
+    const request = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(request).toEqual(expect.objectContaining({
+      host: "ftp.stackcp.com",
+      port: 22,
+      username: "example.com",
+      credential: "ftp-password",
+      operation: "write",
+      parameters: {
+        filePath: "public_html/index.html",
+        content: "<h1>Updated through SFTP</h1>"
+      }
+    }));
+  });
 });

@@ -60,4 +60,56 @@ describe("GitHub source authentication", () => {
     expect(calls[0].options.headers.Authorization).toBe("Bearer invalid-token");
     expect(calls.slice(1).every((call) => !call.options.headers?.Authorization)).toBe(true);
   });
+
+  it("imports routes through the StackCP SFTP connector", async () => {
+    const requests = [];
+    const fetchMock = vi.fn(async (url, options = {}) => {
+      const request = JSON.parse(options.body);
+      requests.push({ url: String(url), request });
+      if (request.operation === "list" && request.parameters.directory === "public_html") {
+        return jsonResponse({
+          data: [
+            { name: "package.json", type: "file", size: 60 },
+            { name: "src", type: "directory", size: 0 }
+          ]
+        });
+      }
+      if (request.operation === "list" && request.parameters.directory === "public_html/src") {
+        return jsonResponse({
+          data: [{ name: "App.jsx", type: "file", size: 80 }]
+        });
+      }
+      if (request.parameters.filePath === "public_html/package.json") {
+        return jsonResponse({
+          data: JSON.stringify({ dependencies: { react: "^19.0.0" } })
+        });
+      }
+      return jsonResponse({
+        data: '<Route path="/contact" element={<ContactUs />} />'
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const imported = await sourceImportService.importSftp({
+      host: "ftp.stackcp.com",
+      username: "example.com",
+      credential: "rotated-ftp-password",
+      rootDirectory: "public_html"
+    });
+
+    expect(imported.manifest).toEqual(expect.objectContaining({
+      provider: "sftp",
+      repository: "sftp://ftp.stackcp.com:22",
+      rootDirectory: "public_html",
+      authentication: "password"
+    }));
+    expect(imported.routes).toEqual([
+      expect.objectContaining({ path: "/contact", title: "Contact Us" })
+    ]);
+    expect(requests.every(({ url }) => url === "/api/sftp")).toBe(true);
+    expect(requests.every(({ request }) => (
+      request.username === "example.com"
+      && request.credential === "rotated-ftp-password"
+    ))).toBe(true);
+  });
 });

@@ -135,6 +135,7 @@ function ConnectedSourceWorkspace({
 }) {
   const isPreview = mode === "preview";
   const isGitHub = website?.connection?.provider === "github";
+  const isSftp = website?.connection?.provider === "sftp";
   const iframeRef = useRef(null);
   const canvasViewportRef = useRef(null);
   const [workspaceMode, setWorkspaceMode] = useState("visual");
@@ -653,7 +654,7 @@ function ConnectedSourceWorkspace({
         onPublish={onPublish}
         onSettings={() => {}}
         showSettings={false}
-        publishLabel={isGitHub ? "Update Git" : "Update cPanel"}
+        publishLabel={isGitHub ? "Update Git" : isSftp ? "Update StackCP" : "Update cPanel"}
       />
 
       <div className="h-11 px-4 border-b border-slate-800 bg-[#0a101d] flex items-center gap-3">
@@ -1497,7 +1498,9 @@ export function VisualBuilderPage() {
           ? "Page committed to GitHub. The connected deployment can now rebuild."
           : providerResult?.provider === "cpanel"
             ? "Page source and route saved directly to cPanel."
-            : "Native page published. Connected runtimes will refresh automatically."
+            : providerResult?.provider === "sftp"
+              ? "Page source and route saved directly to StackCP through SFTP."
+              : "Native page published. Connected runtimes will refresh automatically."
       );
     } catch (error) {
       console.error(error);
@@ -1648,7 +1651,9 @@ export function VisualBuilderPage() {
       toast.success(
         result.provider === "github"
           ? `${pathsToPublish.length} source file${pathsToPublish.length === 1 ? "" : "s"} committed to GitHub. The connected deployment can now rebuild.`
-          : "Saved directly to cPanel."
+          : result.provider === "sftp"
+            ? "Saved directly to StackCP through SFTP."
+            : "Saved directly to cPanel."
       );
     } catch (error) {
       console.error(error);

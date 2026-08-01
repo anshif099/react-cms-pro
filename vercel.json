@@ -5,6 +5,9 @@
     "api/cpanel.js": {
       "maxDuration": 60
     },
+    "api/sftp.js": {
+      "maxDuration": 60
+    },
     "api/live-preview.js": {
       "maxDuration": 30
     }

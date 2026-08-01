@@ -42,6 +42,16 @@ export const sourceCredentialService = {
     });
   },
 
+  rememberSftp(websiteId, credentials) {
+    write(websiteId, {
+      provider: "sftp",
+      host: String(credentials?.host || "").trim().toLowerCase(),
+      port: Number(credentials?.port || 22),
+      username: String(credentials?.username || "").trim(),
+      credential: String(credentials?.credential || "")
+    });
+  },
+
   get(websiteId) {
     return read(websiteId);
   },
