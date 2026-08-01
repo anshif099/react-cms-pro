@@ -28,7 +28,8 @@ const connectSchema = zod.object({
   githubToken: zod.string().optional(),
   cpanelEndpoint: zod.string().optional(),
   cpanelUsername: zod.string().optional(),
-  cpanelToken: zod.string().optional(),
+  cpanelAuthMethod: zod.enum(["password", "api-token"]),
+  cpanelCredential: zod.string().optional(),
   ownerName: zod.string().min(2, "Owner name is required"),
   ownerEmail: zod.string().email("Enter a valid owner email")
 }).superRefine((data, context) => {
@@ -54,11 +55,13 @@ const connectSchema = zod.object({
         message: "cPanel username is required"
       });
     }
-    if (!data.cpanelToken?.trim()) {
+    if (!data.cpanelCredential?.trim()) {
       context.addIssue({
         code: "custom",
-        path: ["cpanelToken"],
-        message: "cPanel API token is required"
+        path: ["cpanelCredential"],
+        message: data.cpanelAuthMethod === "password"
+          ? "cPanel password is required"
+          : "cPanel API token is required"
       });
     }
   }
@@ -95,13 +98,15 @@ export function ConnectWebsitePage() {
       githubToken: "",
       cpanelEndpoint: "",
       cpanelUsername: "",
-      cpanelToken: "",
+      cpanelAuthMethod: "password",
+      cpanelCredential: "",
       ownerName: "",
       ownerEmail: ""
     }
   });
 
   const provider = watch("connectionProvider");
+  const cpanelAuthMethod = watch("cpanelAuthMethod");
 
   useEffect(() => {
     if (!user) return;
@@ -128,7 +133,8 @@ export function ConnectWebsitePage() {
         : await sourceImportService.importCPanel({
           endpoint: data.cpanelEndpoint,
           username: data.cpanelUsername,
-          token: data.cpanelToken,
+          authMethod: data.cpanelAuthMethod,
+          credential: data.cpanelCredential,
           rootDirectory: data.rootDirectory || "public_html",
           onProgress: setProgress
         });
@@ -178,7 +184,8 @@ export function ConnectWebsitePage() {
         sourceCredentialService.rememberCPanel(createdWebsite.id, {
           endpoint: data.cpanelEndpoint,
           username: data.cpanelUsername,
-          token: data.cpanelToken
+          authMethod: data.cpanelAuthMethod,
+          credential: data.cpanelCredential
         });
       }
 
@@ -368,7 +375,7 @@ export function ConnectWebsitePage() {
               </div>
             </Card>
           ) : (
-            <Card title="cPanel Connection" subtitle="Credentials stay in this browser session and are sent only to the connected cPanel server">
+            <Card title="cPanel Connection" subtitle="Credentials stay in this browser session and are relayed only for requests to the connected cPanel server">
               <div className="space-y-5">
                 <Input
                   label="cPanel URL *"
@@ -377,20 +384,52 @@ export function ConnectWebsitePage() {
                   error={errors.cpanelEndpoint?.message}
                   {...register("cpanelEndpoint")}
                 />
+                <div className="flex flex-col gap-1 text-left">
+                  <span className="text-xs font-semibold text-admin-secondary uppercase tracking-wider">
+                    Authentication *
+                  </span>
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      ["password", "Password"],
+                      ["api-token", "API Token"]
+                    ].map(([value, label]) => (
+                      <label
+                        key={value}
+                        className={`rounded-lg border px-3 py-2.5 cursor-pointer text-sm font-semibold transition-colors ${
+                          cpanelAuthMethod === value
+                            ? "border-primary bg-primary/5 text-admin-text"
+                            : "border-admin-border dark:border-slate-700 text-admin-secondary hover:border-slate-400 dark:hover:border-slate-600"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          value={value}
+                          className="sr-only"
+                          {...register("cpanelAuthMethod")}
+                        />
+                        {label}
+                      </label>
+                    ))}
+                  </div>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <Input
                     label="cPanel Username *"
                     placeholder="account username"
+                    helperText="Use the account username shown in cPanel; it is often different from the domain."
                     error={errors.cpanelUsername?.message}
                     {...register("cpanelUsername")}
                   />
                   <Input
                     type="password"
-                    label="cPanel API Token *"
-                    placeholder="API token"
-                    autoComplete="new-password"
-                    error={errors.cpanelToken?.message}
-                    {...register("cpanelToken")}
+                    label={cpanelAuthMethod === "password" ? "cPanel Password *" : "cPanel API Token *"}
+                    placeholder={cpanelAuthMethod === "password" ? "Account password" : "API token"}
+                    helperText={cpanelAuthMethod === "password"
+                      ? "Use the password you use to sign in to cPanel."
+                      : "Use an API token with access to File Manager."}
+                    autoComplete={cpanelAuthMethod === "password" ? "current-password" : "new-password"}
+                    error={errors.cpanelCredential?.message}
+                    {...register("cpanelCredential")}
                   />
                 </div>
                 <Input

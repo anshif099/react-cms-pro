@@ -97,11 +97,34 @@ describe("connected source providers", () => {
     }));
     const request = JSON.parse(fetchMock.mock.calls[0][1].body);
     expect(request).toEqual(expect.objectContaining({
+      authMethod: "api-token",
+      credential: "cpanel-token",
       operation: "write",
       parameters: {
         filePath: "public_html/index.html",
         content: "<h1>Updated</h1>"
       }
+    }));
+  });
+
+  it("uses password authentication without trimming the cPanel password", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ data: [] }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await sourceProviderService.listCPanelFiles(
+      {
+        endpoint: "https://cpanel.example.com:2083",
+        username: "account",
+        authMethod: "password",
+        credential: " password with spaces "
+      },
+      "public_html"
+    );
+
+    const request = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(request).toEqual(expect.objectContaining({
+      authMethod: "password",
+      credential: " password with spaces "
     }));
   });
 });

@@ -29,11 +29,16 @@ export const sourceCredentialService = {
   },
 
   rememberCPanel(websiteId, credentials) {
+    const authMethod = credentials?.authMethod === "password" ? "password" : "api-token";
+    const suppliedCredential = credentials?.credential ?? credentials?.token ?? "";
     write(websiteId, {
       provider: "cpanel",
       endpoint: String(credentials?.endpoint || "").trim(),
       username: String(credentials?.username || "").trim(),
-      token: String(credentials?.token || "").trim()
+      authMethod,
+      credential: authMethod === "password"
+        ? String(suppliedCredential)
+        : String(suppliedCredential).trim()
     });
   },
 

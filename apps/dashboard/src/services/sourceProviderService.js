@@ -77,13 +77,19 @@ async function githubJson(url, token, options = {}) {
 }
 
 async function cpanelRequest(credentials, operation, parameters = {}) {
+  const authMethod = credentials?.authMethod === "password" ? "password" : "api-token";
+  const suppliedCredential = credentials?.credential ?? credentials?.token ?? "";
+  const credential = authMethod === "password"
+    ? String(suppliedCredential)
+    : String(suppliedCredential).trim();
   const response = await fetch("/api/cpanel", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       endpoint: credentials.endpoint,
       username: credentials.username,
-      token: credentials.token,
+      authMethod,
+      credential,
       operation,
       parameters
     })
@@ -180,8 +186,12 @@ export const sourceProviderService = {
       return this.readGitHubFile(connection, filePath, credentials.token || "");
     }
     if (connection.provider === "cpanel") {
-      if (!credentials.endpoint || !credentials.username || !credentials.token) {
-        throw new Error("Reconnect the cPanel API session before reading source files.");
+      if (
+        !credentials.endpoint
+        || !credentials.username
+        || !(credentials.credential ?? credentials.token)
+      ) {
+        throw new Error("Reconnect the cPanel session before reading source files.");
       }
       const path = providerPath(connection, filePath);
       const content = await this.readCPanelFile(credentials, path);
@@ -203,8 +213,12 @@ export const sourceProviderService = {
       );
     }
     if (connection.provider === "cpanel") {
-      if (!credentials.endpoint || !credentials.username || !credentials.token) {
-        throw new Error("Reconnect the cPanel API session before publishing.");
+      if (
+        !credentials.endpoint
+        || !credentials.username
+        || !(credentials.credential ?? credentials.token)
+      ) {
+        throw new Error("Reconnect the cPanel session before publishing.");
       }
       return this.writeCPanelFile(
         credentials,

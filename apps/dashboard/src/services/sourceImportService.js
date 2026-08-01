@@ -452,17 +452,26 @@ export const sourceImportService = {
   async importCPanel({
     endpoint,
     username,
+    authMethod = "api-token",
+    credential,
     token,
     rootDirectory = "public_html",
     onProgress
   }) {
+    const normalizedAuthMethod = authMethod === "password" ? "password" : "api-token";
+    const suppliedCredential = credential ?? token ?? "";
     const credentials = {
       endpoint: String(endpoint || "").trim(),
       username: String(username || "").trim(),
-      token: String(token || "").trim()
+      authMethod: normalizedAuthMethod,
+      credential: normalizedAuthMethod === "password"
+        ? String(suppliedCredential)
+        : String(suppliedCredential).trim()
     };
-    if (!credentials.endpoint || !credentials.username || !credentials.token) {
-      throw new Error("cPanel URL, username, and API token are required.");
+    if (!credentials.endpoint || !credentials.username || !credentials.credential.trim()) {
+      throw new Error(
+        `cPanel URL, username, and ${normalizedAuthMethod === "password" ? "password" : "API token"} are required.`
+      );
     }
     onProgress?.("Connecting to cPanel File Manager...");
     const files = await downloadCPanelFiles(credentials, rootDirectory, onProgress);
@@ -474,7 +483,7 @@ export const sourceImportService = {
       branch: null,
       revision,
       rootDirectory: rootDirectory || "public_html",
-      authentication: "api-token"
+      authentication: normalizedAuthMethod
     }, "cpanel-live-source");
   },
 

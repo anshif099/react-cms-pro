@@ -73,6 +73,18 @@ function cpanelError(payload) {
   return "cPanel rejected the file operation.";
 }
 
+export function cpanelAuthorizationHeader(username, credential, authMethod = "api-token") {
+  const normalizedUsername = String(username || "").trim();
+  const suppliedCredential = String(credential || "");
+  if (authMethod === "password") {
+    return `Basic ${Buffer.from(
+      `${normalizedUsername}:${suppliedCredential}`,
+      "utf8"
+    ).toString("base64")}`;
+  }
+  return `cpanel ${normalizedUsername}:${suppliedCredential.trim()}`;
+}
+
 export default async function handler(request, response) {
   if (request.method !== "POST") {
     response.setHeader("Allow", "POST");
@@ -83,6 +95,8 @@ export default async function handler(request, response) {
     const {
       endpoint,
       username,
+      authMethod = "api-token",
+      credential,
       token,
       operation,
       parameters = {}
@@ -90,8 +104,12 @@ export default async function handler(request, response) {
     if (!ALLOWED_OPERATIONS.has(operation)) {
       return response.status(400).json({ error: "Unsupported cPanel operation." });
     }
-    if (!String(username || "").trim() || !String(token || "").trim()) {
-      return response.status(400).json({ error: "cPanel username and API token are required." });
+    const normalizedAuthMethod = authMethod === "password" ? "password" : "api-token";
+    const suppliedCredential = credential ?? token ?? "";
+    if (!String(username || "").trim() || !String(suppliedCredential).trim()) {
+      return response.status(400).json({
+        error: `cPanel username and ${normalizedAuthMethod === "password" ? "password" : "API token"} are required.`
+      });
     }
     if (String(parameters.content || "").length > 2 * 1024 * 1024) {
       return response.status(413).json({ error: "A cPanel source file cannot exceed 2 MB." });
@@ -131,15 +149,26 @@ export default async function handler(request, response) {
     const upstream = await fetch(`${baseUrl}/execute/Fileman/${functionName}`, {
       method: "POST",
       headers: {
-        Authorization: `cpanel ${String(username).trim()}:${String(token).trim()}`,
+        Authorization: cpanelAuthorizationHeader(
+          username,
+          suppliedCredential,
+          normalizedAuthMethod
+        ),
         "Content-Type": "application/x-www-form-urlencoded",
         Accept: "application/json"
       },
       body: form
     });
     const payload = await upstream.json().catch(() => null);
+    if (upstream.status === 401) {
+      return response.status(401).json({
+        error: normalizedAuthMethod === "password"
+          ? "cPanel rejected the username or password. Check the account login details."
+          : "cPanel rejected the username or API token. Check the token and account details."
+      });
+    }
     if (!upstream.ok || payload?.result?.status !== 1) {
-      return response.status(upstream.status === 401 ? 401 : 502).json({
+      return response.status(502).json({
         error: cpanelError(payload)
       });
     }
