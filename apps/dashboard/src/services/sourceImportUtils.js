@@ -155,9 +155,9 @@ function componentTitle(component) {
 function sourceRouteLabel(content, path) {
   const objects = content.match(/\{[^{}]{0,500}\}/g) || [];
   for (const object of objects) {
-    const objectPath = object.match(/\bpath\s*:\s*["']([^"']+)["']/)?.[1];
+    const objectPath = object.match(/\bpath\s*:\s*["'`]([^"'`]+)["'`]/)?.[1];
     if (normalizeRoutePath(objectPath) !== path) continue;
-    const label = object.match(/\blabel\s*:\s*["']([^"']+)["']/)?.[1];
+    const label = object.match(/\b(?:label|title)\s*:\s*["'`]([^"'`]+)["'`]/)?.[1];
     if (label) return label.trim();
   }
   return null;
@@ -284,8 +284,8 @@ export function discoverSourceRoutes(files, sourceMetadata = {}) {
   files.forEach((file) => {
     if (!file.content || !/\.(?:js|jsx|ts|tsx|mjs|cjs)$/.test(file.path)) return;
     const patterns = [
-      /<Route\b[^>]*\bpath\s*=\s*(?:["']([^"']+)["']|\{\s*["']([^"']+)["']\s*\})/g,
-      /\bpath\s*:\s*["']([^"']+)["']/g
+      /<Route\b[^>]*\bpath\s*=\s*(?:["'`]([^"'`]+)["'`]|\{\s*["'`]([^"'`]+)["'`]\s*\})/g,
+      /\bpath\s*:\s*["'`]([^"'`]+)["'`]/g
     ];
     patterns.forEach((pattern) => {
       let match;
@@ -294,12 +294,12 @@ export function discoverSourceRoutes(files, sourceMetadata = {}) {
       }
     });
 
-    const routeMapPattern = /["'](\/[^"']*)["']\s*:\s*["']([^"']+)["']/g;
+    const routeMapPattern = /["'`](\/[^"'`]*)["'`]\s*:\s*["'`]([^"'`]+)["'`]/g;
     let routeMapMatch;
     while ((routeMapMatch = routeMapPattern.exec(file.content))) {
       const stateKey = routeMapMatch[2].replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const componentMatch = file.content.match(
-        new RegExp(`currentPage\\s*===\\s*["']${stateKey}["'][\\s\\S]{0,160}?<([A-Z][A-Za-z0-9_]*)`)
+        new RegExp(`currentPage\\s*===\\s*["'\`]${stateKey}["'\`][\\s\\S]{0,160}?<([A-Z][A-Za-z0-9_]*)`)
       );
       add(routeMapMatch[1], file, componentMatch?.[1] || null);
     }

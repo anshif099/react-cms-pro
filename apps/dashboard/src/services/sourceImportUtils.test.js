@@ -83,6 +83,22 @@ describe("source import discovery", () => {
     ]));
   });
 
+  it("discovers route metadata from a deployed Vite bundle", () => {
+    const routes = discoverSourceRoutes([{
+      path: "assets/index.js",
+      content: "var routes=[{id:`home`,path:`/`,title:`Home`},{id:`about`,path:`/aboutus`,title:`About Us`},{id:`services`,path:`/services`,title:`Services`},{id:`portfolio`,path:`/portfolio`,title:`Portfolio`},{id:`blog`,path:`/blog`,title:`Blog`},{id:`contact`,path:`/contact`,title:`Contact Us`}];"
+    }], { provider: "sftp", revision: "deployed" });
+
+    expect(routes.map(({ path, title }) => ({ path, title }))).toEqual([
+      { path: "/", title: "Home" },
+      { path: "/aboutus", title: "About Us" },
+      { path: "/blog", title: "Blog" },
+      { path: "/contact", title: "Contact Us" },
+      { path: "/portfolio", title: "Portfolio" },
+      { path: "/services", title: "Services" }
+    ]);
+  });
+
   it("removes a generated archive root and ignored dependency folders", () => {
     const files = normalizeSourceFiles([
       { path: "owner-project-abc/src/App.jsx", size: 10 },

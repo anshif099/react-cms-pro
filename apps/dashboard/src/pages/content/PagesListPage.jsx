@@ -21,7 +21,13 @@ export function PagesListPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
 
-  const { sync, importManual, syncLoading } = useWebsiteSync(websiteId);
+  const {
+    sync,
+    importManual,
+    rescanSource,
+    syncLoading,
+    syncProgress
+  } = useWebsiteSync(websiteId);
   const [showManualSync, setShowManualSync] = useState(false);
 
   const handleSync = async () => {
@@ -29,6 +35,11 @@ export function PagesListPage() {
     if (!result || result.success === false) {
       setShowManualSync(true);
     }
+  };
+
+  const handleSourceRescan = async () => {
+    const result = await rescanSource();
+    if (result?.success) await fetchPages(websiteId);
   };
 
   useEffect(() => {
@@ -132,7 +143,18 @@ export function PagesListPage() {
             <Plus className="w-3.5 h-3.5" />
             New Page
           </Button>
-          {!selectedWebsite.sourceConnected && (
+          {selectedWebsite.sourceConnected ? (
+            <Button
+              onClick={handleSourceRescan}
+              variant="outline"
+              className="gap-2 font-bold py-2.5 cursor-pointer border-slate-805 text-xs"
+              loading={syncLoading}
+              title={syncProgress || "Scan the connected source again for routes"}
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${syncLoading ? "animate-spin" : ""}`} />
+              Rescan Source
+            </Button>
+          ) : (
             <Button
               onClick={handleSync}
               variant="outline"

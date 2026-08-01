@@ -4,6 +4,7 @@ import {
   isSourceTextFile,
   normalizeSourceFiles
 } from "./sourceImportUtils";
+import sourceCredentialService from "./sourceCredentialService";
 import sourceProviderService from "./sourceProviderService";
 
 const MAX_ARCHIVE_BYTES = 50 * 1024 * 1024;
@@ -573,6 +574,64 @@ export const sourceImportService = {
       authentication: "password",
       rootAdjusted
     }, "stackcp-sftp-live-source");
+  },
+
+  async rescanConnectedSource(website, { onProgress } = {}) {
+    const connection = website?.connection || {};
+    const credentials = sourceCredentialService.get(website?.id);
+
+    if (connection.provider === "github") {
+      if (!connection.repository) {
+        throw new Error("The connected GitHub repository is missing.");
+      }
+      return this.importGitHub({
+        repositoryUrl: `https://github.com/${connection.repository}`,
+        branch: connection.branch || "",
+        rootDirectory: connection.rootDirectory || "",
+        token: credentials.token || "",
+        onProgress
+      });
+    }
+
+    if (connection.provider === "cpanel") {
+      if (
+        credentials.provider !== "cpanel"
+        || !credentials.endpoint
+        || !credentials.username
+        || !credentials.credential
+      ) {
+        throw new Error("Reconnect the cPanel source session before rescanning pages.");
+      }
+      return this.importCPanel({
+        endpoint: credentials.endpoint,
+        username: credentials.username,
+        authMethod: credentials.authMethod,
+        credential: credentials.credential,
+        rootDirectory: connection.rootDirectory || "public_html",
+        onProgress
+      });
+    }
+
+    if (connection.provider === "sftp") {
+      if (
+        credentials.provider !== "sftp"
+        || !credentials.host
+        || !credentials.username
+        || !credentials.credential
+      ) {
+        throw new Error("Reconnect the StackCP SFTP source session before rescanning pages.");
+      }
+      return this.importSftp({
+        host: credentials.host,
+        port: credentials.port || connection.port || 22,
+        username: credentials.username,
+        credential: credentials.credential,
+        rootDirectory: connection.rootDirectory || "public_html",
+        onProgress
+      });
+    }
+
+    throw new Error("This website does not have a connected source provider.");
   },
 
   // Source archives intentionally remain with the connected provider.

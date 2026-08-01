@@ -1,18 +1,22 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useWebsites } from "./useWebsites";
 import { useToast } from "./useToast";
 import { useAuth } from "./useAuth";
+import sourceImportService from "../services/sourceImportService";
 
 export function useWebsiteSync(websiteId) {
   const { 
     syncWebsite, 
     importRoutes, 
+    updateWebsite,
     syncLoading, 
     selectedWebsite, 
     websites 
   } = useWebsites();
   const toast = useToast();
   const { user } = useAuth();
+  const [sourceSyncing, setSourceSyncing] = useState(false);
+  const [syncProgress, setSyncProgress] = useState("");
 
   const website = selectedWebsite?.id === websiteId 
     ? selectedWebsite 
@@ -44,10 +48,56 @@ export function useWebsiteSync(websiteId) {
     }
   }, [websiteId, importRoutes, user, toast]);
 
+  const rescanSource = useCallback(async () => {
+    if (!websiteId || !website) return null;
+    setSourceSyncing(true);
+    setSyncProgress("Preparing source rescan...");
+    try {
+      const imported = await sourceImportService.rescanConnectedSource(website, {
+        onProgress: setSyncProgress
+      });
+      setSyncProgress(`Importing ${imported.routes.length} discovered pages...`);
+      await importRoutes(
+        websiteId,
+        imported.routes,
+        user?.email || user?.uid || "system"
+      );
+      await updateWebsite(websiteId, {
+        framework: imported.manifest.framework,
+        connectionHealth: "healthy",
+        connection: {
+          ...(website.connection || {}),
+          status: "ready",
+          repository: imported.manifest.repository,
+          branch: imported.manifest.branch,
+          rootDirectory: imported.manifest.rootDirectory,
+          sourceRevision: imported.manifest.revision,
+          authentication: imported.manifest.authentication,
+          fileCount: imported.manifest.fileCount,
+          routeCount: imported.routes.length,
+          importedAt: Date.now()
+        }
+      });
+      toast.success(
+        `Source rescanned: ${imported.routes.length} page${imported.routes.length === 1 ? "" : "s"} found.`
+      );
+      return { success: true, count: imported.routes.length };
+    } catch (error) {
+      console.error("Source rescan failed:", error);
+      toast.error(error.message || "Connected source rescan failed.");
+      return { success: false, error };
+    } finally {
+      setSourceSyncing(false);
+      setSyncProgress("");
+    }
+  }, [importRoutes, toast, updateWebsite, user, website, websiteId]);
+
   return {
     sync,
     importManual,
-    syncLoading,
+    rescanSource,
+    syncLoading: syncLoading || sourceSyncing,
+    syncProgress,
     syncMode: website?.syncMode || "none",
     syncStatus: website?.syncStatus || "idle",
     syncStats: website?.syncStats || {
