@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildConnectedPageFallbackUrl,
   buildConnectedPageUrl,
   createRuntimeMessage,
   discoverLocalSourceImports,
@@ -164,5 +165,15 @@ describe("connected visual routes", () => {
       "https://example.com/contact?rcms_edit=1"
     );
     expect(createRuntimeMessage("rcms/v1/enter-edit-mode", {}).websiteId).toBe("");
+  });
+
+  it("creates a root fallback URL for hosts without SPA deep-link rewrites", () => {
+    expect(buildConnectedPageFallbackUrl(
+      { domain: "https://triosis.in/" },
+      { route: "/faqs", slug: "faqs" },
+      "preview"
+    )).toBe(
+      "https://triosis.in/?rcms_page=faqs&rcms_preview=1"
+    );
   });
 });

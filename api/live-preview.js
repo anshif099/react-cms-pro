@@ -427,6 +427,36 @@ async function fetchPublicAsset(initialUrl) {
   throw new Error("The connected website asset could not be loaded.");
 }
 
+async function probePublicRoute(initialUrl) {
+  let current = await publicHttpsUrl(initialUrl);
+  for (let redirect = 0; redirect <= MAX_REDIRECTS; redirect += 1) {
+    const upstream = await fetch(current, {
+      method: "GET",
+      redirect: "manual",
+      headers: {
+        Accept: "text/html,application/xhtml+xml",
+        "User-Agent": "ReactCMS-Live-Preview/1.0"
+      }
+    });
+    if (upstream.status >= 300 && upstream.status < 400) {
+      const location = upstream.headers.get("location");
+      await upstream.body?.cancel();
+      if (!location || redirect === MAX_REDIRECTS) {
+        throw new Error("The connected website route redirected too many times.");
+      }
+      current = await publicHttpsUrl(new URL(location, current).toString());
+      continue;
+    }
+    await upstream.body?.cancel();
+    return {
+      ok: upstream.ok,
+      status: upstream.status,
+      url: current.toString()
+    };
+  }
+  throw new Error("The connected website route could not be checked.");
+}
+
 async function proxyPreviewAsset(asset, response) {
   const { bytes, contentType, url } = await fetchPublicAsset(asset);
   const normalizedType = contentType.toLowerCase();
@@ -487,6 +517,13 @@ export default async function handler(request, response) {
   try {
     const asset = firstQueryValue(request.query?.asset);
     if (asset) return await proxyPreviewAsset(asset, response);
+    const probe = firstQueryValue(request.query?.probe);
+    if (probe) {
+      const result = await probePublicRoute(probe);
+      response.setHeader("Cache-Control", "private, no-store, max-age=0");
+      response.setHeader("X-Content-Type-Options", "nosniff");
+      return response.status(200).json(result);
+    }
     const target = firstQueryValue(request.query?.target);
     const mode = firstQueryValue(request.query?.mode) === "edit" ? "edit" : "preview";
     const route = previewRoute(firstQueryValue(request.query?.route), mode);

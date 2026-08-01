@@ -45,6 +45,7 @@ import sourceCredentialService from "../../services/sourceCredentialService";
 import sourceProviderService from "../../services/sourceProviderService";
 import pageService from "../../services/pageService";
 import {
+  buildConnectedPageFallbackUrl,
   buildConnectedPageUrl,
   createRuntimeMessage,
   discoverLocalSourceImports,
@@ -152,10 +153,16 @@ function ConnectedSourceWorkspace({
   const [visualError, setVisualError] = useState("");
   const [liveRouteError, setLiveRouteError] = useState("");
 
-  const livePageUrl = useMemo(
+  const requestedLivePageUrl = useMemo(
     () => buildConnectedPageUrl(website, page, isPreview ? "preview" : "edit"),
     [isPreview, page, website]
   );
+  const fallbackLivePageUrl = useMemo(
+    () => buildConnectedPageFallbackUrl(website, page, isPreview ? "preview" : "edit"),
+    [isPreview, page, website]
+  );
+  const [livePageUrl, setLivePageUrl] = useState("");
+  const [routeResolving, setRouteResolving] = useState(true);
   const liveOrigin = useMemo(() => {
     try {
       return livePageUrl
@@ -180,6 +187,60 @@ function ConnectedSourceWorkspace({
     700,
     canvasScale > 0 ? availableCanvasHeight / canvasScale : 700
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    setRouteResolving(true);
+    setLivePageUrl("");
+    setLiveRouteError("");
+
+    if (!requestedLivePageUrl) {
+      setRouteResolving(false);
+      return undefined;
+    }
+
+    let requestedPath = "/";
+    try {
+      requestedPath = new URL(requestedLivePageUrl).pathname;
+    } catch {
+      setLivePageUrl(requestedLivePageUrl);
+      setRouteResolving(false);
+      return undefined;
+    }
+
+    if (requestedPath === "/") {
+      setLivePageUrl(requestedLivePageUrl);
+      setRouteResolving(false);
+      return undefined;
+    }
+
+    fetch(`/api/live-preview?probe=${encodeURIComponent(requestedLivePageUrl)}`, {
+      method: "GET",
+      cache: "no-store"
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`Route probe failed (${response.status}).`);
+        return response.json();
+      })
+      .then((result) => {
+        if (cancelled) return;
+        setLivePageUrl(
+          result.status === 404 && fallbackLivePageUrl
+            ? fallbackLivePageUrl
+            : requestedLivePageUrl
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setLivePageUrl(requestedLivePageUrl);
+      })
+      .finally(() => {
+        if (!cancelled) setRouteResolving(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [fallbackLivePageUrl, requestedLivePageUrl]);
 
   useEffect(() => {
     const viewport = canvasViewportRef.current;
@@ -770,7 +831,16 @@ function ConnectedSourceWorkspace({
             ref={canvasViewportRef}
             className="flex-1 min-w-0 min-h-0 overflow-auto bg-[#080d18] p-4"
           >
-            {!livePageUrl ? (
+            {routeResolving ? (
+              <div className="h-full grid place-items-center">
+                <div className="text-center">
+                  <Loader2 className="w-6 h-6 animate-spin text-blue-500 mx-auto" />
+                  <p className="mt-3 text-xs font-semibold text-slate-500">
+                    Checking live page routeâ€¦
+                  </p>
+                </div>
+              </div>
+            ) : !livePageUrl ? (
               <div className="h-full grid place-items-center">
                 <div className="max-w-lg rounded-xl border border-rose-500/20 bg-rose-500/5 p-6 text-center">
                   <p className="text-sm font-bold text-white">Live page URL is not configured</p>

@@ -124,6 +124,46 @@ describe("live preview HTML rewriting", () => {
     expect(Buffer.isBuffer(response.body)).toBe(true);
   });
 
+  it("reports a missing SPA deep link so the dashboard can use a root fallback", async () => {
+    const cancel = vi.fn(async () => undefined);
+    vi.stubGlobal("fetch", vi.fn(async () => ({
+      ok: false,
+      status: 404,
+      headers: new Headers({ "Content-Type": "text/html" }),
+      body: { cancel }
+    })));
+    const response = {
+      headers: {},
+      statusCode: 0,
+      body: null,
+      setHeader(name, value) {
+        this.headers[name.toLowerCase()] = value;
+      },
+      status(code) {
+        this.statusCode = code;
+        return this;
+      },
+      json(value) {
+        this.body = value;
+        return this;
+      }
+    };
+
+    await livePreviewHandler({
+      method: "GET",
+      query: { probe: "https://triosis.in/faqs?rcms_preview=1" },
+      headers: {}
+    }, response);
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toEqual({
+      ok: false,
+      status: 404,
+      url: "https://triosis.in/faqs?rcms_preview=1"
+    });
+    expect(cancel).toHaveBeenCalledOnce();
+  });
+
   it("removes upstream base and meta CSP before adding the sandbox bootstrap", () => {
     const result = rewritePreviewHtml(
       '<head><base href="/old/"><meta http-equiv="Content-Security-Policy" content="script-src none"></head>',

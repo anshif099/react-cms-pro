@@ -411,6 +411,27 @@ export function buildConnectedPageUrl(website, page, mode = "preview") {
   }
 }
 
+export function buildConnectedPageFallbackUrl(website, page, mode = "preview") {
+  const domain = String(website?.domain || "").trim();
+  if (!domain) return "";
+
+  try {
+    const url = new URL(domain);
+    if (url.protocol !== "https:") return "";
+    const pageRoute = page?.route
+      || (page?.slug === "home" ? "/" : `/${String(page?.slug || "").replace(/^\/+/, "")}`);
+    const routeKey = String(pageRoute || "/").replace(/^\/+|\/+$/g, "");
+    url.pathname = "/";
+    url.search = "";
+    url.hash = "";
+    if (routeKey) url.searchParams.set("rcms_page", routeKey);
+    url.searchParams.set(mode === "edit" ? "rcms_edit" : "rcms_preview", "1");
+    return url.toString();
+  } catch {
+    return "";
+  }
+}
+
 export function createRuntimeMessage(type, payload = {}) {
   return {
     rcms: true,
