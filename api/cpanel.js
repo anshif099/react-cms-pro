@@ -67,10 +67,30 @@ function splitFilePath(value) {
 }
 
 function cpanelError(payload) {
-  const errors = payload?.result?.errors;
-  if (Array.isArray(errors)) return errors.filter(Boolean).join(" ");
-  if (typeof errors === "string") return errors;
+  const candidates = [
+    payload?.result?.errors,
+    payload?.result?.messages,
+    payload?.errors,
+    payload?.error,
+    payload?.message,
+    payload?.cpanelresult?.error,
+    payload?.cpanelresult?.data?.reason
+  ];
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) {
+      const message = candidate.filter(Boolean).join(" ");
+      if (message) return message;
+    }
+    if (typeof candidate === "string" && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
   return "cPanel rejected the file operation.";
+}
+
+export function incompatiblePanelError(hostname, status, location = "") {
+  const redirectDetail = location ? ` It redirected to ${location}.` : "";
+  return `The server ${hostname} does not provide the cPanel UAPI endpoint (${status}).${redirectDetail} If this hosting account uses StackCP/20i, connect with its unlocked SFTP/FTP details instead of the control-panel URL.`;
 }
 
 export function cpanelAuthorizationHeader(username, credential, authMethod = "api-token") {
@@ -148,6 +168,7 @@ export default async function handler(request, response) {
 
     const upstream = await fetch(`${baseUrl}/execute/Fileman/${functionName}`, {
       method: "POST",
+      redirect: "manual",
       headers: {
         Authorization: cpanelAuthorizationHeader(
           username,
@@ -159,12 +180,33 @@ export default async function handler(request, response) {
       },
       body: form
     });
-    const payload = await upstream.json().catch(() => null);
+    const responseText = await upstream.text();
+    let payload = null;
+    try {
+      payload = JSON.parse(responseText);
+    } catch {
+      // A real cPanel UAPI response is JSON. HTML commonly means the URL is
+      // another control panel or a web-login redirect.
+    }
     if (upstream.status === 401) {
       return response.status(401).json({
         error: normalizedAuthMethod === "password"
           ? "cPanel rejected the username or password. Check the account login details."
           : "cPanel rejected the username or API token. Check the token and account details."
+      });
+    }
+    if (!payload && (upstream.status === 404 || upstream.status >= 300 && upstream.status < 400)) {
+      return response.status(400).json({
+        error: incompatiblePanelError(
+          new URL(baseUrl).hostname,
+          upstream.status,
+          upstream.headers.get("location") || ""
+        )
+      });
+    }
+    if (!payload) {
+      return response.status(502).json({
+        error: `cPanel returned a non-JSON response (${upstream.status}). Check that the URL is the secure cPanel hostname, usually on port 2083.`
       });
     }
     if (!upstream.ok || payload?.result?.status !== 1) {

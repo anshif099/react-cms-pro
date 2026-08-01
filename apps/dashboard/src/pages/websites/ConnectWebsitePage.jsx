@@ -306,7 +306,7 @@ export function ConnectWebsitePage() {
                 <Archive className="w-6 h-6 text-admin-text" />
                 <span className="block mt-3 text-sm font-bold text-admin-text">cPanel Live Connection</span>
                 <span className="block mt-1 text-xs leading-5 text-admin-secondary">
-                  Read and publish files through the account's cPanel UAPI.
+                  Read and publish through cPanel UAPI. StackCP/20i requires an SFTP connection.
                 </span>
               </label>
             </div>
@@ -380,7 +380,7 @@ export function ConnectWebsitePage() {
                 <Input
                   label="cPanel URL *"
                   placeholder="https://cpanel.example.com:2083"
-                  helperText="Use the account's secure cPanel hostname."
+                  helperText="Use the secure cPanel hostname, usually on port 2083. StackCP URLs do not provide cPanel UAPI."
                   error={errors.cpanelEndpoint?.message}
                   {...register("cpanelEndpoint")}
                 />
