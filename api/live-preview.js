@@ -2,7 +2,9 @@ import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 
 const MAX_HTML_BYTES = 2 * 1024 * 1024;
+const MAX_ASSET_BYTES = 4 * 1024 * 1024;
 const MAX_REDIRECTS = 4;
+const ASSET_PROXY_PATH = "/api/live-preview?asset=";
 
 function isPrivateAddress(address) {
   const normalized = String(address || "").toLowerCase();
@@ -118,10 +120,111 @@ function escapeAttribute(value) {
     .replaceAll("<", "&lt;");
 }
 
-function runtimeBootstrap(origin, route) {
+export function previewAssetUrl(value, baseUrl, proxyOrigin = "") {
+  const raw = String(value || "").trim();
+  const proxyPath = `${String(proxyOrigin || "").replace(/\/$/, "")}${ASSET_PROXY_PATH}`;
+  if (
+    !raw
+    || raw.startsWith("#")
+    || /^(?:data|blob|javascript|mailto|tel):/i.test(raw)
+    || raw.startsWith(proxyPath)
+  ) {
+    return raw;
+  }
+  try {
+    const resolved = new URL(raw.startsWith("//") ? `https:${raw}` : raw, baseUrl);
+    if (resolved.protocol !== "https:") return raw;
+    return `${proxyPath}${encodeURIComponent(resolved.toString())}`;
+  } catch {
+    return raw;
+  }
+}
+
+function rewriteAttribute(tag, attribute, baseUrl, proxyOrigin) {
+  const pattern = new RegExp(`(\\b${attribute}\\s*=\\s*)(["'])([^"']*)\\2`, "gi");
+  return tag.replace(pattern, (_match, prefix, quote, value) => (
+    `${prefix}${quote}${escapeAttribute(previewAssetUrl(value, baseUrl, proxyOrigin))}${quote}`
+  ));
+}
+
+function rewriteSrcsetAttribute(tag, baseUrl, proxyOrigin) {
+  return tag.replace(
+    /(\bsrcset\s*=\s*)(["'])([^"']*)\2/gi,
+    (_match, prefix, quote, value) => {
+      const rewritten = value.split(",").map((entry) => {
+        const parts = entry.trim().split(/\s+/);
+        parts[0] = previewAssetUrl(parts[0], baseUrl, proxyOrigin);
+        return parts.join(" ");
+      }).join(", ");
+      return `${prefix}${quote}${escapeAttribute(rewritten)}${quote}`;
+    }
+  );
+}
+
+function rewriteResourceTags(html, baseUrl, proxyOrigin) {
+  return String(html || "").replace(
+    /<(?:script|link|img|source|video|audio|track|input)\b[^>]*>/gi,
+    (tag) => {
+      const name = tag.match(/^<\s*([a-z]+)/i)?.[1]?.toLowerCase();
+      let rewritten = tag;
+      if (name === "link") rewritten = rewriteAttribute(rewritten, "href", baseUrl, proxyOrigin);
+      if (["script", "img", "source", "video", "audio", "track", "input"].includes(name)) {
+        rewritten = rewriteAttribute(rewritten, "src", baseUrl, proxyOrigin);
+      }
+      if (["img", "source"].includes(name)) {
+        rewritten = rewriteSrcsetAttribute(rewritten, baseUrl, proxyOrigin);
+      }
+      if (name === "video") rewritten = rewriteAttribute(rewritten, "poster", baseUrl, proxyOrigin);
+      return rewritten;
+    }
+  );
+}
+
+export function rewritePreviewCss(css, assetUrl, proxyOrigin = "") {
+  const rewriteValue = (value) => previewAssetUrl(value, assetUrl, proxyOrigin);
+  return String(css || "")
+    .replace(
+      /url\(\s*(["']?)([^"')]+)\1\s*\)/gi,
+      (_match, quote, value) => `url(${quote}${rewriteValue(value)}${quote})`
+    )
+    .replace(
+      /(@import\s+)(["'])([^"']+)\2/gi,
+      (_match, prefix, quote, value) => `${prefix}${quote}${rewriteValue(value)}${quote}`
+    );
+}
+
+export function rewritePreviewJavaScript(source, assetUrl) {
+  const rewriteSpecifier = (value) => (
+    /^(?:\.{0,2}\/|https?:\/\/|\/\/)/.test(value)
+      ? previewAssetUrl(value, assetUrl)
+      : value
+  );
+  return String(source || "")
+    .replace(
+      /(\bfrom\s*)(["'])([^"']+)\2/g,
+      (_match, prefix, quote, value) => `${prefix}${quote}${rewriteSpecifier(value)}${quote}`
+    )
+    .replace(
+      /(\bimport\s*\(\s*)(["'])([^"']+)\2/g,
+      (_match, prefix, quote, value) => `${prefix}${quote}${rewriteSpecifier(value)}${quote}`
+    )
+    .replace(
+      /(\bimport\s*)(["'])([^"']+)\2/g,
+      (_match, prefix, quote, value) => `${prefix}${quote}${rewriteSpecifier(value)}${quote}`
+    )
+    .replace(
+      /(new\s+URL\s*\(\s*)(["'])([^"']+)\2(\s*,\s*import\.meta\.url)/g,
+      (_match, prefix, quote, value, suffix) => (
+        `${prefix}${quote}${previewAssetUrl(value, assetUrl)}${quote}${suffix}`
+      )
+    );
+}
+
+function runtimeBootstrap(baseUrl, route, proxyOrigin) {
   return `<script>
 (function () {
-  var sourceOrigin = ${JSON.stringify(origin)};
+  var sourceBaseUrl = ${JSON.stringify(baseUrl)};
+  var assetProxyPath = ${JSON.stringify(`${proxyOrigin}${ASSET_PROXY_PATH}`)};
   var previewRoute = ${JSON.stringify(route)};
   var embeddedEditorToolbarHidden = false;
   try { history.replaceState(null, "", previewRoute); } catch (_) {}
@@ -155,37 +258,58 @@ function runtimeBootstrap(origin, route) {
 
   function absoluteSourceUrl(value) {
     if (!value || typeof value !== "string") return value;
+    if (value.indexOf(assetProxyPath) === 0) return value;
     if (value.slice(0, 2) === "//") return "https:" + value;
-    if (value.charAt(0) === "/") return sourceOrigin + value;
-    return value;
+    try { return new URL(value, sourceBaseUrl).toString(); } catch (_) { return value; }
+  }
+
+  function proxySourceUrl(value) {
+    var absolute = absoluteSourceUrl(value);
+    if (!absolute || absolute.indexOf(assetProxyPath) === 0) return absolute;
+    if (absolute.indexOf("https://") !== 0) return absolute;
+    return assetProxyPath + encodeURIComponent(absolute);
   }
 
   function repairElement(element) {
     if (!element || !element.getAttribute) return;
+    var tagName = String(element.tagName || "").toLowerCase();
+    var proxyable = ["script", "link", "img", "source", "video", "audio", "track", "input"].indexOf(tagName) !== -1;
     ["src", "poster"].forEach(function (name) {
       var value = element.getAttribute(name);
-      if (value && value.charAt(0) === "/") {
-        element.setAttribute(name, absoluteSourceUrl(value));
+      if (value && proxyable) {
+        var rewrittenValue = proxySourceUrl(value);
+        if (rewrittenValue !== value) element.setAttribute(name, rewrittenValue);
       }
     });
+    if (tagName === "link") {
+      var href = element.getAttribute("href");
+      if (href) {
+        var rewrittenHref = proxySourceUrl(href);
+        if (rewrittenHref !== href) element.setAttribute("href", rewrittenHref);
+      }
+    }
     var srcset = element.getAttribute("srcset");
-    if (srcset) {
-      element.setAttribute("srcset", srcset.split(",").map(function (entry) {
+    if (srcset && (tagName === "img" || tagName === "source")) {
+      var rewrittenSrcset = srcset.split(",").map(function (entry) {
         var parts = entry.trim().split(/\\s+/);
-        parts[0] = absoluteSourceUrl(parts[0]);
+        parts[0] = proxySourceUrl(parts[0]);
         return parts.join(" ");
-      }).join(", "));
+      }).join(", ");
+      if (rewrittenSrcset !== srcset) element.setAttribute("srcset", rewrittenSrcset);
     }
     var style = element.getAttribute("style");
-    if (style && style.indexOf("url(/") !== -1) {
-      element.setAttribute("style", style.replace(/url\\((['"]?)\\//g, "url($1" + sourceOrigin + "/"));
+    if (style && style.indexOf("url(") !== -1) {
+      var rewrittenStyle = style.replace(/url\\(\\s*(['"]?)([^'\\")]+)\\1\\s*\\)/g, function (_match, quote, value) {
+        return "url(" + quote + proxySourceUrl(value) + quote + ")";
+      });
+      if (rewrittenStyle !== style) element.setAttribute("style", rewrittenStyle);
     }
   }
 
   function repairTree(root) {
     repairElement(root);
     if (root && root.querySelectorAll) {
-      root.querySelectorAll("[src], [srcset], [poster], [style]").forEach(repairElement);
+      root.querySelectorAll("[src], [href], [srcset], [poster], [style]").forEach(repairElement);
     }
   }
 
@@ -225,42 +349,37 @@ function runtimeBootstrap(origin, route) {
       childList: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ["src", "srcset", "poster", "style"]
+      attributeFilter: ["src", "href", "srcset", "poster", "style"]
     });
   });
 })();
 </script>`;
 }
 
-export function rewritePreviewHtml(html, upstreamUrl, route) {
+export function rewritePreviewHtml(html, upstreamUrl, route, proxyOrigin = "") {
   const url = new URL(upstreamUrl);
-  const origin = url.origin;
   const baseUrl = new URL(".", url).toString();
-  let output = String(html || "")
+  const normalizedProxyOrigin = String(proxyOrigin || "").replace(/\/$/, "");
+  let output = rewriteResourceTags(String(html || ""), baseUrl, normalizedProxyOrigin)
     .replace(/<base\b[^>]*>/gi, "")
     .replace(
       /<meta\b[^>]*http-equiv\s*=\s*(["'])Content-Security-Policy\1[^>]*>/gi,
       ""
     )
     .replace(
-      /(\b(?:src|href|poster)\s*=\s*)(["'])(\/(?!\/)[^"']*)\2/gi,
-      (_match, prefix, quote, path) => `${prefix}${quote}${origin}${path}${quote}`
+      /<style\b([^>]*)>([\s\S]*?)<\/style>/gi,
+      (_match, attributes, css) => (
+        `<style${attributes}>${rewritePreviewCss(css, baseUrl, normalizedProxyOrigin)}</style>`
+      )
     )
     .replace(
-      /(\bsrcset\s*=\s*)(["'])([^"']*)\2/gi,
-      (_match, prefix, quote, value) => {
-        const rewritten = value.split(",").map((entry) => {
-          const parts = entry.trim().split(/\s+/);
-          if (parts[0]?.startsWith("/") && !parts[0].startsWith("//")) {
-            parts[0] = `${origin}${parts[0]}`;
-          }
-          return parts.join(" ");
-        }).join(", ");
-        return `${prefix}${quote}${rewritten}${quote}`;
-      }
+      /(\bstyle\s*=\s*)(["'])([^"']*)\2/gi,
+      (_match, prefix, quote, css) => (
+        `${prefix}${quote}${escapeAttribute(rewritePreviewCss(css, baseUrl, normalizedProxyOrigin))}${quote}`
+      )
     );
 
-  const injection = `<base href="${escapeAttribute(baseUrl)}">${runtimeBootstrap(origin, route)}`;
+  const injection = `<base href="${escapeAttribute(baseUrl)}">${runtimeBootstrap(baseUrl, route, normalizedProxyOrigin)}`;
   if (/<head\b[^>]*>/i.test(output)) {
     output = output.replace(/<head\b([^>]*)>/i, `<head$1>${injection}`);
   } else {
@@ -269,17 +388,105 @@ export function rewritePreviewHtml(html, upstreamUrl, route) {
   return output;
 }
 
+async function fetchPublicAsset(initialUrl) {
+  let current = await publicHttpsUrl(initialUrl);
+  for (let redirect = 0; redirect <= MAX_REDIRECTS; redirect += 1) {
+    const upstream = await fetch(current, {
+      method: "GET",
+      redirect: "manual",
+      headers: {
+        Accept: "*/*",
+        "User-Agent": "ReactCMS-Live-Preview/1.0"
+      }
+    });
+    if (upstream.status >= 300 && upstream.status < 400) {
+      const location = upstream.headers.get("location");
+      if (!location || redirect === MAX_REDIRECTS) {
+        throw new Error("The preview asset redirected too many times.");
+      }
+      current = await publicHttpsUrl(new URL(location, current).toString());
+      continue;
+    }
+    if (!upstream.ok) {
+      throw new Error(`The connected website asset returned HTTP ${upstream.status}.`);
+    }
+    const declaredLength = Number(upstream.headers.get("content-length") || 0);
+    if (declaredLength > MAX_ASSET_BYTES) {
+      throw new Error("The connected website asset exceeds the 4 MB preview limit.");
+    }
+    const bytes = new Uint8Array(await upstream.arrayBuffer());
+    if (bytes.byteLength > MAX_ASSET_BYTES) {
+      throw new Error("The connected website asset exceeds the 4 MB preview limit.");
+    }
+    return {
+      bytes,
+      contentType: upstream.headers.get("content-type") || "application/octet-stream",
+      url: current
+    };
+  }
+  throw new Error("The connected website asset could not be loaded.");
+}
+
+async function proxyPreviewAsset(asset, response) {
+  const { bytes, contentType, url } = await fetchPublicAsset(asset);
+  const normalizedType = contentType.toLowerCase();
+  const pathname = url.pathname.toLowerCase();
+  let body = bytes;
+  if (
+    normalizedType.includes("javascript")
+    || normalizedType.includes("ecmascript")
+    || /\.m?js$/.test(pathname)
+  ) {
+    body = new TextEncoder().encode(
+      rewritePreviewJavaScript(new TextDecoder("utf-8").decode(bytes), url)
+    );
+  } else if (normalizedType.includes("text/css") || pathname.endsWith(".css")) {
+    body = new TextEncoder().encode(
+      rewritePreviewCss(new TextDecoder("utf-8").decode(bytes), url)
+    );
+  }
+
+  response.setHeader("Content-Type", contentType);
+  response.setHeader("Cache-Control", "public, max-age=60, s-maxage=300");
+  response.setHeader("Access-Control-Allow-Origin", "*");
+  response.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+  response.setHeader("X-Content-Type-Options", "nosniff");
+  return response.status(200).send(Buffer.from(body));
+}
+
 function firstQueryValue(value) {
   return Array.isArray(value) ? value[0] : value;
 }
 
+function requestOrigin(request) {
+  const forwardedHost = firstQueryValue(request.headers?.["x-forwarded-host"]);
+  const hostHeader = forwardedHost || firstQueryValue(request.headers?.host);
+  const host = String(hostHeader || "").split(",")[0].trim().toLowerCase();
+  if (!/^[a-z0-9.-]+(?::\d+)?$/.test(host)) {
+    throw new Error("The Live Preview proxy hostname is invalid.");
+  }
+  const forwardedProtocol = String(
+    firstQueryValue(request.headers?.["x-forwarded-proto"]) || "https"
+  ).split(",")[0].trim().toLowerCase();
+  const protocol = forwardedProtocol === "http" ? "http" : "https";
+  return `${protocol}://${host}`;
+}
+
 export default async function handler(request, response) {
+  if (request.method === "OPTIONS") {
+    response.setHeader("Access-Control-Allow-Origin", "*");
+    response.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+    response.setHeader("Access-Control-Max-Age", "86400");
+    return response.status(204).end();
+  }
   if (request.method !== "GET") {
-    response.setHeader("Allow", "GET");
+    response.setHeader("Allow", "GET, OPTIONS");
     return response.status(405).json({ error: "Method not allowed." });
   }
 
   try {
+    const asset = firstQueryValue(request.query?.asset);
+    if (asset) return await proxyPreviewAsset(asset, response);
     const target = firstQueryValue(request.query?.target);
     const mode = firstQueryValue(request.query?.mode) === "edit" ? "edit" : "preview";
     const route = previewRoute(firstQueryValue(request.query?.route), mode);
@@ -287,7 +494,7 @@ export default async function handler(request, response) {
     targetUrl.search = "";
     targetUrl.hash = "";
     const { html, url } = await fetchPublicHtml(targetUrl);
-    const previewHtml = rewritePreviewHtml(html, url, route);
+    const previewHtml = rewritePreviewHtml(html, url, route, requestOrigin(request));
 
     response.setHeader("Content-Type", "text/html; charset=utf-8");
     response.setHeader("Cache-Control", "private, no-store, max-age=0");
@@ -303,6 +510,10 @@ export default async function handler(request, response) {
     );
     return response.status(200).send(previewHtml);
   } catch (error) {
+    if (firstQueryValue(request.query?.asset)) {
+      response.setHeader("Access-Control-Allow-Origin", "*");
+      response.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+    }
     return response.status(400).json({
       error: error.message || "The connected website could not be prepared for Live Preview."
     });
