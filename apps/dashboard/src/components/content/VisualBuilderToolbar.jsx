@@ -147,10 +147,10 @@ export function VisualBuilderToolbar({
                 ? "text-white border-violet-500/40 bg-violet-600 shadow-md shadow-violet-950/30"
                 : "text-violet-300 border-violet-500/20 bg-violet-500/10 hover:bg-violet-500/15"
             }`}
-            title={aiOpen ? "Close AI Website Builder" : "Open AI Website Builder"}
+            title={aiOpen ? "Close Rocket AI" : "Open Rocket AI"}
           >
             <Sparkles className="w-3.5 h-3.5" />
-            <span className="hidden xl:inline">AI Builder</span>
+            <span className="hidden xl:inline">Rocket AI</span>
           </button>
 
           <SaveState status={saveStatus} />

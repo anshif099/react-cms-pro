@@ -1,8 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import aiBuilderHandler, {
   AI_PLAN_RESPONSE_SCHEMA,
-  buildAIBuilderInstructions,
-  extractResponseText
+  buildAIBuilderInstructions
 } from "../../api/ai-builder";
 
 function responseDouble() {
@@ -50,7 +49,9 @@ const plan = {
 describe("AI builder API", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
-    delete process.env.OPENAI_API_KEY;
+    delete process.env.ROCKET_AI_URL;
+    delete process.env.ROCKET_AI_MODEL;
+    delete process.env.ROCKET_AI_GATEWAY_KEY;
   });
 
   it("uses a strict operation schema and instructs the model to reason over data, not screenshots", () => {
@@ -61,23 +62,20 @@ describe("AI builder API", () => {
     expect(buildAIBuilderInstructions()).toContain("never a screenshot");
     expect(buildAIBuilderInstructions()).toContain("requiresApproval to true");
     expect(buildAIBuilderInstructions()).toContain("$op:<operation-id>");
+    expect(buildAIBuilderInstructions()).toContain("Rocket AI");
   });
 
-  it("extracts structured output text from Responses API output items", () => {
-    expect(extractResponseText({
-      output: [{ content: [{ type: "output_text", text: JSON.stringify(plan) }] }]
-    })).toBe(JSON.stringify(plan));
-  });
-
-  it("verifies Firebase auth and returns a structured Responses API plan", async () => {
-    process.env.OPENAI_API_KEY = "test-openai-key";
+  it("verifies Firebase auth and requests a plan only from the first-party Rocket server", async () => {
+    process.env.ROCKET_AI_URL = "http://rocket.internal:8787";
+    process.env.ROCKET_AI_GATEWAY_KEY = "rocket-secret";
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({
         users: [{ localId: "firebase-user-1" }]
       }), { status: 200, headers: { "Content-Type": "application/json" } }))
       .mockResolvedValueOnce(new Response(JSON.stringify({
-        id: "resp_123",
-        output_text: JSON.stringify(plan),
+        plan,
+        model: "rocket-plan",
+        requestId: "rocket_123",
         usage: { input_tokens: 100, output_tokens: 50 }
       }), { status: 200, headers: { "Content-Type": "application/json" } }));
     vi.stubGlobal("fetch", fetchMock);
@@ -98,13 +96,14 @@ describe("AI builder API", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.body.plan).toEqual(plan);
-    expect(response.body.model).toBe("gpt-5.6-sol");
+    expect(response.body.model).toBe("rocket-plan");
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    const openAIRequest = JSON.parse(fetchMock.mock.calls[1][1].body);
-    expect(openAIRequest.model).toBe("gpt-5.6-sol");
-    expect(openAIRequest.text.format.type).toBe("json_schema");
-    expect(openAIRequest.store).toBe(false);
-    expect(openAIRequest.safety_identifier).toHaveLength(64);
+    expect(fetchMock.mock.calls[1][0]).toBe("http://rocket.internal:8787/v1/plan");
+    const rocketRequest = JSON.parse(fetchMock.mock.calls[1][1].body);
+    expect(rocketRequest.model).toBe("rocket-plan");
+    expect(rocketRequest.schema).toEqual(AI_PLAN_RESPONSE_SCHEMA);
+    expect(rocketRequest.requester).toHaveLength(64);
+    expect(fetchMock.mock.calls[1][1].headers["X-Rocket-Key"]).toBe("rocket-secret");
   });
 
   it("refuses unauthenticated planning requests", async () => {
@@ -117,14 +116,16 @@ describe("AI builder API", () => {
     expect(response.statusCode).toBe(401);
   });
 
-  it("generates brand-aware image data through the current image model", async () => {
-    process.env.OPENAI_API_KEY = "test-openai-key";
+  it("generates brand-aware image data through Rocket Image", async () => {
+    process.env.ROCKET_AI_URL = "http://rocket.internal:8787";
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({
         users: [{ localId: "firebase-user-1" }]
       }), { status: 200, headers: { "Content-Type": "application/json" } }))
       .mockResolvedValueOnce(new Response(JSON.stringify({
-        data: [{ b64_json: "aW1hZ2U=" }]
+        imageBase64: "aW1hZ2U=",
+        mimeType: "image/png",
+        model: "rocket-image"
       }), { status: 200, headers: { "Content-Type": "application/json" } }));
     vi.stubGlobal("fetch", fetchMock);
     const response = responseDouble();
@@ -144,10 +145,43 @@ describe("AI builder API", () => {
     expect(response.body).toMatchObject({
       imageBase64: "aW1hZ2U=",
       mimeType: "image/png",
-      model: "gpt-image-2"
+      model: "rocket-image"
     });
     const imageRequest = JSON.parse(fetchMock.mock.calls[1][1].body);
-    expect(imageRequest.model).toBe("gpt-image-2");
-    expect(imageRequest.prompt).toContain("#ff5b5b");
+    expect(fetchMock.mock.calls[1][0]).toBe("http://rocket.internal:8787/v1/images/generate");
+    expect(imageRequest.brandContext.colors.primary).toBe("#ff5b5b");
+  });
+
+  it("sends approved execution feedback to the private Rocket curriculum", async () => {
+    process.env.ROCKET_AI_URL = "http://rocket.internal:8787";
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        users: [{ localId: "firebase-user-1" }]
+      }), { status: 200, headers: { "Content-Type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        accepted: true,
+        captured: true
+      }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const response = responseDouble();
+
+    await aiBuilderHandler({
+      method: "POST",
+      headers: { authorization: "Bearer firebase-token" },
+      body: {
+        action: "feedback",
+        intent: "Improve the page",
+        context: { currentPage: { id: "home" } },
+        plan,
+        results: [{ id: "edit-1", status: "applied" }],
+        validation: []
+      }
+    }, response);
+
+    expect(response.statusCode).toBe(200);
+    expect(fetchMock.mock.calls[1][0]).toBe("http://rocket.internal:8787/v1/feedback");
+    const feedback = JSON.parse(fetchMock.mock.calls[1][1].body);
+    expect(feedback.plan).toEqual(plan);
+    expect(feedback.outcome.results[0].status).toBe("applied");
   });
 });

@@ -34,7 +34,7 @@ import { auditAIContext } from "../../services/aiWebsiteContextService";
 import mediaService from "../../services/mediaService";
 
 const TABS = [
-  { id: "chat", label: "AI Chat", icon: MessageSquare },
+  { id: "chat", label: "Rocket Chat", icon: MessageSquare },
   { id: "tasks", label: "Tasks", icon: ListChecks },
   { id: "history", label: "History", icon: FileClock },
   { id: "suggestions", label: "Suggestions", icon: Lightbulb },
@@ -224,7 +224,7 @@ export function AIWorkspace({
   const [messages, setMessages] = useState([{
     id: "welcome",
     role: "assistant",
-    content: "I understand this complete page, its component tree, website theme, assets, navigation, SEO, draft, and revision history. Tell me the outcome you want."
+    content: "I am Rocket AI. I understand this complete page, its component tree, website theme, assets, navigation, SEO, draft, and revision history. Tell me the outcome you want."
   }]);
   const [planning, setPlanning] = useState(false);
   const [applying, setApplying] = useState(false);
@@ -285,7 +285,7 @@ export function AIWorkspace({
       setRuns(savedRuns);
       setMemory(savedMemory);
     }).catch((error) => {
-      if (!cancelled) log("error", error.message || "AI workspace state could not be loaded.");
+      if (!cancelled) log("error", error.message || "Rocket workspace state could not be loaded.");
     });
     return () => {
       cancelled = true;
@@ -355,7 +355,7 @@ export function AIWorkspace({
         requestId: response.requestId
       });
     } catch (error) {
-      const message = error.message || "The AI could not create a plan.";
+      const message = error.message || "Rocket AI could not create a plan.";
       setMessages((current) => [...current, {
         id: `error_${Date.now()}`,
         role: "assistant",
@@ -405,6 +405,17 @@ export function AIWorkspace({
         validation,
         status: execution.summary?.failed ? "applied_with_warnings" : "applied"
       });
+      await aiWebsiteAgentService.recordFeedback({
+        intent: pending.prompt,
+        context: pending.context,
+        plan: pending.plan,
+        results: execution.results,
+        validation
+      }).then((feedback) => {
+        if (feedback?.captured) log("training", "Approved plan added to the private Rocket AI curriculum.");
+      }).catch((error) => {
+        log("warning", error.message || "Rocket AI training feedback was not captured.");
+      });
       const completedRun = {
         ...run,
         status: execution.summary?.failed ? "applied_with_warnings" : "applied",
@@ -422,9 +433,9 @@ export function AIWorkspace({
       }]);
       setPending(null);
       await refreshContext();
-      log("success", "AI draft committed with a rollback snapshot.", execution.summary);
+      log("success", "Rocket AI draft committed with a rollback snapshot.", execution.summary);
     } catch (error) {
-      const message = error.message || "The AI plan could not be applied.";
+      const message = error.message || "The Rocket AI plan could not be applied.";
       if (run?.id) {
         await aiBuilderPersistenceService.failRun(
           websiteId,
@@ -450,9 +461,9 @@ export function AIWorkspace({
 
   const rollbackRun = async (run) => {
     if (!run.beforeSnapshotJson || applying) return;
-    if (!window.confirm(`Roll back "${run.plan?.title || "AI changes"}"? This restores its earlier page draft snapshot.`)) return;
+    if (!window.confirm(`Roll back "${run.plan?.title || "Rocket AI changes"}"? This restores its earlier page draft snapshot.`)) return;
     setApplying(true);
-    log("rollback", `Restoring AI run ${run.id}.`);
+    log("rollback", `Restoring Rocket AI run ${run.id}.`);
     try {
       await onRollback(parseAISnapshot(run.beforeSnapshotJson));
       await aiBuilderPersistenceService.markRolledBack(websiteId, pageId, run.id);
@@ -462,7 +473,7 @@ export function AIWorkspace({
       setMessages((current) => [...current, {
         id: `rollback_${Date.now()}`,
         role: "assistant",
-        content: `Rolled back “${run.plan?.title || "AI changes"}” and saved the restored draft.`
+        content: `Rolled back “${run.plan?.title || "Rocket AI changes"}” and saved the restored draft.`
       }]);
       await refreshContext();
       log("success", "Rollback completed.");
@@ -645,7 +656,7 @@ export function AIWorkspace({
               }
             }}
             rows="3"
-            placeholder="Ask the AI to build, redesign, review, or optimize this page…"
+            placeholder="Ask Rocket AI to build, redesign, review, or optimize this page…"
             className="w-full resize-none bg-transparent px-1 text-[11px] leading-5 text-slate-200 outline-none placeholder:text-slate-700"
           />
           <div className="mt-1 flex items-center gap-2">
@@ -684,7 +695,7 @@ export function AIWorkspace({
         </div>
       ))}
     </div>
-  ) : <EmptyPanel icon={ListChecks} title="No active tasks">Create a plan in AI Chat to see every coordinated edit and its execution status.</EmptyPanel>;
+  ) : <EmptyPanel icon={ListChecks} title="No active tasks">Create a plan in Rocket Chat to see every coordinated edit and its execution status.</EmptyPanel>;
 
   const renderHistory = () => runs.length ? (
     <div className="space-y-2 p-3">
@@ -735,7 +746,7 @@ export function AIWorkspace({
         </div>
       ))}
     </div>
-  ) : <EmptyPanel icon={Clock3} title="No AI history yet">Applied plans will keep their diff, explanation, draft snapshot, and rollback point here.</EmptyPanel>;
+  ) : <EmptyPanel icon={Clock3} title="No Rocket history yet">Applied plans will keep their diff, explanation, draft snapshot, and rollback point here.</EmptyPanel>;
 
   const renderSuggestions = () => suggestions.length ? (
     <div className="space-y-2 p-3">
@@ -767,7 +778,7 @@ export function AIWorkspace({
         </button>
       ))}
     </div>
-  ) : <EmptyPanel icon={ShieldCheck} title="No obvious issues found">The deterministic page audit currently passes. Ask AI Chat for a deeper design or conversion review.</EmptyPanel>;
+  ) : <EmptyPanel icon={ShieldCheck} title="No obvious issues found">The deterministic page audit currently passes. Ask Rocket Chat for a deeper design or conversion review.</EmptyPanel>;
 
   const renderComponents = () => (
     <div className="min-h-0 overflow-y-auto">
@@ -796,7 +807,7 @@ export function AIWorkspace({
       {renderInspector ? (
         <div className="min-h-96">{renderInspector()}</div>
       ) : (
-        <EmptyPanel icon={Boxes} title="No direct inspector on this surface">Use AI Chat to manipulate the complete page model.</EmptyPanel>
+        <EmptyPanel icon={Boxes} title="No direct inspector on this surface">Use Rocket Chat to manipulate the complete page model.</EmptyPanel>
       )}
     </div>
   );
@@ -855,7 +866,7 @@ export function AIWorkspace({
           ))}
         </div>
       ) : (
-        <EmptyPanel icon={ImageIcon} title="No media assets">Generate one above or upload assets to the Media Library; the AI receives them automatically.</EmptyPanel>
+        <EmptyPanel icon={ImageIcon} title="No media assets">Generate one above or upload assets to the Media Library; Rocket AI receives them automatically.</EmptyPanel>
       )}
     </div>
   );
@@ -950,7 +961,7 @@ export function AIWorkspace({
             <p className="max-w-56 truncate text-[8px] text-slate-600">{pageTitle} · {surface.replaceAll("-", " ")}</p>
           </div>
           {onClose && (
-            <button type="button" onClick={onClose} className="ml-auto grid h-7 w-7 place-items-center rounded-lg text-slate-600 hover:bg-slate-900 hover:text-white cursor-pointer" title="Close AI workspace">
+            <button type="button" onClick={onClose} className="ml-auto grid h-7 w-7 place-items-center rounded-lg text-slate-600 hover:bg-slate-900 hover:text-white cursor-pointer" title="Close Rocket AI workspace">
               <PanelRightClose className="h-3.5 w-3.5" />
             </button>
           )}

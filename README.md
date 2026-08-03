@@ -1,4 +1,8 @@
-# React + Vite
+# ReactCMS Pro
+
+ReactCMS includes the first-party [Rocket AI model and training stack](rocket_ai/README.md). Rocket AI is initialized and trained from scratch for ReactCMS page planning; it does not call OpenAI, Ollama, or another model provider.
+
+## Dashboard
 
 This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
 

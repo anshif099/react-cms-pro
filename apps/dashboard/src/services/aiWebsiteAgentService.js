@@ -3,7 +3,7 @@ import { validateAIPlan } from "./aiBuilderContract";
 
 async function authorizationHeaders() {
   const user = auth.currentUser;
-  if (!user) throw new Error("Sign in again before using the AI Website Builder.");
+  if (!user) throw new Error("Sign in again before using Rocket AI.");
   const token = await user.getIdToken();
   return {
     Authorization: `Bearer ${token}`,
@@ -21,7 +21,7 @@ async function postAIBuilder(body) {
   if (!response.ok) {
     throw new Error(
       payload?.error
-      || `The AI Website Builder request failed (HTTP ${response.status}).`
+      || `Rocket AI request failed (HTTP ${response.status}).`
     );
   }
   return payload;
@@ -60,6 +60,17 @@ export const aiWebsiteAgentService = {
       brandContext,
       size,
       quality
+    });
+  },
+
+  async recordFeedback({ intent, context, plan, results, validation }) {
+    return postAIBuilder({
+      action: "feedback",
+      intent,
+      context,
+      plan,
+      results,
+      validation
     });
   }
 };

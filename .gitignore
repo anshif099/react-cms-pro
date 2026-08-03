@@ -13,6 +13,14 @@ dist-ssr
 *.local
 .env
 .turbo/cache/
+rocket_ai/checkpoints/
+rocket_ai/data/
+rocket_ai/__pycache__/
+rocket_ai/**/__pycache__/
+.rocket-venv/
+*.pt
+*.pth
+*.safetensors
 
 # Editor directories and files
 .vscode/*

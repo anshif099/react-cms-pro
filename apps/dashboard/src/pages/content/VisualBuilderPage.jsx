@@ -859,7 +859,7 @@ function ConnectedSourceWorkspace({
       sendRuntimeMessage("rcms/v1/field-update", change);
     }
     const saved = await onAIDraftSave?.(execution);
-    if (saved === false) throw new Error("The AI page draft could not be saved.");
+    if (saved === false) throw new Error("The Rocket AI page draft could not be saved.");
 
     const validationContext = {
       ...context,
@@ -1359,7 +1359,7 @@ function NativeBuilderWorkspace({
     stringifyAISnapshot(execution.before);
     stringifyAISnapshot(execution.after);
     if (JSON.stringify(execution.tree) !== JSON.stringify(execution.before.tree)) {
-      editor.replaceTree(execution.tree, `AI: ${plan.title}`);
+      editor.replaceTree(execution.tree, `Rocket AI: ${plan.title}`);
     }
     if (JSON.stringify(execution.theme) !== JSON.stringify(execution.before.theme)) {
       await onSaveTheme(execution.theme);
@@ -1371,7 +1371,7 @@ function NativeBuilderWorkspace({
       onRegionsChange(execution.regions);
     }
     const saved = await onAIDraftSave(execution);
-    if (saved === false) throw new Error("The AI page draft could not be saved.");
+    if (saved === false) throw new Error("The Rocket AI page draft could not be saved.");
     const validationContext = {
       ...context,
       currentPage: {
@@ -1402,7 +1402,7 @@ function NativeBuilderWorkspace({
 
   const rollbackNativeAIPlan = useCallback(async (snapshot) => {
     if (!snapshot?.tree) throw new Error("The component-tree rollback snapshot is missing.");
-    editor.replaceTree(snapshot.tree, "Rollback AI changes");
+    editor.replaceTree(snapshot.tree, "Rollback Rocket AI changes");
     if (snapshot.theme) await onSaveTheme(snapshot.theme);
     if (snapshot.pageSettings) onApplySettings(snapshot.pageSettings);
     if (snapshot.regions) onRegionsChange(snapshot.regions);
@@ -2342,7 +2342,7 @@ export function VisualBuilderPage() {
       ? await performSave({ manual: true, settingsOverride: snapshot?.pageSettings })
       : false;
     if (!sourceSaved || !pageSaved) {
-      throw new Error("The AI source draft could not be committed completely.");
+      throw new Error("The Rocket AI source draft could not be committed completely.");
     }
     return true;
   }, [performSave, saveSourceDraft, stageAIExecution]);
@@ -2354,7 +2354,7 @@ export function VisualBuilderPage() {
       ? await performSave({ manual: true, settingsOverride: snapshot?.pageSettings })
       : false;
     if (!regionsSaved || !pageSaved) {
-      throw new Error("The AI page draft could not be committed completely.");
+      throw new Error("The Rocket AI page draft could not be committed completely.");
     }
     return true;
   }, [performSave, saveConnectedDraft, stageAIExecution]);
