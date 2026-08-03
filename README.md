@@ -1,6 +1,6 @@
 # ReactCMS Pro
 
-ReactCMS includes the first-party [Rocket AI model and training stack](rocket_ai/README.md). Rocket AI is initialized and trained from scratch for ReactCMS page planning; it does not call OpenAI, Ollama, or another model provider.
+ReactCMS includes an embedded first-party Rocket planning engine and the experimental [Rocket AI model and training stack](rocket_ai/README.md). Page planning runs directly inside the dashboard against the complete editable page model. It does not call `/api/ai-builder`, OpenAI, Ollama, or another inference provider.
 
 ## Dashboard
 

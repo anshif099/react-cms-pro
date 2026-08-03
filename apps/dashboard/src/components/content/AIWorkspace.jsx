@@ -76,7 +76,7 @@ function dateLabel(value) {
   }).format(new Date(value));
 }
 
-function generatedImageFile(base64, pageTitle) {
+function generatedImageFile(base64, pageTitle, mimeType = "image/png") {
   const binary = window.atob(base64);
   const bytes = new Uint8Array(binary.length);
   for (let index = 0; index < binary.length; index += 1) {
@@ -87,10 +87,11 @@ function generatedImageFile(base64, pageTitle) {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 50) || "website";
+  const extension = mimeType === "image/svg+xml" ? "svg" : "png";
   return new File(
     [bytes],
-    `${safeTitle}-ai-${Date.now()}.png`,
-    { type: "image/png" }
+    `${safeTitle}-ai-${Date.now()}.${extension}`,
+    { type: mimeType }
   );
 }
 
@@ -226,7 +227,7 @@ export function AIWorkspace({
   const [messages, setMessages] = useState([{
     id: "welcome",
     role: "assistant",
-    content: "I am Rocket AI. I understand this complete page, its component tree, website theme, assets, navigation, SEO, draft, and revision history. Tell me the outcome you want."
+    content: "I am Rocket AI, running inside ReactCMS without an external AI API. I understand this complete page, its component tree, website theme, assets, navigation, SEO, draft, and revision history. Tell me the outcome you want."
   }]);
   const [planning, setPlanning] = useState(false);
   const [applying, setApplying] = useState(false);
@@ -558,7 +559,7 @@ export function AIWorkspace({
           memory
         }
       });
-      const file = generatedImageFile(generated.imageBase64, pageTitle);
+      const file = generatedImageFile(generated.imageBase64, pageTitle, generated.mimeType);
       const asset = await mediaService.upload(
         websiteId,
         file,
@@ -617,8 +618,8 @@ export function AIWorkspace({
                 <div className="grid h-8 w-8 place-items-center rounded-full bg-white text-xs font-black text-slate-900">G</div>
               )}
               <div className="min-w-0 flex-1">
-                <p className="text-[9px] font-bold uppercase tracking-wider text-emerald-400">Rocket AI connected</p>
-                <p className="truncate text-[10px] text-slate-300">{rocketUser.email || rocketUser.displayName}</p>
+                <p className="text-[9px] font-bold uppercase tracking-wider text-emerald-400">Rocket AI ready · embedded</p>
+                <p className="truncate text-[10px] text-slate-300">{rocketUser.email || rocketUser.displayName} · no AI API</p>
               </div>
               <button
                 type="button"

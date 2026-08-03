@@ -4,6 +4,12 @@ Rocket AI is ReactCMS Pro's own trainable website-planning model. Its tokenizer,
 
 It does not download or call a pretrained language model. Every model parameter starts randomly and is learned from data you control.
 
+## Current embedded runtime
+
+The ReactCMS dashboard currently uses `apps/dashboard/src/services/rocketLocalEngine.js`. It plans supported page, section, theme, component, responsive, SEO, and UX edits directly in the browser, with no AI HTTP endpoint and no external inference service. Approved outcomes are retained as a small local curriculum for future improvements.
+
+The Python transformer below is an optional research and training path. It is not required for the embedded dashboard runtime. Until its weights are trained and converted for a browser runtime, it should not be described as production intelligence.
+
 ## What “from scratch” means
 
 - `tokenizer.py` learns a byte-level subword vocabulary from your ReactCMS dataset.
@@ -90,7 +96,9 @@ python -m rocket_ai.train `
 
 The `tiny` preset is useful for CPU smoke tests. `base` and `large` require significantly more GPU memory, data, and training time. Checkpoints and datasets are ignored by Git because they can be very large and may contain private website content.
 
-## Start your model server
+## Optional standalone research server
+
+This server is not used by the ReactCMS dashboard. It exists only for future checkpoint evaluation on a dedicated training machine. The shipped dashboard uses the embedded browser engine and requires no `ROCKET_AI_URL`.
 
 ```powershell
 $env:ROCKET_AI_CHECKPOINT="rocket_ai/checkpoints/rocket-plan-small/latest.pt"
@@ -105,19 +113,7 @@ Health check:
 Invoke-RestMethod http://127.0.0.1:8787/health
 ```
 
-Configure the ReactCMS server/Vercel environment:
-
-```text
-ROCKET_AI_URL=https://your-private-rocket-gpu-server.example
-ROCKET_AI_MODEL=rocket-plan
-ROCKET_AI_GATEWAY_KEY=the-same-long-random-secret
-```
-
-The browser never receives the gateway key. The authenticated ReactCMS server function forwards page-planning requests to the Rocket server.
-
 When `ROCKET_AI_FEEDBACK_PATH` is configured, each plan that a user approves and successfully applies is appended to that private JSONL curriculum with its context and execution outcome. Review this file before mixing it into the next training run.
-
-Vercel cannot run a large GPU checkpoint inside a normal serverless function. Host `rocket_ai.server` on hardware you control and make it reachable only through TLS and the shared gateway key.
 
 ## Train Rocket Image
 
@@ -145,7 +141,7 @@ python -m rocket_ai.server
 
 Until an image checkpoint is trained and loaded, Rocket AI returns an explicit `503` for image generation rather than silently using an external provider.
 
-## API
+## Standalone research-server API
 
 - `GET /health`
 - `POST /v1/plan`
