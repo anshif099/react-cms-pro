@@ -22,6 +22,7 @@ export interface EditableButtonProps {
   style?: React.CSSProperties;
   onClick?: (e: React.MouseEvent) => void;
   as?: React.ElementType;
+  children?: React.ReactNode | ((value: ButtonValue | string) => React.ReactNode);
 }
 
 export function EditableButton({
@@ -32,6 +33,7 @@ export function EditableButton({
   style = {},
   onClick,
   as: Component = 'button',
+  children,
 }: EditableButtonProps) {
   const cms = useContext(CMSContext);
   const page = useContext(PageContext);
@@ -100,10 +102,14 @@ export function EditableButton({
   const Tag = btnHref && !editMode ? 'a' : Component;
   const tagProps = Tag === 'a' ? { href: btnHref } : {};
 
+  const renderedContent = typeof children === 'function'
+    ? children(value || defaultBtnObj)
+    : (children !== undefined ? children : btnText);
+
   if (!editMode) {
     return (
       <Tag {...tagProps} className={className} style={buttonStyle} onClick={onClick}>
-        {btnText}
+        {renderedContent}
       </Tag>
     );
   }
@@ -123,7 +129,7 @@ export function EditableButton({
       data-rcms-type="button"
       data-rcms-label={label}
     >
-      {btnText}
+      {renderedContent}
     </Tag>
   );
 }
