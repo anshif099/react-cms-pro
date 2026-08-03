@@ -51,7 +51,8 @@ import {
   createRuntimeMessage,
   discoverLocalSourceImports,
   mergeRegionSelection,
-  patchEditableRegionSource
+  patchEditableRegionSource,
+  shouldUseConnectedWebsiteCanvas
 } from "../../services/sourceVisualPatchService";
 import {
   generateReactPageSource,
@@ -133,7 +134,8 @@ function ConnectedSourceWorkspace({
   onChange,
   onVisualChange,
   onSave,
-  onPublish
+  onPublish,
+  visualOnly = false
 }) {
   const isPreview = mode === "preview";
   const isGitHub = website?.connection?.provider === "github";
@@ -714,12 +716,14 @@ function ConnectedSourceWorkspace({
 
           <div className="rounded-lg border border-emerald-500/15 bg-emerald-500/5 p-3">
             <p className="text-[10px] leading-4 text-emerald-200/70">
-              Supported changes update the connected source immediately. Use {isGitHub
-                ? " Update Git "
-                : isSftp
-                  ? " Update StackCP "
-                  : " Update cPanel "}
-              when the page is ready to publish live.
+              {visualOnly
+                ? "Changes are saved to this page draft while the real website supplies its header, footer, fonts, and colors."
+                : <>Supported changes update the connected source immediately. Use {isGitHub
+                  ? " Update Git "
+                  : isSftp
+                    ? " Update StackCP "
+                    : " Update cPanel "}
+                when the page is ready to publish live.</>}
             </p>
           </div>
         </div>
@@ -746,11 +750,11 @@ function ConnectedSourceWorkspace({
         onPublish={publishConnectedSource}
         onSettings={() => {}}
         showSettings={false}
-        publishLabel={isGitHub ? "Update Git" : isSftp ? "Update StackCP" : "Update cPanel"}
+        publishLabel={visualOnly ? "Publish" : isGitHub ? "Update Git" : isSftp ? "Update StackCP" : "Update cPanel"}
       />
 
       <div className="h-11 px-4 border-b border-slate-800 bg-[#0a101d] flex items-center gap-3">
-        {!isPreview ? (
+        {!isPreview && !visualOnly ? (
           <div className="flex items-center rounded-lg border border-slate-800 bg-slate-950/50 p-0.5">
             <button
               type="button"
@@ -781,12 +785,12 @@ function ConnectedSourceWorkspace({
           <>
             <Eye className="w-4 h-4 text-blue-400" />
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-              Live page preview
+              {isPreview ? "Live page preview" : "Connected website canvas"}
             </span>
           </>
         )}
 
-        {workspaceMode === "code" && !isPreview && (
+        {workspaceMode === "code" && !isPreview && !visualOnly && (
           <>
             <span className="h-4 w-px bg-slate-800" />
             <FileCode2 className="w-3.5 h-3.5 text-slate-500" />
@@ -829,7 +833,7 @@ function ConnectedSourceWorkspace({
         </div>
       </div>
 
-      {!isPreview && isGitHub && (
+      {!isPreview && isGitHub && !visualOnly && (
         <div className="px-4 py-2 border-b border-slate-800 bg-slate-950/40 flex items-center gap-2">
           <KeyRound className="w-3.5 h-3.5 text-slate-500" />
           <span className="shrink-0 text-[10px] font-bold text-slate-400">
@@ -1246,6 +1250,7 @@ export function VisualBuilderPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [themeTokens, setThemeTokens] = useState(null);
   const [sourceWebsite, setSourceWebsite] = useState(null);
+  const [sourceWebsiteLoading, setSourceWebsiteLoading] = useState(true);
   const [sourceContent, setSourceContent] = useState("");
   const [sourceLoading, setSourceLoading] = useState(false);
   const [sourceError, setSourceError] = useState("");
@@ -1253,6 +1258,9 @@ export function VisualBuilderPage() {
   const [sourceSaving, setSourceSaving] = useState(false);
   const [sourcePublishing, setSourcePublishing] = useState(false);
   const [sourceWriteToken, setSourceWriteToken] = useState("");
+  const [connectedSaveStatus, setConnectedSaveStatus] = useState("saved");
+  const [connectedSaving, setConnectedSaving] = useState(false);
+  const [connectedPublishing, setConnectedPublishing] = useState(false);
 
   const treeRef = useRef(null);
   const pageRef = useRef(null);
@@ -1262,6 +1270,7 @@ export function VisualBuilderPage() {
   const loadedIdentityRef = useRef("");
   const sourceFilesRef = useRef({});
   const sourceDirtyPathsRef = useRef(new Set());
+  const connectedWritesRef = useRef(new Set());
 
   const pageKey = useMemo(
     () => visualBuilderService.resolvePageKey(selectedPage),
@@ -1286,6 +1295,7 @@ export function VisualBuilderPage() {
   useEffect(() => {
     if (!websiteId) return undefined;
     let cancelled = false;
+    setSourceWebsiteLoading(true);
     websiteService.getById(websiteId)
       .then((website) => {
         if (cancelled) return;
@@ -1296,6 +1306,9 @@ export function VisualBuilderPage() {
       })
       .catch((error) => {
         if (!cancelled) console.error("Connected website could not be loaded", error);
+      })
+      .finally(() => {
+        if (!cancelled) setSourceWebsiteLoading(false);
       });
     return () => {
       cancelled = true;
@@ -1306,6 +1319,10 @@ export function VisualBuilderPage() {
     selectedPage?.isImported
     && selectedPage?.nativeArtifactStatus === "source-only"
     && selectedPage?.sourceFile
+  );
+  const isConnectedCmsPage = shouldUseConnectedWebsiteCanvas(
+    sourceWebsite,
+    selectedPage
   );
 
   useEffect(() => {
@@ -1830,6 +1847,87 @@ export function VisualBuilderPage() {
     };
   }, [selectedPage?.sourceFile]);
 
+  const persistConnectedRegion = useCallback((change) => {
+    if (!websiteId || !pageKey || !change.regionId) {
+      return { changed: false, error: "The connected page draft is not ready." };
+    }
+
+    setConnectedSaveStatus("saving");
+    const write = visualBuilderService.persistRegion(
+      websiteId,
+      pageKey,
+      change.regionId,
+      change.value
+    );
+    connectedWritesRef.current.add(write);
+    write
+      .then(() => {
+        if (connectedWritesRef.current.size === 1) {
+          setConnectedSaveStatus("saved");
+        }
+      })
+      .catch((error) => {
+        console.error(error);
+        setConnectedSaveStatus("error");
+        toast.error(error.message || "The connected page draft could not be saved.");
+      })
+      .finally(() => {
+        connectedWritesRef.current.delete(write);
+      });
+
+    return { changed: true };
+  }, [pageKey, toast, websiteId]);
+
+  const saveConnectedDraft = useCallback(async (showToast = true) => {
+    setConnectedSaving(true);
+    try {
+      await Promise.all(Array.from(connectedWritesRef.current));
+      setConnectedSaveStatus("saved");
+      if (showToast) toast.success("Connected page draft saved.");
+      return true;
+    } catch (error) {
+      console.error(error);
+      setConnectedSaveStatus("error");
+      toast.error(error.message || "The connected page draft could not be saved.");
+      return false;
+    } finally {
+      setConnectedSaving(false);
+    }
+  }, [toast]);
+
+  const publishConnectedPage = useCallback(async () => {
+    setConnectedPublishing(true);
+    try {
+      const saved = await saveConnectedDraft(false);
+      if (!saved) return null;
+      const contentPublished = await contentSyncService.publishDraft(
+        websiteId,
+        pageKey
+      );
+      if (!contentPublished) {
+        throw new Error("The connected page draft is empty.");
+      }
+      const publishedAt = await pageService.markPublished(
+        websiteId,
+        pageId,
+        selectedPage?.routeId
+      );
+      setSelectedPage((current) => current ? {
+        ...current,
+        status: "published",
+        publishedAt
+      } : current);
+      toast.success("Page content published to the connected website.");
+      return { verified: true };
+    } catch (error) {
+      console.error(error);
+      toast.error(error.message || "The connected page could not be published.");
+      return null;
+    } finally {
+      setConnectedPublishing(false);
+    }
+  }, [pageId, pageKey, saveConnectedDraft, selectedPage?.routeId, setSelectedPage, toast, websiteId]);
+
   if (isConnectedSourcePage) {
     return (
       <ConnectedSourceWorkspace
@@ -1857,6 +1955,46 @@ export function VisualBuilderPage() {
         onVisualChange={patchSourceFromVisual}
         onSave={saveSourceDraft}
         onPublish={publishSource}
+      />
+    );
+  }
+
+  if (
+    selectedPage
+    && !selectedPage.isImported
+    && selectedPage.source === "cms"
+    && sourceWebsiteLoading
+  ) {
+    return (
+      <div className="h-screen bg-[#070b14] text-slate-300 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-7 h-7 animate-spin text-blue-500 mx-auto" />
+          <p className="text-xs font-semibold text-slate-500 mt-3">Connecting the real website canvas...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (isConnectedCmsPage) {
+    return (
+      <ConnectedSourceWorkspace
+        mode={mode}
+        page={selectedPage}
+        website={sourceWebsite}
+        content=""
+        loading={pageLoading}
+        error=""
+        saveStatus={connectedSaveStatus}
+        saving={connectedSaving}
+        publishing={connectedPublishing}
+        writeToken=""
+        onWriteTokenChange={() => {}}
+        onBack={() => navigate(`/content/${websiteId}/pages`)}
+        onChange={() => {}}
+        onVisualChange={persistConnectedRegion}
+        onSave={saveConnectedDraft}
+        onPublish={publishConnectedPage}
+        visualOnly
       />
     );
   }

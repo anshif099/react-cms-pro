@@ -478,6 +478,16 @@ export function mergeRegionSelection(current, payload) {
   };
 }
 
+export function shouldUseConnectedWebsiteCanvas(website, page) {
+  return Boolean(
+    page
+    && !page.isImported
+    && page.source === "cms"
+    && website?.sourceConnected
+    && website?.domain
+  );
+}
+
 export function buildConnectedPageUrl(website, page, mode = "preview") {
   const domain = String(website?.domain || "").trim();
   if (!domain) return "";

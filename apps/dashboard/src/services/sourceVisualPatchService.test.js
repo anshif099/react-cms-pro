@@ -5,7 +5,8 @@ import {
   createRuntimeMessage,
   discoverLocalSourceImports,
   mergeRegionSelection,
-  patchEditableRegionSource
+  patchEditableRegionSource,
+  shouldUseConnectedWebsiteCanvas
 } from "./sourceVisualPatchService";
 
 describe("source visual patches", () => {
@@ -160,6 +161,17 @@ describe("connected region selections", () => {
 });
 
 describe("connected visual routes", () => {
+  it("uses the real website canvas for CMS pages on source-connected sites", () => {
+    expect(shouldUseConnectedWebsiteCanvas(
+      { sourceConnected: true, domain: "https://triosis.vercel.app/" },
+      { source: "cms", isImported: false }
+    )).toBe(true);
+    expect(shouldUseConnectedWebsiteCanvas(
+      { sourceConnected: true, domain: "https://triosis.vercel.app/" },
+      { source: "imported", isImported: true }
+    )).toBe(false);
+  });
+
   it("loads the real deployed page route in preview mode", () => {
     expect(buildConnectedPageUrl(
       { domain: "https://triosis.vercel.app/" },
