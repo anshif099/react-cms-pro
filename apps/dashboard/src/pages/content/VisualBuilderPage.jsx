@@ -63,11 +63,19 @@ import {
 import visualBuilderService, {
   createVisualNode
 } from "../../services/visualBuilderService";
+import { applyAIPlan } from "../../services/aiPageMutationService";
+import { stringifyAISnapshot } from "../../services/aiBuilderPersistenceService";
+import {
+  auditAIContext,
+  collectAIWebsiteContext,
+  AI_COMPONENT_LIBRARY
+} from "../../services/aiWebsiteContextService";
 import VisualBuilderToolbar from "../../components/content/VisualBuilderToolbar";
 import NativeLayersPanel from "../../components/content/NativeLayersPanel";
 import ImagePicker from "../../components/ui/ImagePicker";
 
 const NativeInspector = lazy(() => import("../../components/content/NativeInspector"));
+const AIWorkspace = lazy(() => import("../../components/content/AIWorkspace"));
 const VisualPageSettingsModal = lazy(() => import("../../components/content/VisualPageSettingsModal"));
 
 function sourceDraftKey(websiteId, pageId) {
@@ -120,8 +128,14 @@ async function loadConnectedSourceGraph(website, entryPath, entryContent) {
 
 function ConnectedSourceWorkspace({
   mode,
+  websiteId,
+  pageId,
+  pageKey,
+  locale,
   page,
   website,
+  theme,
+  pageSettings,
   content,
   loading,
   error,
@@ -133,6 +147,11 @@ function ConnectedSourceWorkspace({
   onBack,
   onChange,
   onVisualChange,
+  getSourceFiles,
+  onSourceFilesChange,
+  onThemeChange,
+  onPageSettingsChange,
+  onAIDraftSave,
   onSave,
   onPublish,
   visualOnly = false
@@ -155,6 +174,7 @@ function ConnectedSourceWorkspace({
   const [selectedRegion, setSelectedRegion] = useState(null);
   const [visualError, setVisualError] = useState("");
   const [liveRouteError, setLiveRouteError] = useState("");
+  const [aiOpen, setAIOpen] = useState(true);
 
   const requestedLivePageUrl = useMemo(
     () => buildConnectedPageUrl(website, page, isPreview ? "preview" : "edit"),
@@ -460,10 +480,13 @@ function ConnectedSourceWorkspace({
     }
   };
 
-  const renderVisualInspector = () => {
+  const renderVisualInspector = (embedded = false) => {
     if (!selectedRegion) {
       return (
-        <aside className="w-[320px] flex-shrink-0 border-l border-slate-800 bg-[#0b1120] grid place-items-center p-7 text-center">
+        <aside className={embedded
+          ? "min-h-96 w-full bg-transparent grid place-items-center p-7 text-center"
+          : "w-[320px] flex-shrink-0 border-l border-slate-800 bg-[#0b1120] grid place-items-center p-7 text-center"}
+        >
           <div>
             <MousePointer2 className="w-8 h-8 mx-auto text-blue-400" />
             <h2 className="mt-4 text-sm font-bold text-white">Select a page element</h2>
@@ -487,7 +510,10 @@ function ConnectedSourceWorkspace({
       : value || "";
 
     return (
-      <aside className="w-[320px] flex-shrink-0 border-l border-slate-800 bg-[#0b1120] overflow-y-auto">
+      <aside className={embedded
+        ? "w-full bg-transparent overflow-y-auto"
+        : "w-[320px] flex-shrink-0 border-l border-slate-800 bg-[#0b1120] overflow-y-auto"}
+      >
         <div className="h-12 px-4 border-b border-slate-800 flex items-center">
           <div className="min-w-0">
             <p className="text-[10px] uppercase tracking-wider font-bold text-blue-400">
@@ -731,6 +757,196 @@ function ConnectedSourceWorkspace({
     );
   };
 
+  const getConnectedAIContext = useCallback(() => collectAIWebsiteContext({
+    websiteId,
+    pageId,
+    pageKey,
+    locale,
+    surface: visualOnly ? "connected-runtime" : "connected-source",
+    page,
+    website,
+    tree: null,
+    selectedNode: null,
+    selectedRegion,
+    pageSettings,
+    theme,
+    sourceFiles: visualOnly ? {} : getSourceFiles?.() || {},
+    editorHistory: []
+  }), [
+    getSourceFiles,
+    locale,
+    page,
+    pageId,
+    pageKey,
+    pageSettings,
+    selectedRegion,
+    theme,
+    visualOnly,
+    website,
+    websiteId
+  ]);
+
+  const applyConnectedAIPlan = useCallback(async (plan, context) => {
+    const initialRegions = {
+      ...(context?.currentPage?.editableRegionValues || {})
+    };
+    if (selectedRegion?.regionId) {
+      initialRegions[selectedRegion.regionId] = selectedRegion.value;
+    }
+    const execution = applyAIPlan({
+      plan,
+      tree: null,
+      theme: context?.designSystem?.theme || theme || {},
+      pageSettings: context?.currentPage?.settings || pageSettings || {},
+      regions: initialRegions,
+      sourceFiles: getSourceFiles?.() || {},
+      blockedSourcePaths: Object.entries(context?.sourceProject?.files || {})
+        .filter(([, fileContent]) => String(fileContent).includes("ReactCMS context truncated"))
+        .map(([path]) => path),
+      componentTypes: AI_COMPONENT_LIBRARY.map((component) => component.type),
+      createNode: (type) => createVisualNode(type, locale)
+    });
+    const changedSourcePaths = Array.from(new Set([
+      ...Object.keys(execution.before.sourceFiles || {}),
+      ...Object.keys(execution.sourceFiles || {})
+    ])).filter((path) => (
+      execution.before.sourceFiles?.[path] !== execution.sourceFiles?.[path]
+    ));
+    const historyBefore = {
+      ...execution.before,
+      sourceFilesMode: "patch",
+      sourceFiles: Object.fromEntries(changedSourcePaths.map((path) => [
+        path,
+        execution.before.sourceFiles?.[path] ?? null
+      ]))
+    };
+    const historyAfter = {
+      ...execution.after,
+      sourceFilesMode: "patch",
+      sourceFiles: Object.fromEntries(changedSourcePaths.map((path) => [
+        path,
+        execution.sourceFiles?.[path] ?? null
+      ]))
+    };
+    stringifyAISnapshot(historyBefore);
+    stringifyAISnapshot(historyAfter);
+
+    if (JSON.stringify(execution.sourceFiles) !== JSON.stringify(execution.before.sourceFiles)) {
+      onSourceFilesChange?.(execution.sourceFiles);
+    }
+    if (JSON.stringify(execution.theme) !== JSON.stringify(execution.before.theme)) {
+      await onThemeChange?.(execution.theme);
+      sendRuntimeMessage("rcms/v1/theme-update", { theme: execution.theme });
+    }
+    if (JSON.stringify(execution.pageSettings) !== JSON.stringify(execution.before.pageSettings)) {
+      onPageSettingsChange?.(execution.pageSettings);
+    }
+
+    const regionDefinitions = context?.currentPage?.editableRegionDefinitions || {};
+    for (const [regionId, value] of Object.entries(execution.regions)) {
+      if (JSON.stringify(value) === JSON.stringify(initialRegions[regionId])) continue;
+      const definition = regionDefinitions[regionId] || {};
+      const change = {
+        regionId,
+        type: definition.type || (selectedRegion?.regionId === regionId ? selectedRegion.type : "text"),
+        pageId: definition.pageId || selectedRegion?.pageId || pageKey,
+        value
+      };
+      const changed = onVisualChange(change);
+      if (!changed?.changed) {
+        throw new Error(changed?.error || `Region "${regionId}" could not be updated.`);
+      }
+      sendRuntimeMessage("rcms/v1/field-update", change);
+    }
+    const saved = await onAIDraftSave?.(execution);
+    if (saved === false) throw new Error("The AI page draft could not be saved.");
+
+    const validationContext = {
+      ...context,
+      currentPage: {
+        ...context.currentPage,
+        settings: execution.pageSettings,
+        draftContent: {
+          ...(context.currentPage.draftContent || {}),
+          regions: execution.regions
+        }
+      },
+      designSystem: {
+        ...context.designSystem,
+        theme: execution.theme
+      }
+    };
+    return {
+      ...execution,
+      before: historyBefore,
+      after: historyAfter,
+      validation: auditAIContext(validationContext)
+    };
+  }, [
+    locale,
+    getSourceFiles,
+    onAIDraftSave,
+    onPageSettingsChange,
+    onSourceFilesChange,
+    onThemeChange,
+    onVisualChange,
+    pageKey,
+    pageSettings,
+    selectedRegion,
+    sendRuntimeMessage,
+    theme
+  ]);
+
+  const rollbackConnectedAIPlan = useCallback(async (snapshot) => {
+    if (!snapshot) throw new Error("The rollback snapshot is missing.");
+    if (snapshot.sourceFiles) {
+      const currentFiles = getSourceFiles?.() || {};
+      const restoredFiles = snapshot.sourceFilesMode === "patch"
+        ? { ...currentFiles }
+        : { ...snapshot.sourceFiles };
+      if (snapshot.sourceFilesMode === "patch") {
+        Object.entries(snapshot.sourceFiles).forEach(([path, content]) => {
+          if (content === null) delete restoredFiles[path];
+          else restoredFiles[path] = content;
+        });
+      }
+      onSourceFilesChange?.(restoredFiles);
+    }
+    if (snapshot.theme) {
+      await onThemeChange?.(snapshot.theme);
+      sendRuntimeMessage("rcms/v1/theme-update", { theme: snapshot.theme });
+    }
+    if (snapshot.pageSettings) onPageSettingsChange?.(snapshot.pageSettings);
+    for (const [regionId, value] of Object.entries(snapshot.regions || {})) {
+      const selected = selectedRegion?.regionId === regionId ? selectedRegion : {};
+      const changed = onVisualChange({
+        regionId,
+        type: selected.type || "text",
+        pageId: selected.pageId || pageKey,
+        value
+      });
+      if (changed?.changed) {
+        sendRuntimeMessage("rcms/v1/field-update", {
+          regionId,
+          pageId: selected.pageId || pageKey,
+          value
+        });
+      }
+    }
+    const saved = await onAIDraftSave?.(snapshot);
+    if (saved === false) throw new Error("The restored page draft could not be saved.");
+  }, [
+    onAIDraftSave,
+    getSourceFiles,
+    onPageSettingsChange,
+    onSourceFilesChange,
+    onThemeChange,
+    onVisualChange,
+    pageKey,
+    selectedRegion,
+    sendRuntimeMessage
+  ]);
+
   return (
     <div className="h-screen min-h-0 bg-[#070b14] text-slate-200 flex flex-col overflow-hidden">
       <VisualBuilderToolbar
@@ -749,6 +965,8 @@ function ConnectedSourceWorkspace({
         onSave={onSave}
         onPublish={publishConnectedSource}
         onSettings={() => {}}
+        onAIToggle={() => setAIOpen((value) => !value)}
+        aiOpen={aiOpen}
         showSettings={false}
         publishLabel={visualOnly ? "Publish" : isGitHub ? "Update Git" : isSftp ? "Update StackCP" : "Update cPanel"}
       />
@@ -864,7 +1082,7 @@ function ConnectedSourceWorkspace({
                 <div className="text-center">
                   <Loader2 className="w-6 h-6 animate-spin text-blue-500 mx-auto" />
                   <p className="mt-3 text-xs font-semibold text-slate-500">
-                    Checking live page routeâ€¦
+                    Checking live page route...
                   </p>
                 </div>
               </div>
@@ -936,31 +1154,62 @@ function ConnectedSourceWorkspace({
               </div>
             )}
           </main>
-          {!isPreview && renderVisualInspector()}
+          {!isPreview && aiOpen && (
+            <Suspense fallback={<aside className="w-[400px] border-l border-slate-800 bg-[#0b1120]" />}>
+              <AIWorkspace
+                websiteId={websiteId}
+                pageId={pageId}
+                pageTitle={page.title}
+                surface={visualOnly ? "connected-runtime" : "connected-source"}
+                getContext={getConnectedAIContext}
+                onApplyPlan={applyConnectedAIPlan}
+                onRollback={rollbackConnectedAIPlan}
+                renderInspector={() => renderVisualInspector(true)}
+                onClose={() => setAIOpen(false)}
+              />
+            </Suspense>
+          )}
         </div>
       ) : (
-        <main className="flex-1 min-h-0 p-4 bg-[#080d18]">
-          {loading ? (
-            <div className="h-full grid place-items-center">
-              <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
-            </div>
-          ) : error ? (
-            <div className="h-full grid place-items-center">
-              <div className="max-w-lg rounded-xl border border-rose-500/20 bg-rose-500/5 p-6 text-center">
-                <p className="text-sm font-bold text-white">Connected source could not be loaded</p>
-                <p className="mt-2 text-xs leading-5 text-slate-500">{error}</p>
+        <div className="flex-1 min-h-0 flex">
+          <main className="flex-1 min-w-0 min-h-0 p-4 bg-[#080d18]">
+            {loading ? (
+              <div className="h-full grid place-items-center">
+                <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
               </div>
-            </div>
-          ) : (
-            <textarea
-              value={content}
-              onChange={(event) => onChange(event.target.value)}
-              spellCheck="false"
-              aria-label={`Source code for ${page.title}`}
-              className="w-full h-full resize-none rounded-xl border border-slate-800 bg-[#050914] p-5 font-mono text-[12px] leading-5 text-slate-300 outline-none focus:border-blue-500"
-            />
+            ) : error ? (
+              <div className="h-full grid place-items-center">
+                <div className="max-w-lg rounded-xl border border-rose-500/20 bg-rose-500/5 p-6 text-center">
+                  <p className="text-sm font-bold text-white">Connected source could not be loaded</p>
+                  <p className="mt-2 text-xs leading-5 text-slate-500">{error}</p>
+                </div>
+              </div>
+            ) : (
+              <textarea
+                value={content}
+                onChange={(event) => onChange(event.target.value)}
+                spellCheck="false"
+                aria-label={`Source code for ${page.title}`}
+                className="w-full h-full resize-none rounded-xl border border-slate-800 bg-[#050914] p-5 font-mono text-[12px] leading-5 text-slate-300 outline-none focus:border-blue-500"
+              />
+            )}
+          </main>
+          {aiOpen && (
+            <Suspense fallback={<aside className="w-[400px] border-l border-slate-800 bg-[#0b1120]" />}>
+              <AIWorkspace
+                websiteId={websiteId}
+                pageId={pageId}
+                pageTitle={page.title}
+                surface="connected-source"
+                getContext={getConnectedAIContext}
+                onApplyPlan={applyConnectedAIPlan}
+                onRollback={rollbackConnectedAIPlan}
+                renderInspector={() => renderVisualInspector(true)}
+                onClose={() => setAIOpen(false)}
+              />
+            </Suspense>
           )}
-        </main>
+        </div>
       )}
     </div>
   );
@@ -1001,6 +1250,10 @@ function buildInitialTree(page, document, locale, pageKey) {
 
 function NativeBuilderWorkspace({
   mode,
+  websiteId,
+  pageId,
+  pageKey,
+  website,
   page,
   pageTitle,
   locale,
@@ -1016,10 +1269,14 @@ function NativeBuilderWorkspace({
   revisionLoading,
   onBack,
   onSave,
+  onAIDraftSave,
   onPublish,
   onOpenSettings,
   onTheme,
+  onSaveTheme,
   theme,
+  regions,
+  onRegionsChange,
   settingsOpen,
   onCloseSettings,
   onApplySettings,
@@ -1028,6 +1285,7 @@ function NativeBuilderWorkspace({
 }) {
   const editor = useNativeEditor();
   const isPreview = mode === "preview";
+  const [aiOpen, setAIOpen] = useState(true);
   const blocks = useMemo(() => pageTreeToBlocks(editor.tree), [editor.tree]);
   const importedSourceEmptyState = page.isImported ? (
     <div className="max-w-lg px-8 py-10 text-center">
@@ -1056,6 +1314,102 @@ function NativeBuilderWorkspace({
     editor.insert(node, targetId, position, `Add ${type}`);
   }, [editor, locale]);
 
+  const getNativeAIContext = useCallback(() => collectAIWebsiteContext({
+    websiteId,
+    pageId,
+    pageKey,
+    locale,
+    surface: "native",
+    page,
+    website,
+    tree: editor.tree,
+    selectedNode: editor.selectedNode,
+    selectedRegion: null,
+    pageSettings,
+    theme,
+    regions,
+    sourceFiles: {},
+    editorHistory: editor.history
+  }), [
+    editor.history,
+    editor.selectedNode,
+    editor.tree,
+    locale,
+    page,
+    pageId,
+    pageKey,
+    pageSettings,
+    regions,
+    theme,
+    website,
+    websiteId
+  ]);
+
+  const applyNativeAIPlan = useCallback(async (plan, context) => {
+    const execution = applyAIPlan({
+      plan,
+      tree: editor.tree,
+      theme: context?.designSystem?.theme || theme || {},
+      pageSettings: context?.currentPage?.settings || pageSettings || {},
+      regions: regions || {},
+      sourceFiles: {},
+      componentTypes: AI_COMPONENT_LIBRARY.map((component) => component.type),
+      createNode: (type) => createVisualNode(type, locale)
+    });
+    stringifyAISnapshot(execution.before);
+    stringifyAISnapshot(execution.after);
+    if (JSON.stringify(execution.tree) !== JSON.stringify(execution.before.tree)) {
+      editor.replaceTree(execution.tree, `AI: ${plan.title}`);
+    }
+    if (JSON.stringify(execution.theme) !== JSON.stringify(execution.before.theme)) {
+      await onSaveTheme(execution.theme);
+    }
+    if (JSON.stringify(execution.pageSettings) !== JSON.stringify(execution.before.pageSettings)) {
+      onApplySettings(execution.pageSettings);
+    }
+    if (JSON.stringify(execution.regions) !== JSON.stringify(execution.before.regions)) {
+      onRegionsChange(execution.regions);
+    }
+    const saved = await onAIDraftSave(execution);
+    if (saved === false) throw new Error("The AI page draft could not be saved.");
+    const validationContext = {
+      ...context,
+      currentPage: {
+        ...context.currentPage,
+        componentTree: execution.tree,
+        settings: execution.pageSettings
+      },
+      designSystem: {
+        ...context.designSystem,
+        theme: execution.theme
+      }
+    };
+    return {
+      ...execution,
+      validation: auditAIContext(validationContext)
+    };
+  }, [
+    editor,
+    locale,
+    onApplySettings,
+    onAIDraftSave,
+    onRegionsChange,
+    onSaveTheme,
+    pageSettings,
+    regions,
+    theme
+  ]);
+
+  const rollbackNativeAIPlan = useCallback(async (snapshot) => {
+    if (!snapshot?.tree) throw new Error("The component-tree rollback snapshot is missing.");
+    editor.replaceTree(snapshot.tree, "Rollback AI changes");
+    if (snapshot.theme) await onSaveTheme(snapshot.theme);
+    if (snapshot.pageSettings) onApplySettings(snapshot.pageSettings);
+    if (snapshot.regions) onRegionsChange(snapshot.regions);
+    const saved = await onAIDraftSave(snapshot);
+    if (saved === false) throw new Error("The restored page draft could not be saved.");
+  }, [editor, onAIDraftSave, onApplySettings, onRegionsChange, onSaveTheme]);
+
   return (
     <div className="h-screen min-h-0 bg-[#070b14] text-slate-200 flex flex-col overflow-hidden">
       <VisualBuilderToolbar
@@ -1077,6 +1431,8 @@ function NativeBuilderWorkspace({
         onPublish={onPublish}
         onSettings={onOpenSettings}
         onTheme={onTheme}
+        onAIToggle={() => setAIOpen((value) => !value)}
+        aiOpen={aiOpen}
       />
 
       <div className="flex-1 min-h-0 flex">
@@ -1173,18 +1529,32 @@ function NativeBuilderWorkspace({
           />
         </main>
 
-        {!isPreview && (
-          <Suspense fallback={<aside className="w-[336px] border-l border-slate-800 bg-[#0b1120]" />}>
-            <NativeInspector
-              node={editor.selectedNode}
-              locale={locale}
-              responsiveMode={device}
-              onUpdate={(updatedNode) => editor.update(
-                updatedNode.id,
-                () => updatedNode,
-                "Edit component"
+        {!isPreview && aiOpen && (
+          <Suspense fallback={<aside className="w-[400px] border-l border-slate-800 bg-[#0b1120]" />}>
+            <AIWorkspace
+              websiteId={websiteId}
+              pageId={pageId}
+              pageTitle={pageTitle}
+              surface="native"
+              getContext={getNativeAIContext}
+              onApplyPlan={applyNativeAIPlan}
+              onRollback={rollbackNativeAIPlan}
+              onInsertComponent={addNode}
+              renderInspector={() => (
+                <NativeInspector
+                  embedded
+                  node={editor.selectedNode}
+                  locale={locale}
+                  responsiveMode={device}
+                  onUpdate={(updatedNode) => editor.update(
+                    updatedNode.id,
+                    () => updatedNode,
+                    "Edit component"
+                  )}
+                  onClose={editor.clearSelection}
+                />
               )}
-              onClose={editor.clearSelection}
+              onClose={() => setAIOpen(false)}
             />
           </Suspense>
         )}
@@ -1702,7 +2072,7 @@ export function VisualBuilderPage() {
     }
   };
 
-  const saveSourceDraft = async () => {
+  const saveSourceDraft = useCallback(async () => {
     setSourceSaving(true);
     setSourceSaveStatus("saving");
     try {
@@ -1727,7 +2097,7 @@ export function VisualBuilderPage() {
     } finally {
       setSourceSaving(false);
     }
-  };
+  }, [pageId, toast, websiteId]);
 
   const publishSource = async () => {
     if (!sourceWebsite) return;
@@ -1928,12 +2298,79 @@ export function VisualBuilderPage() {
     }
   }, [pageId, pageKey, saveConnectedDraft, selectedPage?.routeId, setSelectedPage, toast, websiteId]);
 
+  const getAISourceFiles = useCallback(() => sourceFilesRef.current, []);
+
+  const applyAISourceFiles = useCallback((nextFiles) => {
+    const previousFiles = sourceFilesRef.current;
+    Object.entries(nextFiles || {}).forEach(([path, nextContent]) => {
+      if (previousFiles[path] !== nextContent) sourceDirtyPathsRef.current.add(path);
+    });
+    sourceFilesRef.current = { ...(nextFiles || {}) };
+    if (selectedPage?.sourceFile && Object.prototype.hasOwnProperty.call(nextFiles || {}, selectedPage.sourceFile)) {
+      setSourceContent(nextFiles[selectedPage.sourceFile]);
+    }
+    setSourceSaveStatus("unsaved");
+  }, [selectedPage?.sourceFile]);
+
+  const applyAIRegions = useCallback((nextRegions) => {
+    regionsRef.current = { ...(nextRegions || {}) };
+    setLegacyRegions(regionsRef.current);
+    changeVersionRef.current += 1;
+    setSaveStatus("unsaved");
+  }, []);
+
+  const saveAITheme = useCallback(async (tokens) => {
+    await themeService.saveTheme(websiteId, tokens);
+    setThemeTokens(tokens);
+  }, [websiteId]);
+
+  const stageAIExecution = useCallback((snapshot) => {
+    if (snapshot?.tree) treeRef.current = structuredClone(snapshot.tree);
+    if (snapshot?.pageSettings) settingsRef.current = structuredClone(snapshot.pageSettings);
+    if (snapshot?.regions) regionsRef.current = structuredClone(snapshot.regions);
+  }, []);
+
+  const saveNativeAIChanges = useCallback(async (snapshot) => {
+    stageAIExecution(snapshot);
+    return performSave({ manual: true, settingsOverride: snapshot?.pageSettings });
+  }, [performSave, stageAIExecution]);
+
+  const saveSourceAIChanges = useCallback(async (snapshot) => {
+    stageAIExecution(snapshot);
+    const sourceSaved = await saveSourceDraft();
+    const pageSaved = sourceSaved
+      ? await performSave({ manual: true, settingsOverride: snapshot?.pageSettings })
+      : false;
+    if (!sourceSaved || !pageSaved) {
+      throw new Error("The AI source draft could not be committed completely.");
+    }
+    return true;
+  }, [performSave, saveSourceDraft, stageAIExecution]);
+
+  const saveConnectedAIChanges = useCallback(async (snapshot) => {
+    stageAIExecution(snapshot);
+    const regionsSaved = await saveConnectedDraft(false);
+    const pageSaved = regionsSaved
+      ? await performSave({ manual: true, settingsOverride: snapshot?.pageSettings })
+      : false;
+    if (!regionsSaved || !pageSaved) {
+      throw new Error("The AI page draft could not be committed completely.");
+    }
+    return true;
+  }, [performSave, saveConnectedDraft, stageAIExecution]);
+
   if (isConnectedSourcePage) {
     return (
       <ConnectedSourceWorkspace
         mode={mode}
+        websiteId={websiteId}
+        pageId={pageId}
+        pageKey={pageKey}
+        locale={activeLocale}
         page={selectedPage}
         website={sourceWebsite}
+        theme={themeTokens}
+        pageSettings={pageSettings}
         content={sourceContent}
         loading={pageLoading || sourceLoading}
         error={sourceError}
@@ -1953,6 +2390,11 @@ export function VisualBuilderPage() {
           setSourceSaveStatus("unsaved");
         }}
         onVisualChange={patchSourceFromVisual}
+        getSourceFiles={getAISourceFiles}
+        onSourceFilesChange={applyAISourceFiles}
+        onThemeChange={saveAITheme}
+        onPageSettingsChange={applyPageSettings}
+        onAIDraftSave={saveSourceAIChanges}
         onSave={saveSourceDraft}
         onPublish={publishSource}
       />
@@ -1979,8 +2421,14 @@ export function VisualBuilderPage() {
     return (
       <ConnectedSourceWorkspace
         mode={mode}
+        websiteId={websiteId}
+        pageId={pageId}
+        pageKey={pageKey}
+        locale={activeLocale}
         page={selectedPage}
         website={sourceWebsite}
+        theme={themeTokens}
+        pageSettings={pageSettings}
         content=""
         loading={pageLoading}
         error=""
@@ -1992,6 +2440,11 @@ export function VisualBuilderPage() {
         onBack={() => navigate(`/content/${websiteId}/pages`)}
         onChange={() => {}}
         onVisualChange={persistConnectedRegion}
+        getSourceFiles={() => ({})}
+        onSourceFilesChange={() => {}}
+        onThemeChange={saveAITheme}
+        onPageSettingsChange={applyPageSettings}
+        onAIDraftSave={saveConnectedAIChanges}
         onSave={saveConnectedDraft}
         onPublish={publishConnectedPage}
         visualOnly
@@ -2036,6 +2489,10 @@ export function VisualBuilderPage() {
     >
       <NativeBuilderWorkspace
         mode={mode}
+        websiteId={websiteId}
+        pageId={pageId}
+        pageKey={pageKey}
+        website={sourceWebsite}
         page={selectedPage}
         pageTitle={pageSettings.title || selectedPage.title}
         locale={activeLocale}
@@ -2051,10 +2508,14 @@ export function VisualBuilderPage() {
         revisionLoading={revisionLoading}
         onBack={() => navigate(`/content/${websiteId}/pages`)}
         onSave={() => performSave({ manual: true })}
+        onAIDraftSave={saveNativeAIChanges}
         onPublish={publish}
         onOpenSettings={() => setSettingsOpen(true)}
         onTheme={() => navigate(`/content/${websiteId}/theme`)}
+        onSaveTheme={saveAITheme}
         theme={themeTokens}
+        regions={legacyRegions}
+        onRegionsChange={applyAIRegions}
         settingsOpen={settingsOpen}
         onCloseSettings={() => setSettingsOpen(false)}
         onApplySettings={applyPageSettings}

@@ -118,7 +118,8 @@ export function NativeInspector({
   locale,
   responsiveMode,
   onUpdate,
-  onClose
+  onClose,
+  embedded = false
 }) {
   const [tab, setTab] = useState("content");
   const schema = useMemo(
@@ -128,7 +129,10 @@ export function NativeInspector({
 
   if (!node) {
     return (
-      <aside className="w-[336px] flex-shrink-0 h-full border-l border-slate-800 bg-[#0b1120] flex flex-col text-left">
+      <aside className={embedded
+        ? "w-full min-h-96 bg-transparent flex flex-col text-left"
+        : "w-[336px] flex-shrink-0 h-full border-l border-slate-800 bg-[#0b1120] flex flex-col text-left"}
+      >
         <div className="h-12 px-4 border-b border-slate-800 flex items-center gap-2">
           <SlidersHorizontal className="w-4 h-4 text-blue-400" />
           <span className="text-xs font-bold text-slate-100">Inspector</span>
@@ -183,7 +187,10 @@ export function NativeInspector({
   };
 
   return (
-    <aside className="w-[336px] flex-shrink-0 h-full border-l border-slate-800 bg-[#0b1120] flex flex-col text-left">
+    <aside className={embedded
+      ? "w-full min-h-96 bg-transparent flex flex-col text-left"
+      : "w-[336px] flex-shrink-0 h-full border-l border-slate-800 bg-[#0b1120] flex flex-col text-left"}
+    >
       <div className="h-12 px-4 border-b border-slate-800 flex items-center gap-2">
         <Box className="w-4 h-4 text-blue-400" />
         <div className="min-w-0">

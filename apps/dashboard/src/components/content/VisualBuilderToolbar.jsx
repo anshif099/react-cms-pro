@@ -60,6 +60,8 @@ export function VisualBuilderToolbar({
   onSave,
   onPublish,
   onSettings,
+  onAIToggle,
+  aiOpen = true,
   showSettings = true,
   publishLabel = "Publish"
 }) {
@@ -139,11 +141,16 @@ export function VisualBuilderToolbar({
 
           <button
             type="button"
-            className="hidden lg:flex h-9 items-center gap-1.5 px-3 rounded-lg text-[11px] font-semibold text-violet-300 border border-violet-500/20 bg-violet-500/10 hover:bg-violet-500/15 cursor-pointer"
-            title="AI page tools are ready for future integrations"
+            onClick={onAIToggle}
+            className={`flex h-9 items-center gap-1.5 px-2.5 xl:px-3 rounded-lg text-[11px] font-semibold border cursor-pointer ${
+              aiOpen
+                ? "text-white border-violet-500/40 bg-violet-600 shadow-md shadow-violet-950/30"
+                : "text-violet-300 border-violet-500/20 bg-violet-500/10 hover:bg-violet-500/15"
+            }`}
+            title={aiOpen ? "Close AI Website Builder" : "Open AI Website Builder"}
           >
             <Sparkles className="w-3.5 h-3.5" />
-            AI Assist
+            <span className="hidden xl:inline">AI Builder</span>
           </button>
 
           <SaveState status={saveStatus} />
