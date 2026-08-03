@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from "react";
-import { ArrowLeft, FilePlus2, WandSparkles } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { ArrowLeft, Copy, FilePlus2, Loader2, Palette, PanelsTopLeft, WandSparkles } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
 import { usePages } from "../../hooks/usePages";
@@ -23,18 +23,35 @@ function slugify(value) {
 export function PageEditorPage() {
   const { websiteId } = useParams();
   const navigate = useNavigate();
-  const { createPage, pageLoading } = usePages();
+  const { pages, createPage, fetchPages, pageLoading } = usePages();
   const { user } = useAuth();
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
   const [slugTouched, setSlugTouched] = useState(false);
   const [template, setTemplate] = useState("blank");
+  const [copyFromPageId, setCopyFromPageId] = useState("");
   const [error, setError] = useState("");
+
+  const copyablePages = useMemo(
+    () => [...pages]
+      .filter((page) => page.status !== "archived")
+      .sort((a, b) => String(a.title || "").localeCompare(String(b.title || ""))),
+    [pages]
+  );
 
   const route = useMemo(
     () => slug === "home" ? "/" : `/${slug}`,
     [slug]
   );
+
+  useEffect(() => {
+    if (websiteId) fetchPages(websiteId);
+  }, [fetchPages, websiteId]);
+
+  useEffect(() => {
+    if (template !== "copy" || copyFromPageId || copyablePages.length === 0) return;
+    setCopyFromPageId(copyablePages[0].id);
+  }, [copyFromPageId, copyablePages, template]);
 
   const handleTitleChange = (event) => {
     const nextTitle = event.target.value;
@@ -50,6 +67,10 @@ export function PageEditorPage() {
       setError("Enter a page name and route slug.");
       return;
     }
+    if (template === "copy" && !copyFromPageId) {
+      setError("Choose an existing page to copy.");
+      return;
+    }
 
     setError("");
     try {
@@ -58,7 +79,8 @@ export function PageEditorPage() {
         slug: cleanSlug,
         route: cleanSlug === "home" ? "/" : `/${cleanSlug}`,
         routeId: cleanSlug,
-        template: template === "blank" ? null : template,
+        template: ["blank", "copy"].includes(template) ? null : template,
+        copyFromPageId: template === "copy" ? copyFromPageId : null,
         status: "draft",
         source: "cms",
         userId: user?.email || user?.uid
@@ -68,7 +90,7 @@ export function PageEditorPage() {
       });
     } catch (creationError) {
       console.error(creationError);
-      setError("The page could not be created.");
+      setError(creationError.message || "The page could not be created.");
     }
   };
 
@@ -127,6 +149,63 @@ export function PageEditorPage() {
             <h2 className="text-sm font-bold text-slate-200">Starting template</h2>
           </div>
           <PageTemplateSelector selectedTemplate={template} onSelect={setTemplate} />
+
+          {template === "copy" && (
+            <div className="mt-4 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4">
+              <label
+                htmlFor="copy-page"
+                className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-cyan-200"
+              >
+                <Copy className="w-3.5 h-3.5" />
+                Page to copy
+              </label>
+              {pageLoading && copyablePages.length === 0 ? (
+                <div className="mt-3 flex items-center gap-2 text-xs text-slate-400">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Loading existing pages...
+                </div>
+              ) : copyablePages.length > 0 ? (
+                <>
+                  <select
+                    id="copy-page"
+                    value={copyFromPageId}
+                    onChange={(event) => setCopyFromPageId(event.target.value)}
+                    className="mt-3 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-white outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20"
+                  >
+                    {copyablePages.map((page) => (
+                      <option key={page.id} value={page.id}>
+                        {page.title || "Untitled Page"} ({page.route || `/${page.slug || ""}`})
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-2 text-[11px] leading-5 text-slate-400">
+                    Content, blocks, SEO settings, and the current draft are copied. The new page gets its own route and remains a draft.
+                  </p>
+                </>
+              ) : (
+                <p className="mt-3 text-xs text-amber-300">
+                  There are no existing pages available to copy yet.
+                </p>
+              )}
+            </div>
+          )}
+
+          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+            <div className="flex items-start gap-2 rounded-lg border border-slate-800 bg-slate-950/25 px-3 py-2.5">
+              <PanelsTopLeft className="mt-0.5 w-4 h-4 flex-shrink-0 text-blue-400" />
+              <div>
+                <p className="text-[11px] font-bold text-slate-200">Website shell included</p>
+                <p className="mt-0.5 text-[10px] leading-4 text-slate-500">The default website layout supplies the same header and footer.</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-2 rounded-lg border border-slate-800 bg-slate-950/25 px-3 py-2.5">
+              <Palette className="mt-0.5 w-4 h-4 flex-shrink-0 text-violet-400" />
+              <div>
+                <p className="text-[11px] font-bold text-slate-200">Theme stays connected</p>
+                <p className="mt-0.5 text-[10px] leading-4 text-slate-500">Colors, fonts, and buttons inherit the website theme automatically.</p>
+              </div>
+            </div>
+          </div>
         </Card>
 
         {error && (

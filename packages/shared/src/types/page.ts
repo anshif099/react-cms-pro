@@ -32,6 +32,8 @@ export interface Page {
   isImported: boolean;
   routeId?: string;
   route?: string;
+  layout?: string;
+  copiedFromPageId?: string;
   locales: Record<string, PageLocale>;
   contentTypeRefs?: string[];
   lastSynced?: number;

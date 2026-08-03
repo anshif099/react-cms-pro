@@ -10,22 +10,18 @@ export interface CMSNavigationProps {
 
 export function CMSNavigation({ id, label, items }: CMSNavigationProps) {
   const context = useContext(RuntimeContext);
+  const registerNavigation = context?.registerNavigation;
 
   useEffect(() => {
-    if (context) {
-      context.registerNavigation({
+    if (registerNavigation) {
+      registerNavigation({
         id,
         label,
         items,
         registeredAt: Date.now(),
       });
     }
-    return () => {
-      if (context) {
-        context.unregisterNavigation(id);
-      }
-    };
-  }, [context, id, label, items]);
+  }, [id, items, label, registerNavigation]);
 
   return null;
 }

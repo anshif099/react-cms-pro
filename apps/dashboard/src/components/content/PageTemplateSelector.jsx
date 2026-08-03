@@ -1,14 +1,21 @@
 import React from "react";
-import { File, Layout, FileText, Mail, CreditCard, Grid, HelpCircle } from "lucide-react";
+import { Copy, File, Layout, FileText, Mail, CreditCard, Grid, HelpCircle } from "lucide-react";
 import { cn } from "../../utils/cn";
 
 const TEMPLATES = [
   {
     key: "blank",
     name: "Blank Canvas",
-    description: "Start from scratch with an empty layout list.",
+    description: "Start with an empty body inside the website header and footer.",
     icon: File,
     color: "text-slate-400 bg-slate-500/10"
+  },
+  {
+    key: "copy",
+    name: "Copy Existing Page",
+    description: "Duplicate the content and layout of a page already on this website.",
+    icon: Copy,
+    color: "text-cyan-400 bg-cyan-500/10"
   },
   {
     key: "landing",

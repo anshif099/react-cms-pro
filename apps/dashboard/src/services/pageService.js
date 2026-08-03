@@ -5,6 +5,13 @@ import revisionService from "./revisionService";
 import searchService from "./searchService";
 import activityLogService from "./activityLogService";
 import { pageConversionService } from "./pageConversionService";
+import { decodeFirebaseObject, paths } from "@anshif.rainhopes/shared";
+import {
+  cloneDraftDocument,
+  clonePageLocales,
+  resolveCreationLayout,
+  resolvePageKey
+} from "./pageCreationUtils";
 
 export const pageService = {
   async markPublished(websiteId, pageId, routeId = "") {
@@ -75,11 +82,47 @@ export const pageService = {
 
   async create(websiteId, data) {
     try {
+      const [layoutsSnapshot, copiedPageSnapshot] = await Promise.all([
+        get(ref(database, paths.registryLayouts(websiteId))),
+        data.copyFromPageId
+          ? get(ref(database, `pages/${websiteId}/${data.copyFromPageId}`))
+          : Promise.resolve(null)
+      ]);
+      const layouts = layoutsSnapshot.exists() ? layoutsSnapshot.val() : {};
+      const copiedPage = copiedPageSnapshot?.exists()
+        ? { id: data.copyFromPageId, ...copiedPageSnapshot.val() }
+        : null;
+
+      if (data.copyFromPageId && !copiedPage) {
+        throw new Error("The page selected for copying no longer exists.");
+      }
+
+      let copiedDraft = null;
+      if (copiedPage) {
+        const sourcePageKey = resolvePageKey(copiedPage);
+        const [draft, published] = await Promise.all([
+          contentSyncService.getDraft(websiteId, sourcePageKey),
+          contentSyncService.getPublished(websiteId, sourcePageKey)
+        ]);
+        const sourceDocument = draft || published;
+        if (sourceDocument) {
+          copiedDraft = cloneDraftDocument(
+            decodeFirebaseObject(sourceDocument),
+            {
+              sourcePageKey,
+              targetPageKey: data.slug || data.routeId || "home",
+              title: data.title,
+              slug: data.slug || ""
+            }
+          );
+        }
+      }
+
       const pagesRef = ref(database, `pages/${websiteId}`);
       const newPageRef = push(pagesRef);
       const pageId = newPageRef.key;
 
-      const templateBlocks = data.template 
+      const templateBlocks = !copiedPage && data.template
         ? pageConversionService.getTemplateBlocks(data.template)
         : [];
 
@@ -88,14 +131,39 @@ export const pageService = {
 
       const metaTitle = data.metaTitle || data.title;
       const metaDesc = data.metaDescription || data.prompt || "";
-      const keywords = data.keywords || "";
+      const keywords = data.keywords ?? copiedPage?.keywords ?? "";
+      const layout = resolveCreationLayout(
+        layouts,
+        data.layout,
+        copiedPage?.layout
+      );
+      const locales = data.locales || (copiedPage
+        ? clonePageLocales(copiedPage, {
+          title: data.title,
+          slug: data.slug || "",
+          metaTitle,
+          metaDescription: data.metaDescription,
+          keywords: data.keywords
+        })
+        : {
+          en: {
+            title: data.title,
+            slug: data.slug || "",
+            seo: {
+              metaTitle: metaTitle,
+              metaDescription: metaDesc,
+              keywords: keywords
+            },
+            blocks: templateBlocks
+          }
+        });
 
       const pageData = {
         title: data.title,
         slug: data.slug || "",
         routeId: routeId,
         route: routePath,
-        layout: data.layout || "default",
+        layout,
         status: data.status || "draft",
         source: data.source || (data.prompt ? "generated" : "cms"),
         isImported: data.isImported || false,
@@ -109,19 +177,9 @@ export const pageService = {
         ),
         prompt: data.prompt || "",
         keywords: keywords,
-        locales: data.locales || {
-          en: {
-            title: data.title,
-            slug: data.slug || "",
-            seo: {
-              metaTitle: metaTitle,
-              metaDescription: metaDesc,
-              keywords: keywords
-            },
-            blocks: templateBlocks
-          }
-        },
-        contentTypeRefs: data.contentTypeRefs || [],
+        locales,
+        contentTypeRefs: data.contentTypeRefs || copiedPage?.contentTypeRefs || [],
+        copiedFromPageId: copiedPage?.id || null,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       };
@@ -136,7 +194,7 @@ export const pageService = {
           path: routePath,
           title: data.title,
           slug: data.slug || "",
-          layout: data.layout || "default",
+          layout,
           source: pageData.source,
           published: data.status === "published",
           createdAt: Date.now()
@@ -147,7 +205,7 @@ export const pageService = {
       const pageSlug = data.slug || routeId || "home";
       if (pageSlug) {
         let initialRegions = {};
-        if (!data.isImported) {
+        if (data.prompt && !data.isImported && !copiedDraft) {
           const generatedHeroSubtext = data.prompt
             ? data.prompt
             : `Explore comprehensive ${data.title} solutions designed for modern business growth and success.`;
@@ -166,12 +224,17 @@ export const pageService = {
           };
         }
 
-        await contentSyncService.syncDraft(websiteId, pageSlug, {
-          id: pageSlug,
-          title: data.title,
-          regions: initialRegions,
-          updatedAt: Date.now()
-        });
+        await contentSyncService.syncDraft(
+          websiteId,
+          pageSlug,
+          copiedDraft || {
+            id: pageSlug,
+            title: data.title,
+            slug: data.slug || "",
+            regions: initialRegions,
+            updatedAt: Date.now()
+          }
+        );
       }
 
       // Save initial revision

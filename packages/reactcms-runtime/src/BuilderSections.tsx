@@ -68,6 +68,7 @@ export interface BuilderSectionsProps {
   apiKey: string;
   pageId?: string;
   fallback?: React.ReactNode;
+  layout?: React.ComponentType<any> | null;
 }
 
 export function BuilderSections({
@@ -75,6 +76,7 @@ export function BuilderSections({
   apiKey,
   pageId: pageIdOverride,
   fallback = null,
+  layout: Layout = null,
 }: BuilderSectionsProps) {
   const pageId = useMemo(
     () => pageIdOverride?.replace(/^\/+|\/+$/g, '') || resolvePageId(),
@@ -114,7 +116,7 @@ export function BuilderSections({
   }, [apiKey, locale, pageId, websiteId]);
 
   if (!resolved || !tree) return <>{fallback}</>;
-  return (
+  const page = (
     <RuntimeRenderer
       tree={tree}
       locale={locale}
@@ -123,6 +125,7 @@ export function BuilderSections({
       theme={theme}
     />
   );
+  return Layout ? <Layout>{page}</Layout> : page;
 }
 
 export default BuilderSections;

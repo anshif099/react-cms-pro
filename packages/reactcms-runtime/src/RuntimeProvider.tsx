@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   CMSProvider,
   EditableRegistryContext,
@@ -8,11 +8,11 @@ import {
 import {
   EditableRegion,
   EditableType,
-  LayoutDefinition,
   NavMenu,
   ThemeTokens,
 } from '@anshif.rainhopes/shared';
 import { RuntimeContext } from './RuntimeContext';
+import type { RuntimeLayoutDefinition } from './RuntimeContext';
 import { BuilderSections } from './BuilderSections';
 import type { PageComponentTree } from '@anshif.rainhopes/reactcms-renderer';
 import { HeartbeatService } from './heartbeat/heartbeatService';
@@ -74,33 +74,56 @@ export function RuntimeProvider({
   pageTrees,
   children,
 }: RuntimeProviderProps) {
-  const [layouts, setLayouts] = useState<Record<string, LayoutDefinition>>({});
+  const [layouts, setLayouts] = useState<Record<string, RuntimeLayoutDefinition>>({});
   const [navigations, setNavigations] = useState<Record<string, NavMenu>>({});
   const [regions, setRegions] = useState<Record<string, Record<string, EditableRegion>>>({});
 
-  const registerLayout = (layout: LayoutDefinition) => {
+  const registerLayout = useCallback((layout: RuntimeLayoutDefinition) => {
     setLayouts((current) => ({ ...current, [layout.id]: layout }));
-  };
+  }, []);
 
-  const unregisterLayout = (id: string) => {
+  const unregisterLayout = useCallback((id: string) => {
     setLayouts((current) => {
       const next = { ...current };
       delete next[id];
       return next;
     });
-  };
+  }, []);
 
-  const registerNavigation = (navigation: NavMenu) => {
+  const registerNavigation = useCallback((navigation: NavMenu) => {
     setNavigations((current) => ({ ...current, [navigation.id]: navigation }));
-  };
+  }, []);
 
-  const unregisterNavigation = (id: string) => {
+  const unregisterNavigation = useCallback((id: string) => {
     setNavigations((current) => {
       const next = { ...current };
       delete next[id];
       return next;
     });
-  };
+  }, []);
+
+  const defaultLayout = useMemo(() => (
+    Object.values(layouts).find((layout) => layout.isDefault)
+      || layouts.default
+      || Object.values(layouts)[0]
+      || null
+  ), [layouts]);
+
+  const runtimeContextValue = useMemo(() => ({
+    layouts,
+    navigations,
+    registerLayout,
+    unregisterLayout,
+    registerNavigation,
+    unregisterNavigation,
+  }), [
+    layouts,
+    navigations,
+    registerLayout,
+    registerNavigation,
+    unregisterLayout,
+    unregisterNavigation,
+  ]);
 
   const registerRegion = (
     pageId: string,
@@ -209,19 +232,15 @@ export function RuntimeProvider({
   }, [regions, websiteId, apiKey]);
 
   return (
-    <RuntimeContext.Provider
-      value={{
-        layouts,
-        navigations,
-        registerLayout,
-        unregisterLayout,
-        registerNavigation,
-        unregisterNavigation,
-      }}
-    >
+    <RuntimeContext.Provider value={runtimeContextValue}>
       <EditableRegistryContext.Provider value={{ registerRegion, unregisterRegion }}>
         <CMSProvider websiteId={websiteId} apiKey={apiKey} environment="production">
-          <BuilderSections websiteId={websiteId} apiKey={apiKey} fallback={children} />
+          <BuilderSections
+            websiteId={websiteId}
+            apiKey={apiKey}
+            fallback={children}
+            layout={defaultLayout?.component}
+          />
         </CMSProvider>
       </EditableRegistryContext.Provider>
     </RuntimeContext.Provider>

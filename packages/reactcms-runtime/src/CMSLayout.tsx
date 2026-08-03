@@ -1,6 +1,8 @@
 import React, { useContext, useEffect } from 'react';
 import { RuntimeContext } from './RuntimeContext';
 
+const DEFAULT_SLOTS = ['main'];
+
 export interface CMSLayoutProps {
   id: string;
   label: string;
@@ -12,27 +14,25 @@ export interface CMSLayoutProps {
 export function CMSLayout({
   id,
   label,
+  component,
   isDefault = false,
-  slots = ['main'],
+  slots = DEFAULT_SLOTS,
 }: CMSLayoutProps) {
   const context = useContext(RuntimeContext);
+  const registerLayout = context?.registerLayout;
 
   useEffect(() => {
-    if (context) {
-      context.registerLayout({
+    if (registerLayout) {
+      registerLayout({
         id,
         label,
+        component,
         slots,
         isDefault,
         registeredAt: Date.now(),
       });
     }
-    return () => {
-      if (context) {
-        context.unregisterLayout(id);
-      }
-    };
-  }, [context, id, label, isDefault, slots]);
+  }, [component, id, isDefault, label, registerLayout, slots]);
 
   return null;
 }
