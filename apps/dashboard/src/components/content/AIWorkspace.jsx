@@ -15,6 +15,7 @@ import {
   Lightbulb,
   ListChecks,
   Loader2,
+  LogOut,
   MessageSquare,
   PanelRightClose,
   RefreshCw,
@@ -32,6 +33,7 @@ import aiBuilderPersistenceService, {
 import aiWebsiteAgentService from "../../services/aiWebsiteAgentService";
 import { auditAIContext } from "../../services/aiWebsiteContextService";
 import mediaService from "../../services/mediaService";
+import rocketAIAuthService from "../../services/rocketAIAuthService";
 
 const TABS = [
   { id: "chat", label: "Rocket Chat", icon: MessageSquare },
@@ -241,12 +243,22 @@ export function AIWorkspace({
   const [imageGenerating, setImageGenerating] = useState(false);
   const [imageProgress, setImageProgress] = useState(0);
   const [consoleEntries, setConsoleEntries] = useState([]);
+  const [rocketUser, setRocketUser] = useState(() => rocketAIAuthService.currentUser());
+  const [rocketAuthLoading, setRocketAuthLoading] = useState(true);
+  const [rocketSigningIn, setRocketSigningIn] = useState(false);
+  const [rocketAuthError, setRocketAuthError] = useState("");
   const chatEndRef = useRef(null);
   const getContextRef = useRef(getContext);
 
   useEffect(() => {
     getContextRef.current = getContext;
   }, [getContext]);
+
+  useEffect(() => rocketAIAuthService.subscribe((user) => {
+    setRocketUser(user);
+    setRocketAuthLoading(false);
+    if (user) setRocketAuthError("");
+  }), []);
 
   const log = useCallback((level, message, data = null) => {
     setConsoleEntries((current) => [{
@@ -303,6 +315,36 @@ export function AIWorkspace({
   const suggestions = useMemo(() => context ? auditAIContext(context) : [], [context]);
   const assets = context?.contentSystem?.assets || [];
 
+  const connectRocketAI = async () => {
+    if (rocketSigningIn) return;
+    setRocketSigningIn(true);
+    setRocketAuthError("");
+    try {
+      const user = await rocketAIAuthService.signInWithGoogle();
+      setRocketUser(user);
+      log("auth", `Rocket AI connected as ${user.email || user.displayName}.`);
+    } catch (error) {
+      const message = error.message || "Google sign-in failed.";
+      setRocketAuthError(message);
+      log("error", message);
+    } finally {
+      setRocketSigningIn(false);
+    }
+  };
+
+  const disconnectRocketAI = async () => {
+    try {
+      await rocketAIAuthService.signOut();
+      setRocketUser(null);
+      setPending(null);
+      log("auth", "Rocket AI Google account disconnected.");
+    } catch (error) {
+      const message = error.message || "Rocket AI could not sign out.";
+      setRocketAuthError(message);
+      log("error", message);
+    }
+  };
+
   const requestPlan = useCallback(async ({
     intent,
     previousPlan = null,
@@ -311,6 +353,10 @@ export function AIWorkspace({
   }) => {
     const cleanIntent = String(intent || "").trim();
     if (!cleanIntent || planning || applying) return;
+    if (!rocketUser) {
+      setRocketAuthError("Connect a Google account before asking Rocket AI.");
+      return;
+    }
     if (appendUser) {
       setMessages((current) => [...current, {
         id: `user_${Date.now()}`,
@@ -366,7 +412,7 @@ export function AIWorkspace({
     } finally {
       setPlanning(false);
     }
-  }, [applying, log, memory, messages, planning, refreshContext]);
+  }, [applying, log, memory, messages, planning, refreshContext, rocketUser]);
 
   const submitPrompt = (event) => {
     event?.preventDefault();
@@ -553,6 +599,59 @@ export function AIWorkspace({
           </p>
         </div>
 
+        <div className={`rounded-xl border p-3 ${
+          rocketUser
+            ? "border-emerald-500/20 bg-emerald-500/5"
+            : "border-violet-500/25 bg-violet-500/[0.06]"
+        }`}>
+          {rocketAuthLoading ? (
+            <div className="flex items-center gap-2 text-[10px] text-slate-400">
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-violet-300" />
+              Checking Rocket AI account…
+            </div>
+          ) : rocketUser ? (
+            <div className="flex items-center gap-2.5">
+              {rocketUser.photoURL ? (
+                <img src={rocketUser.photoURL} alt="" className="h-8 w-8 rounded-full object-cover" referrerPolicy="no-referrer" />
+              ) : (
+                <div className="grid h-8 w-8 place-items-center rounded-full bg-white text-xs font-black text-slate-900">G</div>
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="text-[9px] font-bold uppercase tracking-wider text-emerald-400">Rocket AI connected</p>
+                <p className="truncate text-[10px] text-slate-300">{rocketUser.email || rocketUser.displayName}</p>
+              </div>
+              <button
+                type="button"
+                onClick={disconnectRocketAI}
+                className="grid h-7 w-7 place-items-center rounded-lg border border-slate-800 text-slate-500 hover:border-rose-500/30 hover:text-rose-300 cursor-pointer"
+                title="Disconnect Google account"
+              >
+                <LogOut className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ) : (
+            <div>
+              <div className="flex items-start gap-2.5">
+                <div className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-lg bg-white text-xs font-black text-slate-900">G</div>
+                <div>
+                  <p className="text-[10px] font-bold text-white">Connect Google to Rocket AI</p>
+                  <p className="mt-1 text-[9px] leading-4 text-slate-500">This is separate from your ReactCMS administrator session.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={connectRocketAI}
+                disabled={rocketSigningIn}
+                className="mt-3 flex h-8 w-full items-center justify-center gap-2 rounded-lg bg-white px-3 text-[10px] font-bold text-slate-900 hover:bg-slate-100 disabled:opacity-60 cursor-pointer"
+              >
+                {rocketSigningIn ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <span className="text-xs font-black">G</span>}
+                {rocketSigningIn ? "Connecting…" : "Continue with Google"}
+              </button>
+              {rocketAuthError && <p className="mt-2 text-[9px] leading-4 text-rose-300">{rocketAuthError}</p>}
+            </div>
+          )}
+        </div>
+
         {messages.map((message) => (
           <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
             <div className={`max-w-[92%] rounded-xl px-3 py-2.5 text-[10px] leading-5 ${
@@ -634,6 +733,7 @@ export function AIWorkspace({
                 key={request}
                 type="button"
                 onClick={() => requestPlan({ intent: request })}
+                disabled={!rocketUser}
                 className="rounded-lg border border-slate-800/80 bg-slate-950/30 px-3 py-2 text-left text-[9px] leading-4 text-slate-500 hover:border-violet-500/25 hover:text-slate-200 cursor-pointer"
               >
                 {request}
@@ -649,6 +749,7 @@ export function AIWorkspace({
           <textarea
             value={prompt}
             onChange={(event) => setPrompt(event.target.value)}
+            disabled={!rocketUser}
             onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();
@@ -656,14 +757,14 @@ export function AIWorkspace({
               }
             }}
             rows="3"
-            placeholder="Ask Rocket AI to build, redesign, review, or optimize this page…"
+            placeholder={rocketUser ? "Ask Rocket AI to build, redesign, review, or optimize this page…" : "Connect Google to start using Rocket AI…"}
             className="w-full resize-none bg-transparent px-1 text-[11px] leading-5 text-slate-200 outline-none placeholder:text-slate-700"
           />
           <div className="mt-1 flex items-center gap-2">
             <span className="text-[8px] text-slate-700">Enter to plan · Shift+Enter for a line</span>
             <button
               type="submit"
-              disabled={!prompt.trim() || planning || applying}
+              disabled={!rocketUser || !prompt.trim() || planning || applying}
               className="ml-auto grid h-7 w-7 place-items-center rounded-lg bg-violet-600 text-white disabled:opacity-30 cursor-pointer"
               title="Create plan"
             >

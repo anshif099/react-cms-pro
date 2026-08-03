@@ -1,9 +1,9 @@
-import { auth } from "../lib/firebase";
 import { validateAIPlan } from "./aiBuilderContract";
+import { rocketAIAuth } from "./rocketAIAuthService";
 
 async function authorizationHeaders() {
-  const user = auth.currentUser;
-  if (!user) throw new Error("Sign in again before using Rocket AI.");
+  const user = rocketAIAuth.currentUser;
+  if (!user) throw new Error("Connect your Google account before using Rocket AI.");
   const token = await user.getIdToken();
   return {
     Authorization: `Bearer ${token}`,

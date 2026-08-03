@@ -4,7 +4,7 @@ import { getAuth } from "firebase/auth";
 import { getDatabase } from "firebase/database";
 import { getStorage } from "firebase/storage";
 
-const firebaseConfig = {
+export const firebaseConfig = {
   apiKey: "AIzaSyDX2mOPJqAUguPJNPGj9sxEVVr1dA1_8CQ",
   authDomain: "react-cms-pro.firebaseapp.com",
   databaseURL: "https://react-cms-pro-default-rtdb.firebaseio.com",
