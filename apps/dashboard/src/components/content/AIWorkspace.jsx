@@ -379,6 +379,16 @@ export function AIWorkspace({
         previousPlan,
         feedback
       });
+      if (!response.plan.operations.length) {
+        setMessages((current) => [...current, {
+          id: `assistant_${Date.now()}`,
+          role: "assistant",
+          content: response.plan.assistantMessage
+        }]);
+        setTasks([]);
+        log("warning", "Rocket AI found no safe editable operation for this request.");
+        return;
+      }
       const nextPending = {
         prompt: cleanIntent,
         plan: response.plan,
@@ -438,6 +448,9 @@ export function AIWorkspace({
         requestId: pending.requestId
       });
       const execution = await onApplyPlan(pending.plan, pending.context);
+      if (!execution?.changed) {
+        throw new Error("Rocket AI did not change any draft value. The requested value may already be applied.");
+      }
       const resultById = new Map((execution.results || []).map((item) => [item.id, item]));
       setTasks((current) => current.map((task) => ({
         ...task,
@@ -473,10 +486,15 @@ export function AIWorkspace({
         appliedAt: Date.now()
       };
       setRuns((current) => [completedRun, ...current.filter((item) => item.id !== run.id)]);
+      const changedLabels = (execution.results || [])
+        .filter((result) => result.status === "applied")
+        .map((result) => result.summary)
+        .filter(Boolean)
+        .slice(0, 3);
       setMessages((current) => [...current, {
         id: `applied_${Date.now()}`,
         role: "assistant",
-        content: `Applied ${execution.summary?.applied || 0} edits${execution.summary?.failed ? `; ${execution.summary.failed} need attention` : ""}. A draft snapshot and rollback point were created.`
+        content: `Applied ${execution.summary?.applied || 0} edits${execution.summary?.failed ? `; ${execution.summary.failed} need attention` : ""}.${changedLabels.length ? ` Changed: ${changedLabels.join("; ")}.` : ""} A draft snapshot and rollback point were created.`
       }]);
       setPending(null);
       await refreshContext();

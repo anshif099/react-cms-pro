@@ -856,6 +856,9 @@ function ConnectedSourceWorkspace({
       if (!changed?.changed) {
         throw new Error(changed?.error || `Region "${regionId}" could not be updated.`);
       }
+      setSelectedRegion((current) => (
+        current?.regionId === regionId ? { ...current, value } : current
+      ));
       sendRuntimeMessage("rcms/v1/field-update", change);
     }
     const saved = await onAIDraftSave?.(execution);

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { validateAIPlan } from "./aiBuilderContract";
+import { applyAIPlan } from "./aiPageMutationService";
 import aiWebsiteAgentService from "./aiWebsiteAgentService";
 import rocketLocalEngine from "./rocketLocalEngine";
 
@@ -18,6 +19,9 @@ function connectedContext() {
         type: "section",
         label: "ad.hero",
         value: { background: "#000000", paddingY: 80 }
+      },
+      editableRegionDefinitions: {
+        "ad.hero": { type: "section", label: "Hero section" }
       },
       editableRegionValues: {
         "ad.hero": { background: "#000000", paddingY: 80 }
@@ -82,7 +86,40 @@ describe("embedded Rocket AI engine", () => {
       patches: [{ path: "value.background", valueJson: '"#F5F5F7"' }]
     });
     expect(() => validateAIPlan(response.plan)).not.toThrow();
+    const execution = applyAIPlan({
+      plan: response.plan,
+      regions: connectedContext().currentPage.editableRegionValues
+    });
+    expect(execution.changed).toBe(true);
+    expect(execution.regions["ad.hero"].background).toBe("#F5F5F7");
     fetchSpy.mockRestore();
+  });
+
+  it("finds the page section when it is not currently selected", async () => {
+    const context = connectedContext();
+    context.currentPage.selectedRegion = null;
+    const response = await rocketLocalEngine.createPlan({
+      intent: "Change the page background to #f5f5f7",
+      context,
+      memory: {}
+    });
+
+    expect(response.plan.operations[0]).toMatchObject({
+      type: "update_region",
+      targetId: "ad.hero",
+      patches: [{ path: "value.background", valueJson: '"#f5f5f7"' }]
+    });
+  });
+
+  it("does not claim a fake edit for an unrelated prompt", async () => {
+    const response = await rocketLocalEngine.createPlan({
+      intent: "I was checking the screen sharing option, but the live ended",
+      context: connectedContext(),
+      memory: {}
+    });
+
+    expect(response.plan.operations).toEqual([]);
+    expect(response.plan.assistantMessage).toMatch(/could not map/i);
   });
 
   it("builds a native landing page from real registered components", async () => {

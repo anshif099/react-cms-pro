@@ -160,12 +160,34 @@ function companyFromContext(context, memory) {
     || "your business";
 }
 
-function selectedRegionOperation(addOperation, context, field, value, summary, reason) {
-  const selected = context?.currentPage?.selectedRegion;
+function regionOperation(addOperation, context, field, value, summary, reason, type = "") {
+  const page = context?.currentPage || {};
+  const selected = page.selectedRegion;
   const capabilities = new Set(context?.capabilities || []);
-  if (!selected?.regionId || !capabilities.has("update_region")) return null;
+  if (!capabilities.has("update_region")) return null;
+  const definitions = page.editableRegionDefinitions || {};
+  const values = page.editableRegionValues || {};
+  const candidates = Object.entries(definitions)
+    .filter(([, definition]) => !type || definition?.type === type)
+    .map(([regionId]) => regionId);
+  if (type === "section") {
+    Object.entries(values).forEach(([regionId, regionValue]) => {
+      if (
+        regionValue
+        && typeof regionValue === "object"
+        && ("background" in regionValue || "paddingY" in regionValue)
+        && !candidates.includes(regionId)
+      ) candidates.push(regionId);
+    });
+  }
+  const regionId = (
+    selected?.regionId && (!type || selected.type === type)
+      ? selected.regionId
+      : candidates.find((id) => /(?:hero|main|page|content|body)/i.test(id)) || candidates[0]
+  );
+  if (!regionId) return null;
   return addOperation("update_region", {
-    targetId: selected.regionId,
+    targetId: regionId,
     summary,
     reason,
     patches: [patch(`value.${field}`, value)]
@@ -320,21 +342,22 @@ function buildPlan({ intent, context, memory = {}, previousPlan, feedback }) {
   const operations = [];
   const affected = new Set();
   const capabilities = new Set(context?.capabilities || []);
-  const selectedRegion = context?.currentPage?.selectedRegion;
   const color = colorFromIntent(combinedIntent);
 
   if (color && includesAny(text, ["background", " bg ", "bg colour", "bg color"])) {
-    let item = selectedRegion?.type === "section"
-      ? selectedRegionOperation(
-        addOperation,
-        context,
-        "background",
-        color,
-        `Change ${selectedRegion.label || "section"} background to ${color}`,
-        "Apply the requested color directly to the selected website section."
-      )
-      : null;
-    if (!item) {
+    const isPageBackground = includesAny(text, [
+      "page background", "website background", "site background", "body background"
+    ]);
+    let item = regionOperation(
+      addOperation,
+      context,
+      "background",
+      color,
+      `Change the editable page section background to ${color}`,
+      "Apply the requested color directly to the connected website section.",
+      "section"
+    );
+    if (!item && !isPageBackground) {
       item = selectedComponentOperation(
         addOperation,
         context,
@@ -450,22 +473,6 @@ function buildPlan({ intent, context, memory = {}, previousPlan, feedback }) {
   if (!operations.length && previousPlan?.operations?.length && feedback) {
     previousPlan.operations.slice(0, 80).forEach((item) => operations.push({ ...item }));
     affected.add("Modified plan");
-  }
-
-  if (!operations.length && capabilities.has("update_theme")) {
-    const currentPrimary = context?.designSystem?.theme?.colors?.primary || "#2563eb";
-    addThemeOperation(
-      operations,
-      addOperation,
-      [
-        patch("colors.primary", currentPrimary),
-        patch("buttons.borderRadius", "10px"),
-        patch("buttons.fontWeight", "700")
-      ],
-      "Polish the current design system",
-      "Improve interface consistency while preserving the existing brand color."
-    );
-    affected.add("Theme");
   }
 
   const risk = operations.some((item) => [
