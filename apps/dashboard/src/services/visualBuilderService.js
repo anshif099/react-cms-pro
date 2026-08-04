@@ -1,5 +1,6 @@
 import { ref, get, set, update } from "firebase/database";
 import {
+  decodeFirebaseKey,
   decodeFirebaseObject,
   encodeFirebaseKey,
   encodeFirebaseObject,
@@ -179,15 +180,18 @@ const BLOCK_STARTER_VALUES = {
 
 function decodeRegions(raw) {
   if (!raw || typeof raw !== "object") return {};
-  const decoded = decodeFirebaseObject(raw);
-  const source = decoded.regions && typeof decoded.regions === "object"
-    ? decoded.regions
-    : decoded;
+  const rawObj = raw.regions && typeof raw.regions === "object"
+    ? raw.regions
+    : raw;
+  const decoded = decodeFirebaseObject(rawObj);
 
   return Object.fromEntries(
-    Object.entries(source).filter(([key]) => (
+    Object.entries(decoded).filter(([key]) => (
       !["id", "title", "slug", "updatedAt", "publishedAt"].includes(key)
-    ))
+    )).map(([key, value]) => [
+      decodeFirebaseKey(key.replace(/_DOT_/g, ".")),
+      value
+    ])
   );
 }
 
@@ -243,35 +247,65 @@ export const visualBuilderService = {
       pageIdentity.pageId,
       pageIdentity.routeId,
       pageIdentity.slug,
-      pageIdentity.route
+      pageIdentity.route,
+      pageKey ? String(pageKey).replace(/\//g, "-") : null,
+      pageIdentity.route ? String(pageIdentity.route).replace(/^\/+|\/+$/g, "").replace(/\//g, "-") : null
     ]
       .filter(Boolean)
       .map((value) => String(value).split("?")[0].replace(/^\/+|\/+$/g, "") || "home")));
 
     const [
-      draftSnapshot,
-      publishedSnapshot,
-      registeredTreeSnapshot,
+      draftSnapshots,
+      publishedSnapshots,
+      registeredTreeSnapshots,
       registeredRegionSnapshots
     ] = await Promise.all([
-      get(ref(database, paths.contentDraft(websiteId, pageKey))),
-      get(ref(database, paths.contentPublished(websiteId, pageKey))),
-      get(ref(database, paths.registryPageTree(websiteId, pageKey))),
+      Promise.all(registryKeys.map((key) => (
+        get(ref(database, paths.contentDraft(websiteId, key)))
+      ))),
+      Promise.all(registryKeys.map((key) => (
+        get(ref(database, paths.contentPublished(websiteId, key)))
+      ))),
+      Promise.all(registryKeys.map((key) => (
+        get(ref(database, paths.registryPageTree(websiteId, key)))
+      ))),
       Promise.all(registryKeys.map((key) => (
         get(ref(database, paths.registryRegions(websiteId, key)))
       )))
     ]);
 
-    const published = publishedSnapshot.exists()
-      ? decodePageDocument(publishedSnapshot.val())
-      : decodePageDocument(null);
-    const draftDocument = draftSnapshot.exists()
-      ? decodePageDocument(draftSnapshot.val())
-      : decodePageDocument(null);
-    const registeredTree = registeredTreeSnapshot.exists()
-      && isPageComponentTree(registeredTreeSnapshot.val())
-      ? registeredTreeSnapshot.val()
-      : null;
+    let published = decodePageDocument(null);
+    publishedSnapshots.forEach((snapshot) => {
+      if (snapshot.exists()) {
+        const decoded = decodePageDocument(snapshot.val());
+        published = {
+          ...published,
+          ...decoded,
+          regions: { ...published.regions, ...decoded.regions }
+        };
+      }
+    });
+
+    let draftDocument = decodePageDocument(null);
+    const mergedDraftRegions = {};
+    draftSnapshots.forEach((snapshot) => {
+      if (!snapshot.exists()) return;
+      const decoded = decodePageDocument(snapshot.val());
+      Object.assign(mergedDraftRegions, decoded.regions);
+      if (decoded.tree || decoded.blocks.length || Object.keys(decoded.regions).length) {
+        draftDocument = {
+          ...decoded,
+          tree: decoded.tree || draftDocument.tree,
+          blocks: decoded.blocks.length ? decoded.blocks : draftDocument.blocks
+        };
+      }
+    });
+    draftDocument.regions = mergedDraftRegions;
+
+    const registeredTree = registeredTreeSnapshots.find((snapshot) => (
+      snapshot.exists() && isPageComponentTree(snapshot.val())
+    ))?.val() || null;
+
     const registeredRegions = registeredRegionSnapshots.reduce((all, snapshot) => {
       if (!snapshot.exists()) return all;
       return {
@@ -309,11 +343,32 @@ export const visualBuilderService = {
     };
   },
 
-  async loadSavedDraftRegions(websiteId, pageKey) {
-    const snapshot = await get(ref(database, paths.contentDraft(websiteId, pageKey)));
-    return snapshot.exists()
-      ? decodePageDocument(snapshot.val()).regions
-      : {};
+  async loadSavedDraftRegions(websiteId, pageKey, pageIdentity = {}) {
+    const candidateKeys = Array.from(new Set([
+      pageKey,
+      pageIdentity.pageId,
+      pageIdentity.routeId,
+      pageIdentity.slug,
+      pageIdentity.route,
+      pageKey ? String(pageKey).replace(/\//g, "-") : null,
+      pageIdentity.route ? String(pageIdentity.route).replace(/^\/+|\/+$/g, "").replace(/\//g, "-") : null
+    ]
+      .filter(Boolean)
+      .map((value) => String(value).split("?")[0].replace(/^\/+|\/+$/g, "") || "home")));
+
+    const snapshots = await Promise.all(
+      candidateKeys.map((key) => get(ref(database, paths.contentDraft(websiteId, key))))
+    );
+
+    const mergedRegions = {};
+    snapshots.forEach((snapshot) => {
+      if (snapshot.exists()) {
+        const decoded = decodePageDocument(snapshot.val());
+        Object.assign(mergedRegions, decoded.regions);
+      }
+    });
+
+    return mergedRegions;
   },
 
   async persistRegion(websiteId, pageKey, regionId, value) {
@@ -388,6 +443,19 @@ export const visualBuilderService = {
       .split("?")[0]
       .replace(/^\/+|\/+$/g, "") || "home";
 
+    const targetDraftKeys = Array.from(new Set([
+      pageKey,
+      nextPageKey,
+      pageId,
+      page?.id,
+      page?.routeId,
+      page?.slug,
+      pageKey ? String(pageKey).replace(/\//g, "-") : null,
+      nextPageKey ? String(nextPageKey).replace(/\//g, "-") : null
+    ]
+      .filter(Boolean)
+      .map((value) => String(value).split("?")[0].replace(/^\/+|\/+$/g, "") || "home")));
+
     const pageUpdates = {
       updatedAt: Date.now(),
       route,
@@ -405,21 +473,12 @@ export const visualBuilderService = {
     }
 
     const operations = [
-      set(
-        ref(database, paths.contentDraft(websiteId, pageKey)),
-        encodeFirebaseObject(draftPayload)
-      ),
+      ...targetDraftKeys.map((key) => set(
+        ref(database, paths.contentDraft(websiteId, key)),
+        encodeFirebaseObject({ ...draftPayload, id: key })
+      )),
       update(ref(database, `pages/${websiteId}/${pageId}`), pageUpdates)
     ];
-
-    if (nextPageKey !== pageKey) {
-      operations.push(
-        set(
-          ref(database, paths.contentDraft(websiteId, nextPageKey)),
-          encodeFirebaseObject({ ...draftPayload, id: nextPageKey })
-        )
-      );
-    }
 
     if (page.routeId || page.slug) {
       operations.push(

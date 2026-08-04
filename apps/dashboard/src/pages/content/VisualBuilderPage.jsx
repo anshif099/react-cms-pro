@@ -427,7 +427,12 @@ function ConnectedSourceWorkspace({
           isPreview ? "rcms/v1/exit-edit-mode" : "rcms/v1/enter-edit-mode"
         );
         if (!isPreview && visualOnly && websiteId && pageKey) {
-          void visualBuilderService.loadSavedDraftRegions(websiteId, pageKey)
+          void visualBuilderService.loadSavedDraftRegions(websiteId, pageKey, {
+            pageId,
+            routeId: page?.routeId,
+            slug: page?.slug,
+            route: page?.route
+          })
             .then((draftRegions) => {
               if (!active) return;
               const entries = Object.entries(draftRegions || {}).filter(([, value]) => (
@@ -2480,6 +2485,17 @@ export function VisualBuilderPage() {
 
   const saveConnectedAIChanges = useCallback(async (snapshot) => {
     stageAIExecution(snapshot);
+    if (snapshot?.regions) {
+      Object.entries(snapshot.regions).forEach(([regionId, value]) => {
+        persistConnectedRegion({
+          regionId,
+          value,
+          pageId: canvasRuntimePageId || pageKey,
+          runtimeWebsiteId,
+          runtimeWebsiteIds: [runtimeWebsiteIdFallback]
+        });
+      });
+    }
     const regionsSaved = await saveConnectedDraft(false);
     const pageSaved = regionsSaved
       ? await performSave({ manual: true, settingsOverride: snapshot?.pageSettings })
@@ -2488,7 +2504,7 @@ export function VisualBuilderPage() {
       throw new Error("The Rocket AI page draft could not be committed completely.");
     }
     return true;
-  }, [performSave, saveConnectedDraft, stageAIExecution]);
+  }, [canvasRuntimePageId, pageKey, performSave, persistConnectedRegion, runtimeWebsiteId, runtimeWebsiteIdFallback, saveConnectedDraft, stageAIExecution]);
 
   if (isConnectedSourcePage) {
     return (
