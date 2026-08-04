@@ -1,5 +1,6 @@
 import { database } from "../lib/firebase";
 import { ref, push, set, get } from "firebase/database";
+import { decodeFirebaseObject, encodeFirebaseObject } from "@anshif.rainhopes/shared";
 
 export const revisionService = {
   async save(websiteId, entityType, entityId, snapshot, userId) {
@@ -10,7 +11,7 @@ export const revisionService = {
 
       await set(newRevisionRef, {
         id: revisionId,
-        snapshot,
+        snapshot: encodeFirebaseObject(snapshot),
         savedBy: userId || "system",
         savedAt: Date.now()
       });
@@ -28,10 +29,13 @@ export const revisionService = {
       const snapshot = await get(revisionsRef);
       if (snapshot.exists()) {
         const val = snapshot.val();
-        return Object.keys(val).map(key => ({
-          id: key,
-          ...val[key]
-        })).sort((a, b) => b.savedAt - a.savedAt); // Newest first
+        return Object.keys(val).map(key => {
+          const revision = decodeFirebaseObject(val[key]);
+          return {
+            id: key,
+            ...revision
+          };
+        }).sort((a, b) => b.savedAt - a.savedAt); // Newest first
       }
       return [];
     } catch (error) {
@@ -45,7 +49,8 @@ export const revisionService = {
       const docRef = ref(database, `revisions/${websiteId}/${entityType}/${entityId}/${revisionId}`);
       const snapshot = await get(docRef);
       if (snapshot.exists()) {
-        return snapshot.val();
+        const revision = decodeFirebaseObject(snapshot.val());
+        return revision;
       }
       return null;
     } catch (error) {
