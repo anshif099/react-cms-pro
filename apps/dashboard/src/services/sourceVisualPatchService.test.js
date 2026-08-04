@@ -168,12 +168,19 @@ describe("connected visual routes", () => {
       websiteId: "cms-site",
       pageKey: "ad",
       runtimeWebsiteId: "embedded-site",
-      runtimePageId: "api-live-preview"
+      runtimeWebsiteIds: ["website-record-site"],
+      runtimePageId: "api/live-preview",
+      regionId: "api-live-preview.hero"
     })).toEqual([
       { key: "cms-site:ad", websiteId: "cms-site", pageKey: "ad" },
+      { key: "cms-site:api/live-preview", websiteId: "cms-site", pageKey: "api/live-preview" },
       { key: "cms-site:api-live-preview", websiteId: "cms-site", pageKey: "api-live-preview" },
+      { key: "embedded-site:api/live-preview", websiteId: "embedded-site", pageKey: "api/live-preview" },
       { key: "embedded-site:api-live-preview", websiteId: "embedded-site", pageKey: "api-live-preview" },
-      { key: "embedded-site:ad", websiteId: "embedded-site", pageKey: "ad" }
+      { key: "embedded-site:ad", websiteId: "embedded-site", pageKey: "ad" },
+      { key: "website-record-site:api/live-preview", websiteId: "website-record-site", pageKey: "api/live-preview" },
+      { key: "website-record-site:api-live-preview", websiteId: "website-record-site", pageKey: "api-live-preview" },
+      { key: "website-record-site:ad", websiteId: "website-record-site", pageKey: "ad" }
     ]);
   });
 

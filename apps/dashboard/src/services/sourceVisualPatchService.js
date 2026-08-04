@@ -489,12 +489,27 @@ export function connectedDraftTargets({
   websiteId,
   pageKey,
   runtimeWebsiteId = "",
-  runtimePageId = ""
+  runtimeWebsiteIds = [],
+  runtimePageId = "",
+  regionId = ""
 }) {
   const primaryWebsite = String(websiteId || "").trim();
   const primaryPage = normalizedDraftPageKey(pageKey) || "home";
-  const runtimeWebsite = String(runtimeWebsiteId || "").trim();
-  const runtimePage = normalizedDraftPageKey(runtimePageId);
+  const runtimeWebsites = Array.from(new Set([
+    runtimeWebsiteId,
+    ...(Array.isArray(runtimeWebsiteIds) ? runtimeWebsiteIds : [])
+  ].map((value) => String(value || "").trim()).filter(Boolean)));
+  const runtimePages = [];
+  const addRuntimePage = (value) => {
+    const normalized = normalizedDraftPageKey(value);
+    if (!normalized || normalized === primaryPage || runtimePages.includes(normalized)) return;
+    runtimePages.push(normalized);
+  };
+  addRuntimePage(runtimePageId);
+  const regionPagePrefix = String(regionId || "").match(/^([^.]+)\./)?.[1] || "";
+  addRuntimePage(regionPagePrefix);
+  if (runtimePages.includes("api/live-preview")) addRuntimePage("api-live-preview");
+  if (runtimePages.includes("api-live-preview")) addRuntimePage("api/live-preview");
   const targets = [];
   const add = (targetWebsiteId, targetPageKey) => {
     if (!targetWebsiteId || !targetPageKey) return;
@@ -504,9 +519,11 @@ export function connectedDraftTargets({
   };
 
   add(primaryWebsite, primaryPage);
-  add(primaryWebsite, runtimePage);
-  add(runtimeWebsite, runtimePage || primaryPage);
-  add(runtimeWebsite, primaryPage);
+  runtimePages.forEach((runtimePage) => add(primaryWebsite, runtimePage));
+  runtimeWebsites.forEach((runtimeWebsite) => {
+    runtimePages.forEach((runtimePage) => add(runtimeWebsite, runtimePage));
+    add(runtimeWebsite, primaryPage);
+  });
   return targets;
 }
 

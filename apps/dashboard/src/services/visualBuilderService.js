@@ -219,6 +219,17 @@ function decodePageDocument(raw) {
   };
 }
 
+function stableJson(value) {
+  const normalize = (entry) => {
+    if (Array.isArray(entry)) return entry.map(normalize);
+    if (!entry || typeof entry !== "object") return entry;
+    return Object.fromEntries(
+      Object.keys(entry).sort().map((key) => [key, normalize(entry[key])])
+    );
+  };
+  return JSON.stringify(normalize(value));
+}
+
 export const visualBuilderService = {
   resolvePageKey(page) {
     const route = page?.route || page?.slug || "home";
@@ -298,13 +309,53 @@ export const visualBuilderService = {
     };
   },
 
+  async loadSavedDraftRegions(websiteId, pageKey) {
+    const snapshot = await get(ref(database, paths.contentDraft(websiteId, pageKey)));
+    return snapshot.exists()
+      ? decodePageDocument(snapshot.val()).regions
+      : {};
+  },
+
   async persistRegion(websiteId, pageKey, regionId, value) {
-    const encodedRegionId = encodeFirebaseKey(regionId);
-    const regionRef = ref(
-      database,
-      `${paths.contentDraft(websiteId, pageKey)}/regions/${encodedRegionId}`
+    return this.persistRegionTargets(
+      [{ websiteId, pageKey }],
+      regionId,
+      value
     );
-    await set(regionRef, encodeFirebaseObject(value));
+  },
+
+  async persistRegionTargets(targets, regionId, value) {
+    const uniqueTargets = Array.from(new Map(
+      (targets || [])
+        .filter((target) => target?.websiteId && target?.pageKey)
+        .map((target) => [`${target.websiteId}:${target.pageKey}`, target])
+    ).values());
+    if (!uniqueTargets.length) {
+      throw new Error("No connected draft destination was available.");
+    }
+
+    const encodedRegionId = encodeFirebaseKey(regionId);
+    const encodedValue = encodeFirebaseObject(value);
+    const regionPaths = uniqueTargets.map((target) => (
+      `${paths.contentDraft(target.websiteId, target.pageKey)}/regions/${encodedRegionId}`
+    ));
+    await update(ref(database), Object.fromEntries(
+      regionPaths.map((path) => [path, encodedValue])
+    ));
+
+    const snapshots = await Promise.all(regionPaths.map((path) => get(ref(database, path))));
+    const expected = stableJson(value);
+    const missingTargets = uniqueTargets.filter((_target, index) => {
+      const snapshot = snapshots[index];
+      return !snapshot.exists()
+        || stableJson(decodeFirebaseObject(snapshot.val())) !== expected;
+    });
+    if (missingTargets.length) {
+      throw new Error(
+        `Connected draft verification failed for ${missingTargets.length} runtime destination(s).`
+      );
+    }
+    return uniqueTargets;
   },
 
   async saveDraft({

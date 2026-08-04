@@ -163,6 +163,7 @@ function ConnectedSourceWorkspace({
   const isSftp = website?.connection?.provider === "sftp";
   const iframeRef = useRef(null);
   const canvasViewportRef = useRef(null);
+  const connectedDraftHydratedRef = useRef(false);
   const [workspaceMode, setWorkspaceMode] = useState("visual");
   const [device, setDevice] = useState("desktop");
   const [customWidth, setCustomWidth] = useState(960);
@@ -173,7 +174,8 @@ function ConnectedSourceWorkspace({
   const [frameLoading, setFrameLoading] = useState(true);
   const [frameVersion, setFrameVersion] = useState(0);
   const [runtimeConnected, setRuntimeConnected] = useState(false);
-  const [runtimeWebsiteId, setRuntimeWebsiteId] = useState("");
+  const runtimeWebsiteIdFallback = String(website?.websiteId || "").trim();
+  const [runtimeWebsiteId, setRuntimeWebsiteId] = useState(runtimeWebsiteIdFallback);
   const [selectedRegion, setSelectedRegion] = useState(null);
   const [visualError, setVisualError] = useState("");
   const [liveRouteError, setLiveRouteError] = useState("");
@@ -188,6 +190,14 @@ function ConnectedSourceWorkspace({
     [isPreview, page, website]
   );
   const [livePageUrl, setLivePageUrl] = useState("");
+  const canvasRuntimePageId = useMemo(() => {
+    try {
+      return new URL(livePageUrl, window.location.origin).pathname
+        .replace(/^\/+|\/+$/g, "");
+    } catch {
+      return "";
+    }
+  }, [livePageUrl]);
   const [routeResolving, setRouteResolving] = useState(true);
   const renderedLivePageUrl = useMemo(() => {
     if (!livePageUrl || frameVersion === 0) return livePageUrl;
@@ -318,8 +328,9 @@ function ConnectedSourceWorkspace({
     const result = onVisualChange({
       regionId: region.regionId,
       type: region.type,
-      pageId: region.pageId,
+      pageId: region.pageId || canvasRuntimePageId,
       runtimeWebsiteId,
+      runtimeWebsiteIds: [runtimeWebsiteIdFallback],
       value
     });
     if (!result?.changed) {
@@ -334,21 +345,28 @@ function ConnectedSourceWorkspace({
     setSelectedRegion((current) => current ? { ...current, value } : current);
     if (sendToRuntime) {
       sendRuntimeMessage("rcms/v1/field-update", {
-        pageId: region.pageId,
+        pageId: region.pageId || canvasRuntimePageId,
         regionId: region.regionId,
         value
       });
     }
     return true;
-  }, [onVisualChange, runtimeWebsiteId, sendRuntimeMessage]);
+  }, [
+    canvasRuntimePageId,
+    onVisualChange,
+    runtimeWebsiteId,
+    runtimeWebsiteIdFallback,
+    sendRuntimeMessage
+  ]);
 
   useEffect(() => {
     setWorkspaceMode("visual");
     setSelectedRegion(null);
-    setRuntimeWebsiteId("");
+    setRuntimeWebsiteId(runtimeWebsiteIdFallback);
+    connectedDraftHydratedRef.current = false;
     setVisualError("");
     setFrameLoading(true);
-  }, [page?.id, isPreview]);
+  }, [page?.id, isPreview, runtimeWebsiteIdFallback]);
 
   useEffect(() => {
     if (!livePageUrl) return undefined;
@@ -401,26 +419,48 @@ function ConnectedSourceWorkspace({
       ) return;
 
       if (message.type === "rcms/v1/runtime-ready") {
+        connectedDraftHydratedRef.current = false;
         setRuntimeConnected(true);
-        if (message.websiteId) setRuntimeWebsiteId(message.websiteId);
+        const readyRuntimeWebsiteId = message.websiteId || runtimeWebsiteIdFallback;
+        if (readyRuntimeWebsiteId) setRuntimeWebsiteId(readyRuntimeWebsiteId);
         sendRuntimeMessage(
           isPreview ? "rcms/v1/exit-edit-mode" : "rcms/v1/enter-edit-mode"
         );
         if (!isPreview && visualOnly && websiteId && pageKey) {
-          void visualBuilderService.loadNativePage(websiteId, pageKey)
-            .then(({ draft }) => {
+          void visualBuilderService.loadSavedDraftRegions(websiteId, pageKey)
+            .then((draftRegions) => {
               if (!active) return;
-              Object.entries(draft?.regions || {}).forEach(([regionId, value]) => {
+              const entries = Object.entries(draftRegions || {}).filter(([, value]) => (
+                value !== null && value !== undefined
+              ));
+              entries.forEach(([regionId, value]) => {
+                onVisualChange({
+                  regionId,
+                  pageId: canvasRuntimePageId,
+                  runtimeWebsiteId: readyRuntimeWebsiteId,
+                  runtimeWebsiteIds: [runtimeWebsiteIdFallback],
+                  value
+                });
+              });
+              const broadcastDraft = () => entries.forEach(([regionId, value]) => {
+                if (!active) return;
                 if (value === null || value === undefined) return;
                 sendRuntimeMessage("rcms/v1/field-update", {
-                  pageId: pageKey,
+                  pageId: canvasRuntimePageId || pageKey,
                   regionId,
                   value
                 });
               });
+              broadcastDraft();
+              window.setTimeout(broadcastDraft, 250);
+              window.setTimeout(() => {
+                broadcastDraft();
+                if (active) connectedDraftHydratedRef.current = true;
+              }, 900);
             })
             .catch((hydrationError) => {
               console.error("Connected canvas draft could not be hydrated", hydrationError);
+              connectedDraftHydratedRef.current = true;
             });
         }
         return;
@@ -436,6 +476,7 @@ function ConnectedSourceWorkspace({
       }
 
       if (!isPreview && message.type === "rcms/v1/field-update") {
+        if (visualOnly && !connectedDraftHydratedRef.current) return;
         const payload = message.payload || {};
         if (!payload.regionId) return;
         setSelectedRegion((current) => ({
@@ -456,13 +497,17 @@ function ConnectedSourceWorkspace({
     isPreview,
     liveOrigin,
     livePageUrl,
+    canvasRuntimePageId,
+    onVisualChange,
     pageKey,
+    runtimeWebsiteIdFallback,
     sendRuntimeMessage,
     visualOnly,
     websiteId
   ]);
 
   const handleFrameLoad = () => {
+    connectedDraftHydratedRef.current = false;
     setFrameLoading(false);
     setRuntimeConnected(false);
     sendRuntimeMessage(
@@ -888,8 +933,9 @@ function ConnectedSourceWorkspace({
       const change = {
         regionId,
         type: definition.type || (selectedRegion?.regionId === regionId ? selectedRegion.type : "text"),
-        pageId: definition.pageId || selectedRegion?.pageId || pageKey,
+        pageId: definition.pageId || selectedRegion?.pageId || canvasRuntimePageId || pageKey,
         runtimeWebsiteId,
+        runtimeWebsiteIds: [runtimeWebsiteIdFallback],
         value
       };
       const changed = onVisualChange(change);
@@ -933,9 +979,11 @@ function ConnectedSourceWorkspace({
     onSourceFilesChange,
     onThemeChange,
     onVisualChange,
+    canvasRuntimePageId,
     pageKey,
     pageSettings,
     runtimeWebsiteId,
+    runtimeWebsiteIdFallback,
     selectedRegion,
     sendRuntimeMessage,
     theme
@@ -966,14 +1014,15 @@ function ConnectedSourceWorkspace({
       const changed = onVisualChange({
         regionId,
         type: selected.type || "text",
-        pageId: selected.pageId || pageKey,
+        pageId: selected.pageId || canvasRuntimePageId || pageKey,
         runtimeWebsiteId,
+        runtimeWebsiteIds: [runtimeWebsiteIdFallback],
         value
       });
       if (changed?.changed) {
         sendRuntimeMessage("rcms/v1/field-update", {
           regionId,
-          pageId: selected.pageId || pageKey,
+          pageId: selected.pageId || canvasRuntimePageId || pageKey,
           value
         });
       }
@@ -987,8 +1036,10 @@ function ConnectedSourceWorkspace({
     onSourceFilesChange,
     onThemeChange,
     onVisualChange,
+    canvasRuntimePageId,
     pageKey,
     runtimeWebsiteId,
+    runtimeWebsiteIdFallback,
     selectedRegion,
     sendRuntimeMessage
   ]);
@@ -2291,32 +2342,24 @@ export function VisualBuilderPage() {
     }
 
     setConnectedSaveStatus("saving");
+    regionsRef.current = {
+      ...regionsRef.current,
+      [change.regionId]: change.value
+    };
+    setLegacyRegions(regionsRef.current);
     const targets = connectedDraftTargets({
       websiteId,
       pageKey,
       runtimeWebsiteId: change.runtimeWebsiteId,
-      runtimePageId: change.pageId
+      runtimeWebsiteIds: change.runtimeWebsiteIds,
+      runtimePageId: change.pageId,
+      regionId: change.regionId
     });
-    const [primaryTarget, ...mirrorTargets] = targets;
-    const write = visualBuilderService.persistRegion(
-      primaryTarget.websiteId,
-      primaryTarget.pageKey,
+    const write = visualBuilderService.persistRegionTargets(
+      targets,
       change.regionId,
       change.value
-    ).then(async () => {
-      const mirrorResults = await Promise.allSettled(mirrorTargets.map((target) => (
-        visualBuilderService.persistRegion(
-          target.websiteId,
-          target.pageKey,
-          change.regionId,
-          change.value
-        )
-      )));
-      const failedMirrors = mirrorResults.filter((result) => result.status === "rejected");
-      if (failedMirrors.length) {
-        console.warn(`Connected draft saved canonically, but ${failedMirrors.length} runtime mirror write(s) failed.`);
-      }
-    });
+    );
     connectedWritesRef.current.add(write);
     write
       .then(() => {
