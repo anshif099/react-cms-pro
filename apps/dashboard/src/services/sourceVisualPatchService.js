@@ -531,6 +531,26 @@ export function buildConnectedPageFallbackUrl(website, page, mode = "preview") {
   }
 }
 
+export function buildConnectedCanvasProxyUrl(connectedPageUrl, mode = "edit") {
+  const value = String(connectedPageUrl || "").trim();
+  if (!value) return "";
+
+  try {
+    const pageUrl = new URL(value);
+    if (pageUrl.protocol !== "https:") return "";
+    const targetUrl = new URL(pageUrl.origin);
+    const route = `${pageUrl.pathname}${pageUrl.search}${pageUrl.hash}`;
+    const parameters = new URLSearchParams({
+      target: targetUrl.toString(),
+      route,
+      mode: mode === "edit" ? "edit" : "preview"
+    });
+    return `/api/live-preview?${parameters.toString()}`;
+  } catch {
+    return "";
+  }
+}
+
 export function createRuntimeMessage(type, payload = {}) {
   return {
     rcms: true,

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildConnectedCanvasProxyUrl,
   buildConnectedPageFallbackUrl,
   buildConnectedPageUrl,
   createRuntimeMessage,
@@ -201,6 +202,19 @@ describe("connected visual routes", () => {
       "https://example.com/contact?rcms_edit=1"
     );
     expect(createRuntimeMessage("rcms/v1/enter-edit-mode", {}).websiteId).toBe("");
+  });
+
+  it("creates a same-origin edit canvas that preserves the deployed route", () => {
+    const result = buildConnectedCanvasProxyUrl(
+      "https://triosis.vercel.app/ad?rcms_edit=1",
+      "edit"
+    );
+    const url = new URL(result, "https://react-cms-pro.vercel.app");
+
+    expect(url.pathname).toBe("/api/live-preview");
+    expect(url.searchParams.get("target")).toBe("https://triosis.vercel.app/");
+    expect(url.searchParams.get("route")).toBe("/ad?rcms_edit=1");
+    expect(url.searchParams.get("mode")).toBe("edit");
   });
 
   it("creates a root fallback URL for hosts without SPA deep-link rewrites", () => {

@@ -46,6 +46,7 @@ import sourceProviderService from "../../services/sourceProviderService";
 import pageService from "../../services/pageService";
 import contentSyncService from "../../services/contentSyncService";
 import {
+  buildConnectedCanvasProxyUrl,
   buildConnectedPageFallbackUrl,
   buildConnectedPageUrl,
   createRuntimeMessage,
@@ -233,6 +234,11 @@ function ConnectedSourceWorkspace({
       return undefined;
     }
 
+    const canvasUrl = (connectedUrl) => {
+      if (isPreview) return connectedUrl;
+      return buildConnectedCanvasProxyUrl(connectedUrl, "edit") || connectedUrl;
+    };
+
     let requestedPath = "/";
     try {
       requestedPath = new URL(requestedLivePageUrl).pathname;
@@ -243,7 +249,7 @@ function ConnectedSourceWorkspace({
     }
 
     if (requestedPath === "/") {
-      setLivePageUrl(requestedLivePageUrl);
+      setLivePageUrl(canvasUrl(requestedLivePageUrl));
       setRouteResolving(false);
       return undefined;
     }
@@ -259,13 +265,15 @@ function ConnectedSourceWorkspace({
       .then((result) => {
         if (cancelled) return;
         setLivePageUrl(
-          result.status === 404 && fallbackLivePageUrl
-            ? fallbackLivePageUrl
-            : requestedLivePageUrl
+          canvasUrl(
+            result.status === 404 && fallbackLivePageUrl
+              ? fallbackLivePageUrl
+              : requestedLivePageUrl
+          )
         );
       })
       .catch(() => {
-        if (!cancelled) setLivePageUrl(requestedLivePageUrl);
+        if (!cancelled) setLivePageUrl(canvasUrl(requestedLivePageUrl));
       })
       .finally(() => {
         if (!cancelled) setRouteResolving(false);
@@ -274,7 +282,7 @@ function ConnectedSourceWorkspace({
     return () => {
       cancelled = true;
     };
-  }, [fallbackLivePageUrl, requestedLivePageUrl]);
+  }, [fallbackLivePageUrl, isPreview, requestedLivePageUrl]);
 
   useEffect(() => {
     const viewport = canvasViewportRef.current;
@@ -374,6 +382,7 @@ function ConnectedSourceWorkspace({
 
   useEffect(() => {
     if (!livePageUrl) return undefined;
+    let active = true;
     const handleRuntimeMessage = (event) => {
       if (event.source !== iframeRef.current?.contentWindow) return;
       if (
@@ -395,6 +404,23 @@ function ConnectedSourceWorkspace({
         sendRuntimeMessage(
           isPreview ? "rcms/v1/exit-edit-mode" : "rcms/v1/enter-edit-mode"
         );
+        if (!isPreview && visualOnly && websiteId && pageKey) {
+          void visualBuilderService.loadNativePage(websiteId, pageKey)
+            .then(({ draft }) => {
+              if (!active) return;
+              Object.entries(draft?.regions || {}).forEach(([regionId, value]) => {
+                if (value === null || value === undefined) return;
+                sendRuntimeMessage("rcms/v1/field-update", {
+                  pageId: pageKey,
+                  regionId,
+                  value
+                });
+              });
+            })
+            .catch((hydrationError) => {
+              console.error("Connected canvas draft could not be hydrated", hydrationError);
+            });
+        }
         return;
       }
 
@@ -419,13 +445,19 @@ function ConnectedSourceWorkspace({
     };
 
     window.addEventListener("message", handleRuntimeMessage);
-    return () => window.removeEventListener("message", handleRuntimeMessage);
+    return () => {
+      active = false;
+      window.removeEventListener("message", handleRuntimeMessage);
+    };
   }, [
     applyVisualValue,
     isPreview,
     liveOrigin,
     livePageUrl,
-    sendRuntimeMessage
+    pageKey,
+    sendRuntimeMessage,
+    visualOnly,
+    websiteId
   ]);
 
   const handleFrameLoad = () => {

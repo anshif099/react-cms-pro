@@ -227,7 +227,93 @@ function runtimeBootstrap(baseUrl, route, proxyOrigin) {
   var assetProxyPath = ${JSON.stringify(`${proxyOrigin}${ASSET_PROXY_PATH}`)};
   var previewRoute = ${JSON.stringify(route)};
   var embeddedEditorToolbarHidden = false;
+  var liveRegionValues = Object.create(null);
+  var bridgedElementStyles = typeof WeakMap === "function" ? new WeakMap() : null;
   try { history.replaceState(null, "", previewRoute); } catch (_) {}
+
+  function originalElementStyles(element) {
+    if (!bridgedElementStyles) return null;
+    var originals = bridgedElementStyles.get(element);
+    if (!originals) {
+      originals = Object.create(null);
+      bridgedElementStyles.set(element, originals);
+    }
+    return originals;
+  }
+
+  function setBridgedStyle(element, property, value, enabled) {
+    if (!element || !element.style) return;
+    var originals = originalElementStyles(element);
+    if (enabled) {
+      if (originals && !Object.prototype.hasOwnProperty.call(originals, property)) {
+        originals[property] = {
+          value: element.style.getPropertyValue(property),
+          priority: element.style.getPropertyPriority(property)
+        };
+      }
+      var nextValue = String(value);
+      if (
+        element.style.getPropertyValue(property) !== nextValue
+        || element.style.getPropertyPriority(property) !== "important"
+      ) {
+        element.style.setProperty(property, nextValue, "important");
+      }
+      return;
+    }
+    if (!originals || !Object.prototype.hasOwnProperty.call(originals, property)) return;
+    var original = originals[property];
+    if (original.value) {
+      element.style.setProperty(property, original.value, original.priority || "");
+    } else {
+      element.style.removeProperty(property);
+    }
+    delete originals[property];
+  }
+
+  function applyLiveRegionValue(element) {
+    if (!element || !element.getAttribute) return;
+    var regionId = element.getAttribute("data-rcms-region");
+    if (!regionId || !Object.prototype.hasOwnProperty.call(liveRegionValues, regionId)) return;
+    var value = liveRegionValues[regionId];
+    if (!value || typeof value !== "object" || Array.isArray(value)) return;
+    var hasBackground = typeof value.background === "string";
+    var hasBackgroundColor = typeof value.backgroundColor === "string";
+    var hasPadding = typeof value.paddingY === "number" && Number.isFinite(value.paddingY);
+    var hasLayout = value.layout === "flex" || value.layout === "grid";
+    var hasFullWidth = value.layout === "full";
+    setBridgedStyle(element, "background", value.background, hasBackground);
+    setBridgedStyle(element, "background-color", value.backgroundColor, hasBackgroundColor);
+    setBridgedStyle(element, "padding-top", hasPadding ? value.paddingY + "px" : "", hasPadding);
+    setBridgedStyle(element, "padding-bottom", hasPadding ? value.paddingY + "px" : "", hasPadding);
+    setBridgedStyle(element, "display", value.layout, hasLayout);
+    setBridgedStyle(element, "width", "100%", hasFullWidth);
+  }
+
+  function applyLiveRegion(regionId) {
+    if (!regionId || !document.querySelectorAll) return;
+    document.querySelectorAll("[data-rcms-region]").forEach(function (element) {
+      if (element.getAttribute("data-rcms-region") === regionId) applyLiveRegionValue(element);
+    });
+  }
+
+  window.addEventListener("message", function (event) {
+    var message = event.data;
+    if (
+      event.source !== window.parent
+      || !message
+      || typeof message !== "object"
+      || message.rcms !== true
+      || message.version !== "v1"
+      || message.type !== "rcms/v1/field-update"
+    ) return;
+    var payload = message.payload;
+    if (!payload || typeof payload.regionId !== "string") return;
+    liveRegionValues[payload.regionId] = payload.value;
+    applyLiveRegion(payload.regionId);
+    if (typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(function () { applyLiveRegion(payload.regionId); });
+    }
+  });
 
   function blockUnsafeFrameNavigation() {
     try {
@@ -304,6 +390,7 @@ function runtimeBootstrap(baseUrl, route, proxyOrigin) {
       });
       if (rewrittenStyle !== style) element.setAttribute("style", rewrittenStyle);
     }
+    applyLiveRegionValue(element);
   }
 
   function repairTree(root) {

@@ -190,6 +190,19 @@ describe("live preview HTML rewriting", () => {
     );
   });
 
+  it("bridges section styles for connected sites using an older SDK", () => {
+    const result = rewritePreviewHtml(
+      "<html><head></head><body><div id=\"root\"></div></body></html>",
+      "https://example.com/",
+      "/ad?rcms_edit=1"
+    );
+
+    expect(result).toContain('message.type !== "rcms/v1/field-update"');
+    expect(result).toContain('document.querySelectorAll("[data-rcms-region]")');
+    expect(result).toContain('element.style.setProperty(property, nextValue, "important")');
+    expect(result).toContain('setBridgedStyle(element, "background", value.background, hasBackground)');
+  });
+
   it("blocks javascript iframe navigation without granting preview same-origin access", () => {
     const result = rewritePreviewHtml(
       "<html><head></head><body></body></html>",
