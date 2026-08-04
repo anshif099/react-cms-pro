@@ -96,7 +96,12 @@ describe("embedded Rocket AI engine", () => {
     });
 
     expect(fetchSpy).not.toHaveBeenCalled();
-    expect(response.model).toBe("rocket-embedded-v1");
+    expect(response.model).toBe("rocket-embedded-v1.1.0-c0");
+    expect(response.modelInfo).toMatchObject({
+      name: "Rocket Embedded",
+      version: "1.1.0-c0",
+      curriculumRevision: 0
+    });
     expect(response.usage.networkRequests).toBe(0);
     expect(response.plan.operations).toHaveLength(1);
     expect(response.plan.operations[0]).toMatchObject({
@@ -330,6 +335,49 @@ describe("embedded Rocket AI engine", () => {
     expect(execution.regions["ad.title"]).toBe("Smarter Growth Campaigns");
   });
 
+  it("changes the color on the selected connected text instead of the shared theme", async () => {
+    const context = connectedContext();
+    context.currentPage.selectedRegion = {
+      regionId: "ad.heading",
+      type: "text",
+      label: "About heading",
+      value: "About Api/live Preview",
+      computedStyle: { color: "#ffffff" }
+    };
+    context.currentPage.editableRegionDefinitions["ad.heading"] = {
+      type: "text",
+      label: "About heading"
+    };
+    context.currentPage.editableRegionValues["ad.heading"] = "About Api/live Preview";
+
+    const response = await rocketLocalEngine.createPlan({
+      intent: "change the selected text color to #FF5757",
+      context,
+      memory: {}
+    });
+
+    expect(response.plan.operations).toHaveLength(1);
+    expect(response.plan.operations[0]).toMatchObject({
+      type: "update_region",
+      targetId: "ad.heading",
+      patches: [{
+        path: "value",
+        valueJson: JSON.stringify({ text: "About Api/live Preview", color: "#FF5757" })
+      }]
+    });
+    expect(response.plan.operations.some((operation) => operation.type === "update_theme")).toBe(false);
+    const execution = applyAIPlan({
+      plan: response.plan,
+      regions: context.currentPage.editableRegionValues,
+      theme: context.designSystem.theme
+    });
+    expect(execution.changed).toBe(true);
+    expect(execution.regions["ad.heading"]).toEqual({
+      text: "About Api/live Preview",
+      color: "#FF5757"
+    });
+  });
+
   it("builds a native landing page from real registered components", async () => {
     const response = await rocketLocalEngine.createPlan({
       intent: "Build a SaaS landing page",
@@ -357,8 +405,38 @@ describe("embedded Rocket AI engine", () => {
       }
     });
 
-    expect(result.model).toBe("rocket-embedded-v1-procedural-image");
+    expect(result.model).toBe("rocket-embedded-v1.1.0-c0-procedural-image");
     expect(result.mimeType).toBe("image/svg+xml");
     expect(result.imageBase64.length).toBeGreaterThan(100);
+  });
+
+  it("advances and reports its local curriculum version after approved feedback", async () => {
+    const values = new Map();
+    vi.stubGlobal("localStorage", {
+      getItem: (key) => values.get(key) || null,
+      setItem: (key, value) => values.set(key, value)
+    });
+    try {
+      expect(rocketLocalEngine.getModelInfo()).toMatchObject({
+        id: "rocket-embedded-v1.1.0-c0",
+        trainedExamples: 0
+      });
+      const feedback = await rocketLocalEngine.recordFeedback({
+        intent: "change selected heading color",
+        context: connectedContext(),
+        plan: { operations: [] },
+        results: [],
+        validation: []
+      });
+      expect(feedback.captured).toBe(true);
+      expect(feedback.modelInfo).toMatchObject({
+        id: "rocket-embedded-v1.1.0-c1",
+        version: "1.1.0-c1",
+        curriculumRevision: 1,
+        trainedExamples: 1
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

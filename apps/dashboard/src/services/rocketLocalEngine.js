@@ -1,7 +1,10 @@
 import { auditAIContext, flattenContextTree } from "./aiWebsiteContextService";
 
-const MODEL_NAME = "rocket-embedded-v1";
+const MODEL_FAMILY = "rocket-embedded";
+const MODEL_DISPLAY_NAME = "Rocket Embedded";
+const ENGINE_VERSION = "1.1.0";
 const FEEDBACK_KEY = "reactcms_rocket_embedded_curriculum_v1";
+const MODEL_STATE_KEY = "reactcms_rocket_embedded_model_state_v1";
 
 const THEME_PRESETS = {
   dark: {
@@ -113,6 +116,35 @@ function json(value) {
 
 function patch(path, value) {
   return { path, valueJson: json(value) };
+}
+
+function readStoredJson(key, fallback) {
+  const target = storage();
+  if (!target) return fallback;
+  try {
+    const parsed = JSON.parse(target.getItem(key) || "null");
+    return parsed ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function currentModelInfo() {
+  const state = readStoredJson(MODEL_STATE_KEY, {});
+  const curriculumRevision = Math.max(0, Number(state.curriculumRevision) || 0);
+  const trainedExamples = Math.max(0, Number(state.trainedExamples) || 0);
+  const version = `${ENGINE_VERSION}-c${curriculumRevision}`;
+  return {
+    id: `${MODEL_FAMILY}-v${version}`,
+    name: MODEL_DISPLAY_NAME,
+    version,
+    engineVersion: ENGINE_VERSION,
+    curriculumRevision,
+    trainedExamples,
+    updatedAt: Number(state.updatedAt) || null,
+    runtime: "browser",
+    trainingMode: "approved-feedback curriculum"
+  };
 }
 
 function requestId() {
@@ -471,6 +503,28 @@ function selectedRegionCopyOperation(addOperation, context, intent) {
   });
 }
 
+function selectedRegionTextColorOperation(addOperation, context, color) {
+  const selected = context?.currentPage?.selectedRegion;
+  const capabilities = new Set(context?.capabilities || []);
+  if (
+    !color
+    || !selected?.regionId
+    || !capabilities.has("update_region")
+    || !["text", "button"].includes(selected.type)
+  ) return null;
+
+  const currentValue = selected.value;
+  const nextValue = currentValue && typeof currentValue === "object"
+    ? { ...currentValue, color }
+    : { text: String(currentValue ?? ""), color };
+  return addOperation("update_region", {
+    targetId: selected.regionId,
+    summary: `Change ${selected.label || "selected text"} color to ${color}`,
+    reason: "Apply the requested color only to the editable area attached to this chat.",
+    patches: [patch("value", nextValue)]
+  });
+}
+
 function mediaAssetFromIntent(intent, context) {
   const assets = Array.isArray(context?.contentSystem?.assets)
     ? context.contentSystem.assets
@@ -661,7 +715,8 @@ function buildPlan({ intent, context, memory = {}, conversation = [], previousPl
   }
 
   if (color && includesAny(text, ["text color", "text colour", "font color", "font colour"])) {
-    const item = selectedComponentOperation(
+    const regionItem = selectedRegionTextColorOperation(addOperation, context, color);
+    const item = regionItem || selectedComponentOperation(
       addOperation,
       context,
       "styles.base.color",
@@ -803,7 +858,8 @@ function storage() {
 function captureFeedback(value) {
   const target = storage();
   if (!target) return false;
-  const existing = JSON.parse(target.getItem(FEEDBACK_KEY) || "[]");
+  const storedFeedback = readStoredJson(FEEDBACK_KEY, []);
+  const existing = Array.isArray(storedFeedback) ? storedFeedback : [];
   const record = {
     capturedAt: Date.now(),
     intent: String(value.intent || "").slice(0, 1000),
@@ -821,6 +877,12 @@ function captureFeedback(value) {
     validationCount: value.validation?.length || 0
   };
   target.setItem(FEEDBACK_KEY, JSON.stringify([...existing.slice(-49), record]));
+  const previousState = readStoredJson(MODEL_STATE_KEY, {});
+  target.setItem(MODEL_STATE_KEY, JSON.stringify({
+    curriculumRevision: Math.max(0, Number(previousState.curriculumRevision) || 0) + 1,
+    trainedExamples: Math.max(0, Number(previousState.trainedExamples) || 0) + 1,
+    updatedAt: record.capturedAt
+  }));
   return true;
 }
 
@@ -873,16 +935,23 @@ function proceduralImage(prompt, brandContext = {}) {
   return {
     imageBase64: base64Utf8(svg),
     mimeType: "image/svg+xml",
-    model: `${MODEL_NAME}-procedural-image`
+    model: `${currentModelInfo().id}-procedural-image`,
+    modelInfo: currentModelInfo()
   };
 }
 
 export const rocketLocalEngine = {
+  getModelInfo() {
+    return currentModelInfo();
+  },
+
   async createPlan(input) {
     const plan = buildPlan(input);
+    const modelInfo = currentModelInfo();
     return {
       plan,
-      model: MODEL_NAME,
+      model: modelInfo.id,
+      modelInfo,
       requestId: requestId(),
       usage: {
         runtime: "browser",
@@ -898,7 +967,9 @@ export const rocketLocalEngine = {
   },
 
   async recordFeedback(value) {
-    return { accepted: true, captured: captureFeedback(value), model: MODEL_NAME };
+    const captured = captureFeedback(value);
+    const modelInfo = currentModelInfo();
+    return { accepted: true, captured, model: modelInfo.id, modelInfo };
   }
 };
 

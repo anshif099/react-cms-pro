@@ -107,6 +107,7 @@ function generatedImageFile(base64, pageTitle, mimeType = "image/png") {
 function StatusIcon({ status }) {
   if (status === "applying") return <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-400" />;
   if (status === "applied") return <Check className="h-3.5 w-3.5 text-emerald-400" />;
+  if (status === "skipped") return <Check className="h-3.5 w-3.5 text-slate-500" />;
   if (status === "failed") return <TriangleAlert className="h-3.5 w-3.5 text-rose-400" />;
   return <Circle className="h-3.5 w-3.5 text-slate-600" />;
 }
@@ -236,6 +237,7 @@ export function AIWorkspace({
   onClose
 }) {
   const [activeTab, setActiveTab] = useState("chat");
+  const [modelInfo, setModelInfo] = useState(() => aiWebsiteAgentService.getModelInfo());
   const [prompt, setPrompt] = useState("");
   const [messages, setMessages] = useState([{
     id: "welcome",
@@ -286,6 +288,12 @@ export function AIWorkspace({
     setRocketAuthLoading(false);
     if (user) setRocketAuthError("");
   }), []);
+
+  useEffect(() => {
+    const refreshModelInfo = () => setModelInfo(aiWebsiteAgentService.getModelInfo());
+    window.addEventListener("storage", refreshModelInfo);
+    return () => window.removeEventListener("storage", refreshModelInfo);
+  }, []);
 
   const log = useCallback((level, message, data = null) => {
     setConsoleEntries((current) => [{
@@ -419,6 +427,7 @@ export function AIWorkspace({
             memory
           }
         });
+        if (generated.modelInfo) setModelInfo(generated.modelInfo);
         const file = generatedImageFile(generated.imageBase64, pageTitle, generated.mimeType);
         const asset = await mediaService.upload(
           websiteId,
@@ -441,6 +450,7 @@ export function AIWorkspace({
         previousPlan,
         feedback
       });
+      if (response.modelInfo) setModelInfo(response.modelInfo);
       if (!response.plan.operations.length) {
         setMessages((current) => [...current, {
           id: `assistant_${Date.now()}`,
@@ -523,8 +533,47 @@ export function AIWorkspace({
         requestId: pending.requestId
       });
       const execution = await onApplyPlan(pending.plan, pending.context);
-      if (!execution?.changed) {
-        throw new Error("Rocket AI did not change any draft value. The requested value may already be applied.");
+      if (!execution) {
+        throw new Error("Rocket AI did not receive an execution result from this editing surface.");
+      }
+      if (!execution.changed) {
+        const noChangeResults = (execution.results || []).map((result) => ({
+          ...result,
+          status: "skipped",
+          detail: "The draft already matches this requested value."
+        }));
+        const validation = execution.validation || [];
+        setTasks((current) => current.map((task) => ({
+          ...task,
+          status: "skipped",
+          detail: "The draft already matches this requested value."
+        })));
+        await aiBuilderPersistenceService.completeRun(websiteId, pageId, run.id, {
+          before: execution.before,
+          after: execution.after,
+          results: noChangeResults,
+          validation,
+          status: "no_change"
+        });
+        const completedRun = {
+          ...run,
+          status: "no_change",
+          results: noChangeResults,
+          validation,
+          beforeSnapshotJson: JSON.stringify(execution.before),
+          afterSnapshotJson: JSON.stringify(execution.after),
+          appliedAt: Date.now()
+        };
+        setRuns((current) => [completedRun, ...current.filter((item) => item.id !== run.id)]);
+        setMessages((current) => [...current, {
+          id: `no_change_${Date.now()}`,
+          role: "assistant",
+          content: "No draft change was needed—the selected area already matches the requested value. Choose another value or continue with a new instruction."
+        }]);
+        setPending(null);
+        await refreshContext();
+        log("info", "Rocket AI skipped an already-current draft value.", { runId: run.id });
+        return;
       }
       const resultById = new Map((execution.results || []).map((item) => [item.id, item]));
       setTasks((current) => current.map((task) => ({
@@ -540,17 +589,23 @@ export function AIWorkspace({
         validation,
         status: execution.summary?.failed ? "applied_with_warnings" : "applied"
       });
-      await aiWebsiteAgentService.recordFeedback({
+      const feedbackResult = await aiWebsiteAgentService.recordFeedback({
         intent: pending.prompt,
         context: pending.context,
         plan: pending.plan,
         results: execution.results,
         validation
-      }).then((feedback) => {
-        if (feedback?.captured) log("training", "Approved plan added to the private Rocket AI curriculum.");
       }).catch((error) => {
         log("warning", error.message || "Rocket AI training feedback was not captured.");
+        return null;
       });
+      if (feedbackResult?.captured) {
+        if (feedbackResult.modelInfo) setModelInfo(feedbackResult.modelInfo);
+        log(
+          "training",
+          `Approved plan advanced the private Rocket AI curriculum to ${feedbackResult.modelInfo?.version || feedbackResult.model}.`
+        );
+      }
       const completedRun = {
         ...run,
         status: execution.summary?.failed ? "applied_with_warnings" : "applied",
@@ -569,7 +624,7 @@ export function AIWorkspace({
       setMessages((current) => [...current, {
         id: `applied_${Date.now()}`,
         role: "assistant",
-        content: `Applied ${execution.summary?.applied || 0} edits${execution.summary?.failed ? `; ${execution.summary.failed} need attention` : ""}.${changedLabels.length ? ` Changed: ${changedLabels.join("; ")}.` : ""} A draft snapshot and rollback point were created.`
+        content: `Applied ${execution.summary?.applied || 0} edits${execution.summary?.failed ? `; ${execution.summary.failed} need attention` : ""}.${changedLabels.length ? ` Changed: ${changedLabels.join("; ")}.` : ""} A draft snapshot and rollback point were created.${feedbackResult?.captured ? ` Rocket curriculum advanced to ${feedbackResult.modelInfo?.version || feedbackResult.model}.` : ""}`
       }]);
       setPending(null);
       await refreshContext();
@@ -652,6 +707,7 @@ export function AIWorkspace({
           memory
         }
       });
+      if (generated.modelInfo) setModelInfo(generated.modelInfo);
       const file = generatedImageFile(generated.imageBase64, pageTitle, generated.mimeType);
       const asset = await mediaService.upload(
         websiteId,
@@ -769,8 +825,11 @@ export function AIWorkspace({
                 <div className="grid h-8 w-8 place-items-center rounded-full bg-white text-xs font-black text-slate-900">G</div>
               )}
               <div className="min-w-0 flex-1">
-                <p className="text-[9px] font-bold uppercase tracking-wider text-emerald-400">Rocket AI ready · embedded</p>
-                <p className="truncate text-[10px] text-slate-300">{rocketUser.email || rocketUser.displayName} · no AI API</p>
+                <p className="text-[9px] font-bold uppercase tracking-wider text-emerald-400">Rocket AI ready · {modelInfo.name}</p>
+                <p className="truncate text-[10px] text-slate-300">{rocketUser.email || rocketUser.displayName} · local runtime</p>
+                <p className="mt-0.5 truncate text-[8px] text-slate-500" title={modelInfo.id}>
+                  Model {modelInfo.id} · {modelInfo.trainedExamples} approved lesson{modelInfo.trainedExamples === 1 ? "" : "s"}
+                </p>
               </div>
               <button
                 type="button"
@@ -997,7 +1056,7 @@ export function AIWorkspace({
               </div>
             </>
           )}
-          {run.beforeSnapshotJson && run.status !== "rolled_back" && (
+          {run.beforeSnapshotJson && !["rolled_back", "no_change"].includes(run.status) && (
             <button
               type="button"
               disabled={applying}
@@ -1228,7 +1287,11 @@ export function AIWorkspace({
           </div>
           <div className="min-w-0">
             <p className="text-[10px] font-bold text-white">{active.label}</p>
-            <p className="max-w-56 truncate text-[8px] text-slate-600">{pageTitle} · {surface.replaceAll("-", " ")}</p>
+            <p className="max-w-64 truncate text-[8px] text-slate-600" title={activeTab === "chat" ? modelInfo.id : undefined}>
+              {activeTab === "chat"
+                ? `${modelInfo.name} · v${modelInfo.version} · auto curriculum`
+                : `${pageTitle} · ${surface.replaceAll("-", " ")}`}
+            </p>
           </div>
           {onClose && (
             <button type="button" onClick={onClose} className="ml-auto grid h-7 w-7 place-items-center rounded-lg text-slate-600 hover:bg-slate-900 hover:text-white cursor-pointer" title="Close Rocket AI workspace">

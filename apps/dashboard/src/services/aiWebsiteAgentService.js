@@ -2,6 +2,10 @@ import { validateAIPlan } from "./aiBuilderContract";
 import rocketLocalEngine from "./rocketLocalEngine";
 
 export const aiWebsiteAgentService = {
+  getModelInfo() {
+    return rocketLocalEngine.getModelInfo();
+  },
+
   async createPlan({
     intent,
     context,
@@ -21,6 +25,7 @@ export const aiWebsiteAgentService = {
     return {
       plan: validateAIPlan(payload.plan),
       model: payload.model,
+      modelInfo: payload.modelInfo,
       requestId: payload.requestId,
       usage: payload.usage || null
     };
