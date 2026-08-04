@@ -233,6 +233,103 @@ describe("embedded Rocket AI engine", () => {
     expect(response.plan.assistantMessage).toMatch(/header component/i);
   });
 
+  it("replaces the image selected as the chat area with an existing media asset", async () => {
+    const context = connectedContext();
+    context.currentPage.selectedRegion = {
+      regionId: "ad.hero_image",
+      type: "image",
+      label: "Hero visual",
+      value: { src: "https://example.com/old.jpg", alt: "Old visual" }
+    };
+    context.currentPage.editableRegionDefinitions["ad.hero_image"] = {
+      type: "image",
+      label: "Hero visual"
+    };
+    context.currentPage.editableRegionValues["ad.hero_image"] = context.currentPage.selectedRegion.value;
+    context.contentSystem = {
+      assets: [{
+        id: "asset-new-hero",
+        name: "Technology hero",
+        alt: "Connected technology network",
+        type: "image/jpeg",
+        url: "https://cdn.example.com/new-hero.jpg"
+      }]
+    };
+
+    const response = await rocketLocalEngine.createPlan({
+      intent: 'Use the existing media asset with ID "asset-new-hero" in the selected image',
+      context,
+      memory: {}
+    });
+
+    expect(response.plan.operations).toHaveLength(1);
+    expect(response.plan.operations[0]).toMatchObject({
+      type: "update_region",
+      targetId: "ad.hero_image",
+      patches: [
+        { path: "value.src", valueJson: '"https://cdn.example.com/new-hero.jpg"' },
+        { path: "value.alt", valueJson: '"Connected technology network"' }
+      ]
+    });
+    const execution = applyAIPlan({
+      plan: response.plan,
+      regions: context.currentPage.editableRegionValues
+    });
+    expect(execution.regions["ad.hero_image"]).toEqual({
+      src: "https://cdn.example.com/new-hero.jpg",
+      alt: "Connected technology network"
+    });
+  });
+
+  it("asks for an image area when an image request has no selection", async () => {
+    const context = connectedContext();
+    context.currentPage.selectedRegion = null;
+    const response = await rocketLocalEngine.createPlan({
+      intent: "generate a premium technology image",
+      context,
+      memory: {}
+    });
+
+    expect(response.plan.operations).toEqual([]);
+    expect(response.plan.assistantMessage).toMatch(/select area/i);
+    expect(response.plan.assistantMessage).toMatch(/editable image/i);
+  });
+
+  it("rewrites only the connected text area attached to the chat", async () => {
+    const context = connectedContext();
+    context.currentPage.selectedRegion = {
+      regionId: "ad.title",
+      type: "text",
+      label: "Page title",
+      value: "Ad"
+    };
+    context.currentPage.editableRegionDefinitions["ad.title"] = {
+      type: "text",
+      label: "Page title"
+    };
+    context.currentPage.editableRegionValues["ad.title"] = "Ad";
+
+    const response = await rocketLocalEngine.createPlan({
+      intent: "change this text to Smarter Growth Campaigns",
+      context,
+      memory: {}
+    });
+
+    expect(response.plan.operations).toHaveLength(1);
+    expect(response.plan.operations[0]).toMatchObject({
+      type: "update_region",
+      targetId: "ad.title",
+      patches: [
+        { path: "value", valueJson: '"Smarter Growth Campaigns"' }
+      ]
+    });
+    const execution = applyAIPlan({
+      plan: response.plan,
+      regions: context.currentPage.editableRegionValues
+    });
+    expect(execution.regions["ad.title"]).toBe("Smarter Growth Campaigns");
+  });
+
   it("builds a native landing page from real registered components", async () => {
     const response = await rocketLocalEngine.createPlan({
       intent: "Build a SaaS landing page",

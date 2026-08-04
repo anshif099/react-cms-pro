@@ -1206,6 +1206,14 @@ function ConnectedSourceWorkspace({
                 onRollback={rollbackConnectedAIPlan}
                 renderInspector={() => renderVisualInspector(true)}
                 inspectorSelectionKey={selectedRegion?.regionId}
+                selectedTarget={selectedRegion}
+                onRequestAreaSelect={() => {
+                  setWorkspaceMode("visual");
+                  setSelectedRegion(null);
+                  sendRuntimeMessage("rcms/v1/enter-edit-mode");
+                  window.setTimeout(() => iframeRef.current?.focus(), 0);
+                }}
+                onClearAreaSelection={() => setSelectedRegion(null)}
                 onClose={() => setAIOpen(false)}
               />
             </Suspense>
@@ -1247,6 +1255,14 @@ function ConnectedSourceWorkspace({
                 onRollback={rollbackConnectedAIPlan}
                 renderInspector={() => renderVisualInspector(true)}
                 inspectorSelectionKey={selectedRegion?.regionId}
+                selectedTarget={selectedRegion}
+                onRequestAreaSelect={() => {
+                  setWorkspaceMode("visual");
+                  setSelectedRegion(null);
+                  sendRuntimeMessage("rcms/v1/enter-edit-mode");
+                  window.setTimeout(() => iframeRef.current?.focus(), 0);
+                }}
+                onClearAreaSelection={() => setSelectedRegion(null)}
                 onClose={() => setAIOpen(false)}
               />
             </Suspense>
@@ -1583,6 +1599,9 @@ function NativeBuilderWorkspace({
               onRollback={rollbackNativeAIPlan}
               onInsertComponent={addNode}
               inspectorSelectionKey={editor.selectedNode?.id}
+              selectedTarget={editor.selectedNode}
+              onRequestAreaSelect={editor.clearSelection}
+              onClearAreaSelection={editor.clearSelection}
               renderInspector={() => (
                 <NativeInspector
                   embedded

@@ -421,6 +421,135 @@ function addCopyEdit(operations, addOperation, context, intent) {
   return true;
 }
 
+function selectedRegionCopyOperation(addOperation, context, intent) {
+  const selected = context?.currentPage?.selectedRegion;
+  const capabilities = new Set(context?.capabilities || []);
+  if (
+    !selected?.regionId
+    || !capabilities.has("update_region")
+    || !["text", "richtext", "button"].includes(selected.type)
+  ) return null;
+
+  const text = normalized(intent);
+  if (includesAny(text, [
+    "background", "text color", "text colour", "font color", "font colour",
+    "font size", "image", "photo", "picture", "media asset", "link url", "href"
+  ])) return null;
+
+  const source = String(intent).trim();
+  const replacement = source.match(
+    /\b(?:change|replace|set|update|rewrite)\b[\s\S]*?\b(?:to|as)\s+["'“]?([\s\S]+?)["'”]?\s*$/i
+  ) || source.match(
+    /\b(?:make|have)\b[\s\S]*?\b(?:say|read)\s+["'“]?([\s\S]+?)["'”]?\s*$/i
+  ) || source.match(
+    /^(?:text|copy|heading|headline|title|label|button)\s*:\s*["'“]?([\s\S]+?)["'”]?\s*$/i
+  );
+  const value = replacement?.[1]?.trim();
+  if (!value) return null;
+
+  let path = "value";
+  if (selected.type === "button") {
+    path = selected.value && typeof selected.value === "object"
+      ? "value.text"
+      : "value";
+  } else if (
+    selected.type === "text"
+    && selected.value
+    && typeof selected.value === "object"
+  ) {
+    path = "value.text";
+  }
+  const patchValue = selected.type === "button" && path === "value"
+    ? { text: value }
+    : value;
+
+  return addOperation("update_region", {
+    targetId: selected.regionId,
+    summary: `Rewrite ${selected.label || "selected content"}`,
+    reason: "Apply the requested copy only to the area attached to this chat.",
+    patches: [patch(path, patchValue)]
+  });
+}
+
+function mediaAssetFromIntent(intent, context) {
+  const assets = Array.isArray(context?.contentSystem?.assets)
+    ? context.contentSystem.assets
+    : [];
+  const idMatch = String(intent).match(/media\s+asset(?:\s+with)?\s+id\s*["'“”]?([^"'“”\s,;.]+)/i);
+  if (idMatch) {
+    const byId = assets.find((asset) => String(asset?.id) === idMatch[1]);
+    if (byId) return byId;
+  }
+  const text = normalized(intent);
+  return assets.find((asset) => {
+    const name = normalized(asset?.name || asset?.title || asset?.fileName);
+    return name.length >= 3 && text.includes(name);
+  }) || null;
+}
+
+function selectedImageTarget(context, allowProminent = false) {
+  const page = context?.currentPage || {};
+  if (page.selectedRegion?.regionId && page.selectedRegion.type === "image") {
+    return { kind: "region", target: page.selectedRegion };
+  }
+  if (page.selectedComponent?.id && page.selectedComponent.type === "image") {
+    return { kind: "component", target: page.selectedComponent };
+  }
+  if (!allowProminent) return null;
+  const definitions = page.editableRegionDefinitions || {};
+  const entries = Object.entries(definitions).filter(([, definition]) => definition?.type === "image");
+  const entry = entries.find(([regionId]) => /(?:hero|banner|cover|main)/i.test(regionId)) || entries[0];
+  return entry ? {
+    kind: "region",
+    target: {
+      regionId: entry[0],
+      type: "image",
+      label: entry[1]?.label || entry[0],
+      value: page.editableRegionValues?.[entry[0]]
+    }
+  } : null;
+}
+
+function imageOperation(addOperation, context, intent) {
+  const text = normalized(intent);
+  if (!includesAny(text, ["image", "photo", "picture", "media asset"])) return null;
+  const asset = mediaAssetFromIntent(intent, context);
+  const urlMatch = String(intent).match(/https:\/\/[^\s"'<>]+/i);
+  const source = asset?.url || urlMatch?.[0] || "";
+  if (!source) return null;
+  const allowProminent = includesAny(text, ["prominent", "hero", "most appropriate"]);
+  const imageTarget = selectedImageTarget(context, allowProminent);
+  if (!imageTarget) return null;
+  const alt = String(
+    asset?.alt
+    || asset?.name
+    || context?.currentPage?.record?.title
+    || "Website image"
+  ).trim();
+
+  if (imageTarget.kind === "region") {
+    return addOperation("update_region", {
+      targetId: imageTarget.target.regionId,
+      summary: `Replace ${imageTarget.target.label || "selected image"}`,
+      reason: "Use the requested media asset in the selected editable image area.",
+      patches: [
+        patch("value.src", source),
+        patch("value.alt", alt)
+      ]
+    });
+  }
+  const locale = context?.currentPage?.locale || "en";
+  return addOperation("update_component", {
+    targetId: imageTarget.target.id,
+    summary: `Replace ${imageTarget.target.label || "selected image"}`,
+    reason: "Use the requested media asset in the selected image component.",
+    patches: [
+      patch("props.src", source),
+      patch(`props.locales.${locale}.alt`, alt)
+    ]
+  });
+}
+
 function conversationalReply(intent, context) {
   const text = normalized(intent);
   const assets = Array.isArray(context?.contentSystem?.assets)
@@ -439,6 +568,12 @@ function conversationalReply(intent, context) {
         : "The header belongs to the connected website shell and is not exposed as an editable field on this page. I also do not see a logo-named CMS asset, so check the connected Header component's logo import/path or add the logo to Media and expose it with EditableImage.";
     }
     return "The header logo is not represented by an editable image in the current page model. Select an exposed logo image, or add it as an editable image in the header, and I can replace or configure it safely.";
+  }
+  if (includesAny(text, ["image", "photo", "picture"])) {
+    const selected = selectedImageTarget(context, false);
+    return selected
+      ? "The image area is selected. Ask me to generate a specific image, include an image URL, or choose an existing item from Assets; I’ll prepare the replacement as an approved draft edit."
+      : "Use Select area and click an editable image first. Then ask me to generate, replace, resize, or update that image while the selection stays attached to the chat.";
   }
   if (/^(hi|hello|hey|good morning|good afternoon|good evening)\b/.test(text)) {
     return "Hello! I’m following this page and our conversation. Tell me what should change, or ask me to inspect a problem before editing.";
@@ -464,6 +599,18 @@ function buildPlan({ intent, context, memory = {}, conversation = [], previousPl
   const affected = new Set();
   const capabilities = new Set(context?.capabilities || []);
   const color = colorFromIntent(combinedIntent);
+
+  const imageItem = imageOperation(addOperation, context, combinedIntent);
+  if (imageItem) {
+    operations.push(imageItem);
+    affected.add("Selected image");
+  }
+
+  const selectedCopyItem = selectedRegionCopyOperation(addOperation, context, combinedIntent);
+  if (selectedCopyItem) {
+    operations.push(selectedCopyItem);
+    affected.add("Selected content");
+  }
 
   if (color && includesAny(text, ["background", " bg ", "bg colour", "bg color"])) {
     const isPageBackground = includesAny(text, [

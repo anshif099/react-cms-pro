@@ -68,6 +68,13 @@ const MEMORY_FIELDS = [
   ["designLanguage", "Design language"]
 ];
 
+function requestsGeneratedImage(value) {
+  const text = String(value || "").trim().toLowerCase();
+  return /\b(generate|create|make|design)\b/.test(text)
+    && /\b(image|photo|picture|illustration|artwork|visual)\b/.test(text)
+    && !/\b(existing|uploaded|media library)\b/.test(text);
+}
+
 function dateLabel(value) {
   if (!value) return "Just now";
   return new Intl.DateTimeFormat(undefined, {
@@ -223,9 +230,12 @@ export function AIWorkspace({
   onInsertComponent,
   renderInspector,
   inspectorSelectionKey,
+  selectedTarget,
+  onRequestAreaSelect,
+  onClearAreaSelection,
   onClose
 }) {
-  const [activeTab, setActiveTab] = useState(() => renderInspector ? "inspector" : "chat");
+  const [activeTab, setActiveTab] = useState("chat");
   const [prompt, setPrompt] = useState("");
   const [messages, setMessages] = useState([{
     id: "welcome",
@@ -246,6 +256,7 @@ export function AIWorkspace({
   const [imagePrompt, setImagePrompt] = useState("");
   const [imageGenerating, setImageGenerating] = useState(false);
   const [imageProgress, setImageProgress] = useState(0);
+  const [selectingArea, setSelectingArea] = useState(false);
   const [consoleEntries, setConsoleEntries] = useState([]);
   const [rocketUser, setRocketUser] = useState(() => rocketAIAuthService.currentUser());
   const [rocketAuthLoading, setRocketAuthLoading] = useState(true);
@@ -253,14 +264,22 @@ export function AIWorkspace({
   const [rocketAuthError, setRocketAuthError] = useState("");
   const chatEndRef = useRef(null);
   const getContextRef = useRef(getContext);
+  const areaSelectionClearedRef = useRef(false);
 
   useEffect(() => {
     getContextRef.current = getContext;
   }, [getContext]);
 
   useEffect(() => {
-    if (inspectorSelectionKey) setActiveTab("inspector");
-  }, [inspectorSelectionKey]);
+    if (!selectingArea) return;
+    if (!inspectorSelectionKey) {
+      areaSelectionClearedRef.current = true;
+      return;
+    }
+    if (!areaSelectionClearedRef.current) return;
+    setSelectingArea(false);
+    setActiveTab("chat");
+  }, [inspectorSelectionKey, selectingArea]);
 
   useEffect(() => rocketAIAuthService.subscribe((user) => {
     setRocketUser(user);
@@ -360,7 +379,7 @@ export function AIWorkspace({
     appendUser = true
   }) => {
     const cleanIntent = String(intent || "").trim();
-    if (!cleanIntent || planning || applying) return;
+    if (!cleanIntent || planning || applying || imageGenerating) return;
     if (!rocketUser) {
       setRocketAuthError("Connect a Google account before asking Rocket AI.");
       return;
@@ -381,9 +400,41 @@ export function AIWorkspace({
     setModifyOpen(false);
     log("plan", `Analyzing the full page for: ${cleanIntent}`);
     try {
-      const freshContext = await refreshContext();
+      let freshContext = await refreshContext();
+      let planningIntent = cleanIntent;
+      const imageTarget = freshContext?.currentPage?.selectedRegion?.type === "image"
+        ? freshContext.currentPage.selectedRegion
+        : freshContext?.currentPage?.selectedComponent?.type === "image"
+          ? freshContext.currentPage.selectedComponent
+          : null;
+      if (!previousPlan && requestsGeneratedImage(cleanIntent) && imageTarget) {
+        setImageGenerating(true);
+        setImageProgress(0);
+        log("image", `Generating an image for ${imageTarget.label || imageTarget.regionId || imageTarget.id}.`);
+        const generated = await aiWebsiteAgentService.generateImage({
+          prompt: cleanIntent,
+          brandContext: {
+            pageTitle,
+            theme: freshContext?.designSystem?.theme,
+            memory
+          }
+        });
+        const file = generatedImageFile(generated.imageBase64, pageTitle, generated.mimeType);
+        const asset = await mediaService.upload(
+          websiteId,
+          file,
+          "ai-generated",
+          setImageProgress
+        );
+        freshContext = await refreshContext();
+        planningIntent = `Use the existing media asset with ID "${asset.id}" and URL "${asset.url}" in the selected image, with accessible alt text. Original request: ${cleanIntent}`;
+        log("success", `Generated ${asset.name} and attached it to the pending selected-image plan.`, {
+          model: generated.model,
+          assetId: asset.id
+        });
+      }
       const response = await aiWebsiteAgentService.createPlan({
-        intent: cleanIntent,
+        intent: planningIntent,
         context: freshContext,
         memory,
         conversation: requestConversation,
@@ -433,8 +484,21 @@ export function AIWorkspace({
       log("error", message);
     } finally {
       setPlanning(false);
+      setImageGenerating(false);
+      setImageProgress(0);
     }
-  }, [applying, log, memory, messages, planning, refreshContext, rocketUser]);
+  }, [
+    applying,
+    imageGenerating,
+    log,
+    memory,
+    messages,
+    pageTitle,
+    planning,
+    refreshContext,
+    rocketUser,
+    websiteId
+  ]);
 
   const submitPrompt = (event) => {
     event?.preventDefault();
@@ -609,6 +673,19 @@ export function AIWorkspace({
     }
   };
 
+  const beginAreaSelection = () => {
+    areaSelectionClearedRef.current = false;
+    setSelectingArea(true);
+    setActiveTab("chat");
+    onRequestAreaSelect?.();
+  };
+
+  const clearAreaSelection = () => {
+    areaSelectionClearedRef.current = false;
+    setSelectingArea(false);
+    onClearAreaSelection?.();
+  };
+
   const renderChat = () => (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex-1 space-y-3 overflow-y-auto p-3">
@@ -627,6 +704,51 @@ export function AIWorkspace({
           <p className="mt-2 text-[9px] leading-4 text-slate-500">
             {context?.currentPage?.flattenedComponentIndex?.length || 0} components · {assets.length} assets · {context?.revisionHistory?.length || 0} revisions · {(context?.capabilities || []).length} editing capabilities
           </p>
+        </div>
+
+        <div className={`rounded-xl border p-3 ${
+          selectingArea
+            ? "border-amber-400/30 bg-amber-400/[0.06]"
+            : selectedTarget
+              ? "border-violet-500/30 bg-violet-500/[0.07]"
+              : "border-slate-800 bg-slate-950/35"
+        }`}>
+          <div className="flex items-center gap-2">
+            <MousePointer2 className={`h-3.5 w-3.5 ${selectingArea ? "text-amber-300" : selectedTarget ? "text-violet-300" : "text-slate-600"}`} />
+            <div className="min-w-0 flex-1">
+              <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                {selectingArea ? "Click an area in the canvas" : selectedTarget ? "AI target attached" : "Area targeting"}
+              </p>
+              <p className="mt-0.5 truncate text-[9px] text-slate-600">
+                {selectingArea
+                  ? "Choose an outlined section, text, button, or image."
+                  : selectedTarget
+                    ? `${selectedTarget.label || selectedTarget.regionId || selectedTarget.id} · ${selectedTarget.type || "area"}`
+                    : "Select one area so chat edits stay scoped to it."}
+              </p>
+            </div>
+            {selectedTarget && !selectingArea && (
+              <button
+                type="button"
+                onClick={clearAreaSelection}
+                className="grid h-7 w-7 place-items-center rounded-lg text-slate-600 hover:bg-slate-900 hover:text-white cursor-pointer"
+                title="Clear selected AI target"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={beginAreaSelection}
+            className={`mt-2 h-8 w-full rounded-lg border text-[9px] font-bold cursor-pointer ${
+              selectingArea
+                ? "border-amber-400/30 bg-amber-400/10 text-amber-200"
+                : "border-violet-500/25 bg-violet-500/10 text-violet-200 hover:bg-violet-500/15"
+            }`}
+          >
+            {selectingArea ? "Waiting for canvas selection…" : selectedTarget ? "Select another area" : "Select area"}
+          </button>
         </div>
 
         <div className={`rounded-xl border p-3 ${
@@ -700,8 +822,14 @@ export function AIWorkspace({
           <div className="flex items-center gap-2 rounded-xl border border-violet-500/15 bg-violet-500/5 p-3">
             <Loader2 className="h-4 w-4 animate-spin text-violet-300" />
             <div>
-              <p className="text-[10px] font-semibold text-violet-100">Analyzing the entire page</p>
-              <p className="mt-0.5 text-[9px] text-slate-600">Planning structure, design, content, responsive behavior, and validation…</p>
+              <p className="text-[10px] font-semibold text-violet-100">
+                {imageGenerating ? "Generating the selected image" : selectedTarget ? "Planning the selected-area update" : "Analyzing the entire page"}
+              </p>
+              <p className="mt-0.5 text-[9px] text-slate-600">
+                {imageGenerating
+                  ? `Creating brand-aware artwork${imageProgress ? ` · ${Math.round(imageProgress)}% upload` : "…"}`
+                  : "Planning structure, design, content, responsive behavior, and validation…"}
+              </p>
             </div>
           </div>
         )}
@@ -787,14 +915,20 @@ export function AIWorkspace({
               }
             }}
             rows="3"
-            placeholder={rocketUser ? "Ask Rocket AI to build, redesign, review, or optimize this page…" : "Connect Google to start using Rocket AI…"}
+            placeholder={rocketUser
+              ? selectedTarget
+                ? `Tell Rocket how to update this ${selectedTarget.type || "area"}…`
+                : "Ask Rocket AI to build, redesign, review, or optimize this page…"
+              : "Connect Google to start using Rocket AI…"}
             className="w-full resize-none bg-transparent px-1 text-[11px] leading-5 text-slate-200 outline-none placeholder:text-slate-700"
           />
           <div className="mt-1 flex items-center gap-2">
-            <span className="text-[8px] text-slate-700">Enter to plan · Shift+Enter for a line</span>
+            <span className="truncate text-[8px] text-slate-700">
+              {selectedTarget ? `Target: ${selectedTarget.label || selectedTarget.regionId || selectedTarget.id}` : "Enter to plan · Shift+Enter for a line"}
+            </span>
             <button
               type="submit"
-              disabled={!rocketUser || !prompt.trim() || planning || applying}
+              disabled={!rocketUser || !prompt.trim() || planning || applying || imageGenerating}
               className="ml-auto grid h-7 w-7 place-items-center rounded-lg bg-violet-600 text-white disabled:opacity-30 cursor-pointer"
               title="Create plan"
             >
