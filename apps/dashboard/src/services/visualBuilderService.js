@@ -244,12 +244,12 @@ export const visualBuilderService = {
   async loadNativePage(websiteId, pageKey, pageIdentity = {}) {
     const registryKeys = Array.from(new Set([
       pageKey,
-      pageIdentity.pageId,
-      pageIdentity.routeId,
-      pageIdentity.slug,
-      pageIdentity.route,
+      pageIdentity?.pageId,
+      pageIdentity?.routeId,
+      pageIdentity?.slug,
+      pageIdentity?.route,
       pageKey ? String(pageKey).replace(/\//g, "-") : null,
-      pageIdentity.route ? String(pageIdentity.route).replace(/^\/+|\/+$/g, "").replace(/\//g, "-") : null
+      pageIdentity?.route ? String(pageIdentity.route).replace(/^\/+|\/+$/g, "").replace(/\//g, "-") : null
     ]
       .filter(Boolean)
       .map((value) => String(value).split("?")[0].replace(/^\/+|\/+$/g, "") || "home")));
@@ -346,12 +346,12 @@ export const visualBuilderService = {
   async loadSavedDraftRegions(websiteId, pageKey, pageIdentity = {}) {
     const candidateKeys = Array.from(new Set([
       pageKey,
-      pageIdentity.pageId,
-      pageIdentity.routeId,
-      pageIdentity.slug,
-      pageIdentity.route,
+      pageIdentity?.pageId,
+      pageIdentity?.routeId,
+      pageIdentity?.slug,
+      pageIdentity?.route,
       pageKey ? String(pageKey).replace(/\//g, "-") : null,
-      pageIdentity.route ? String(pageIdentity.route).replace(/^\/+|\/+$/g, "").replace(/\//g, "-") : null
+      pageIdentity?.route ? String(pageIdentity.route).replace(/^\/+|\/+$/g, "").replace(/\//g, "-") : null
     ]
       .filter(Boolean)
       .map((value) => String(value).split("?")[0].replace(/^\/+|\/+$/g, "") || "home")));
@@ -418,16 +418,16 @@ export const visualBuilderService = {
     pageId,
     pageKey,
     locale,
-    page,
-    pageSettings,
-    regions,
-    blocks,
-    tree
+    page = {},
+    pageSettings = {},
+    regions = {},
+    blocks = [],
+    tree = null
   }) {
-    const title = pageSettings.title || page.title || "Untitled Page";
-    const slug = pageSettings.slug ?? page.slug ?? "";
-    const route = pageSettings.route || (slug === "home" ? "/" : `/${slug}`);
-    const seo = pageSettings.seo || {};
+    const title = pageSettings?.title || page?.title || "Untitled Page";
+    const slug = pageSettings?.slug ?? page?.slug ?? "";
+    const route = pageSettings?.route || (slug === "home" ? "/" : `/${slug}`);
+    const seo = pageSettings?.seo || {};
     const draftPayload = {
       id: pageKey,
       title,
@@ -459,7 +459,7 @@ export const visualBuilderService = {
     const pageUpdates = {
       updatedAt: Date.now(),
       route,
-      layout: pageSettings.layout || page.layout || "default",
+      layout: pageSettings?.layout || page?.layout || "default",
       [`locales/${locale}/title`]: title,
       [`locales/${locale}/slug`]: slug,
       [`locales/${locale}/seo`]: seo,
@@ -480,13 +480,13 @@ export const visualBuilderService = {
       update(ref(database, `pages/${websiteId}/${pageId}`), pageUpdates)
     ];
 
-    if (page.routeId || page.slug) {
+    if (page?.routeId || page?.slug) {
       operations.push(
         update(ref(database, `registry/${websiteId}/routes/${page.routeId || page.slug}`), {
           title,
           path: route,
           slug,
-          layout: pageSettings.layout || page.layout || "default",
+          layout: pageSettings?.layout || page?.layout || "default",
           updatedAt: Date.now()
         })
       );
