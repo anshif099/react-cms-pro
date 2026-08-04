@@ -365,12 +365,16 @@ export function AIWorkspace({
       setRocketAuthError("Connect a Google account before asking Rocket AI.");
       return;
     }
+    const userMessage = appendUser ? {
+      id: `user_${Date.now()}`,
+      role: "user",
+      content: feedback || cleanIntent
+    } : null;
+    const requestConversation = userMessage
+      ? [...messages, userMessage]
+      : messages;
     if (appendUser) {
-      setMessages((current) => [...current, {
-        id: `user_${Date.now()}`,
-        role: "user",
-        content: feedback || cleanIntent
-      }]);
+      setMessages((current) => [...current, userMessage]);
     }
     setPlanning(true);
     setPending(null);
@@ -382,7 +386,7 @@ export function AIWorkspace({
         intent: cleanIntent,
         context: freshContext,
         memory,
-        conversation: messages,
+        conversation: requestConversation,
         previousPlan,
         feedback
       });

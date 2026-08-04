@@ -67,6 +67,25 @@ function nativeContext() {
   };
 }
 
+function connectedFullPageContext() {
+  const context = connectedContext();
+  context.currentPage.editableRegionDefinitions = {
+    "ad.hero": { type: "section", label: "Hero section" },
+    "ad.stats_carousel_section": { type: "section", label: "Statistics" },
+    "ad.body_section": { type: "section", label: "Main content" },
+    "ad.cta_section": { type: "section", label: "Call to action" },
+    "ad.title": { type: "text", label: "Page title" }
+  };
+  context.currentPage.editableRegionValues = {
+    "ad.hero": { background: "#000000", paddingY: 80 },
+    "ad.stats_carousel_section": { background: "#111111" },
+    "ad.body_section": { background: "#0d0d0d" },
+    "ad.cta_section": { background: "#111111" },
+    "ad.title": "Ad"
+  };
+  return context;
+}
+
 describe("embedded Rocket AI engine", () => {
   it("changes the selected connected section background without an API request", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
@@ -111,6 +130,53 @@ describe("embedded Rocket AI engine", () => {
     });
   });
 
+  it("applies an explicit page background request to every editable section", async () => {
+    const context = connectedFullPageContext();
+    const response = await rocketLocalEngine.createPlan({
+      intent: "change background colour on this page black change to add: #F5F5F7",
+      context,
+      memory: {}
+    });
+
+    expect(response.plan.operations.map((operation) => operation.targetId)).toEqual([
+      "ad.hero",
+      "ad.stats_carousel_section",
+      "ad.body_section",
+      "ad.cta_section"
+    ]);
+    expect(response.plan.operations.every((operation) => (
+      operation.patches[0].valueJson === '"#F5F5F7"'
+    ))).toBe(true);
+  });
+
+  it("carries the prior background and color into a natural-language follow-up", async () => {
+    const context = connectedFullPageContext();
+    const response = await rocketLocalEngine.createPlan({
+      intent: "full page change not only one module",
+      context,
+      memory: {},
+      conversation: [
+        { role: "user", content: "change the page background from black to #F5F5F7" },
+        { role: "assistant", content: "Applied the selected section edit." }
+      ]
+    });
+
+    expect(response.plan.operations).toHaveLength(4);
+    expect(response.plan.operations.map((operation) => operation.targetId)).toEqual([
+      "ad.hero",
+      "ad.stats_carousel_section",
+      "ad.body_section",
+      "ad.cta_section"
+    ]);
+    expect(response.plan.assistantMessage).toMatch(/carried forward/i);
+    const execution = applyAIPlan({
+      plan: response.plan,
+      regions: context.currentPage.editableRegionValues
+    });
+    expect(execution.regions["ad.body_section"].background).toBe("#F5F5F7");
+    expect(execution.regions["ad.cta_section"].background).toBe("#F5F5F7");
+  });
+
   it("prefers the visible hero when connected section values have not hydrated", async () => {
     const context = connectedContext();
     context.currentPage.selectedRegion = null;
@@ -149,7 +215,22 @@ describe("embedded Rocket AI engine", () => {
     });
 
     expect(response.plan.operations).toEqual([]);
-    expect(response.plan.assistantMessage).toMatch(/could not map/i);
+    expect(response.plan.assistantMessage).toMatch(/help diagnose/i);
+  });
+
+  it("continues the conversation with a useful shell-level logo diagnosis", async () => {
+    const response = await rocketLocalEngine.createPlan({
+      intent: "head logo not showing",
+      context: connectedContext(),
+      memory: {},
+      conversation: [
+        { role: "user", content: "full page change not only one module" }
+      ]
+    });
+
+    expect(response.plan.operations).toEqual([]);
+    expect(response.plan.assistantMessage).toMatch(/connected website shell/i);
+    expect(response.plan.assistantMessage).toMatch(/header component/i);
   });
 
   it("builds a native landing page from real registered components", async () => {

@@ -146,6 +146,57 @@ function colorFromIntent(intent) {
   return matches?.at(-1) || "";
 }
 
+function requestsFullPageScope(intent) {
+  const text = normalized(intent);
+  return includesAny(text, [
+    "full page",
+    "whole page",
+    "entire page",
+    "across the page",
+    "all sections",
+    "every section",
+    "all modules",
+    "every module",
+    "not only one",
+    "not just one",
+    "do it everywhere",
+    "apply everywhere"
+  ]);
+}
+
+function previousUserIntent(conversation, predicate) {
+  if (!Array.isArray(conversation)) return "";
+  return [...conversation].reverse().find((message) => (
+    message?.role === "user"
+    && typeof message.content === "string"
+    && predicate(message.content)
+  ))?.content || "";
+}
+
+function resolveContextualIntent(intent, conversation = []) {
+  const directIntent = String(intent || "").trim();
+  const directText = normalized(directIntent);
+  const needsBackgroundContext = requestsFullPageScope(directText)
+    && (!colorFromIntent(directIntent) || !directText.includes("background"));
+  if (!needsBackgroundContext) {
+    return { directIntent, resolvedIntent: directIntent, carriedForward: false };
+  }
+
+  const previous = previousUserIntent(conversation, (content) => {
+    const text = normalized(content);
+    return Boolean(colorFromIntent(content))
+      && includesAny(text, ["background", " bg ", "bg colour", "bg color"]);
+  });
+  if (!previous) {
+    return { directIntent, resolvedIntent: directIntent, carriedForward: false };
+  }
+  return {
+    directIntent,
+    resolvedIntent: `${previous}. Follow-up instruction: ${directIntent}`,
+    carriedForward: true
+  };
+}
+
 function titleFromContext(context) {
   return context?.currentPage?.record?.title
     || context?.currentPage?.settings?.title
@@ -194,6 +245,39 @@ function regionOperation(addOperation, context, field, value, summary, reason, t
     reason,
     patches: [patch(`value.${field}`, value)]
   });
+}
+
+function sectionRegionEntries(context) {
+  const page = context?.currentPage || {};
+  const definitions = page.editableRegionDefinitions || {};
+  const values = page.editableRegionValues || {};
+  const entries = new Map();
+
+  Object.entries(definitions).forEach(([regionId, definition]) => {
+    if (definition?.type !== "section") return;
+    entries.set(regionId, definition);
+  });
+  Object.entries(values).forEach(([regionId, regionValue]) => {
+    if (
+      entries.has(regionId)
+      || !regionValue
+      || typeof regionValue !== "object"
+      || Array.isArray(regionValue)
+      || (!("background" in regionValue) && !("paddingY" in regionValue))
+    ) return;
+    entries.set(regionId, { type: "section", label: regionId });
+  });
+  return Array.from(entries.entries()).slice(0, 79);
+}
+
+function pageSectionOperations(addOperation, context, color) {
+  if (!(context?.capabilities || []).includes("update_region")) return [];
+  return sectionRegionEntries(context).map(([regionId, definition]) => addOperation("update_region", {
+    targetId: regionId,
+    summary: `Change ${definition?.label || regionId} background to ${color}`,
+    reason: "Apply the requested page background consistently across every editable section.",
+    patches: [patch("value.background", color)]
+  }));
 }
 
 function selectedComponentOperation(addOperation, context, path, value, summary, reason) {
@@ -337,8 +421,43 @@ function addCopyEdit(operations, addOperation, context, intent) {
   return true;
 }
 
-function buildPlan({ intent, context, memory = {}, previousPlan, feedback }) {
-  const combinedIntent = [intent, feedback].filter(Boolean).join(". ");
+function conversationalReply(intent, context) {
+  const text = normalized(intent);
+  const assets = Array.isArray(context?.contentSystem?.assets)
+    ? context.contentSystem.assets
+    : [];
+  const logoAsset = assets.find((asset) => (
+    /logo|brandmark|wordmark/i.test(String(
+      asset?.name || asset?.title || asset?.fileName || asset?.alt || ""
+    ))
+  ));
+
+  if (includesAny(text, ["logo not showing", "logo is not showing", "missing logo", "logo missing", "head logo", "header logo"])) {
+    if (context?.constraints?.preserveWebsiteShell) {
+      return logoAsset
+        ? `I found a logo-like asset (${logoAsset.name || logoAsset.title || logoAsset.fileName || "brand asset"}), but the header belongs to the connected website shell and is not exposed as an editable field on this page. The likely issue is the Header component's asset path or render logic; expose the logo with EditableImage or update the connected Header source so I can change it safely.`
+        : "The header belongs to the connected website shell and is not exposed as an editable field on this page. I also do not see a logo-named CMS asset, so check the connected Header component's logo import/path or add the logo to Media and expose it with EditableImage.";
+    }
+    return "The header logo is not represented by an editable image in the current page model. Select an exposed logo image, or add it as an editable image in the header, and I can replace or configure it safely.";
+  }
+  if (/^(hi|hello|hey|good morning|good afternoon|good evening)\b/.test(text)) {
+    return "Hello! I’m following this page and our conversation. Tell me what should change, or ask me to inspect a problem before editing.";
+  }
+  if (/^(thanks|thank you|got it|okay|ok)\b/.test(text)) {
+    return "You’re welcome. I’ll keep the current page and conversation context for your next instruction.";
+  }
+  if (includesAny(text, ["what can you do", "help me", "how can you help"])) {
+    return "I can continue from earlier instructions, edit exposed page sections and content, update page settings and theme tokens, review UX/SEO, and explain issues that belong to the connected website shell.";
+  }
+  return "I understand the message, but it does not identify a safe change in the current editable page model. I can still help diagnose it—tell me what is wrong, where it appears, and the result you expect.";
+}
+
+function buildPlan({ intent, context, memory = {}, conversation = [], previousPlan, feedback }) {
+  const contextualIntent = resolveContextualIntent(
+    [intent, feedback].filter(Boolean).join(". "),
+    conversation
+  );
+  const combinedIntent = contextualIntent.resolvedIntent;
   const text = normalized(combinedIntent);
   const addOperation = operationFactory();
   const operations = [];
@@ -348,17 +467,27 @@ function buildPlan({ intent, context, memory = {}, previousPlan, feedback }) {
 
   if (color && includesAny(text, ["background", " bg ", "bg colour", "bg color"])) {
     const isPageBackground = includesAny(text, [
-      "page background", "website background", "site background", "body background"
-    ]);
-    let item = regionOperation(
-      addOperation,
-      context,
-      "background",
-      color,
-      `Change the editable page section background to ${color}`,
-      "Apply the requested color directly to the connected website section.",
-      "section"
-    );
+      "page background", "website background", "site background", "body background",
+      "background colour on this page", "background color on this page"
+    ]) || requestsFullPageScope(text);
+    const pageItems = isPageBackground
+      ? pageSectionOperations(addOperation, context, color)
+      : [];
+    let item = null;
+    if (pageItems.length) {
+      operations.push(...pageItems);
+      affected.add("All editable page sections");
+    } else {
+      item = regionOperation(
+        addOperation,
+        context,
+        "background",
+        color,
+        `Change the editable page section background to ${color}`,
+        "Apply the requested color directly to the connected website section.",
+        "section"
+      );
+    }
     if (!item && !isPageBackground) {
       item = selectedComponentOperation(
         addOperation,
@@ -372,7 +501,7 @@ function buildPlan({ intent, context, memory = {}, previousPlan, feedback }) {
     if (item) {
       operations.push(item);
       affected.add("Selected section");
-    } else if (capabilities.has("update_theme")) {
+    } else if (!pageItems.length && capabilities.has("update_theme")) {
       addThemeOperation(
         operations,
         addOperation,
@@ -494,8 +623,10 @@ function buildPlan({ intent, context, memory = {}, previousPlan, feedback }) {
       ? `${operations.length} coordinated local edit${operations.length === 1 ? "" : "s"} prepared from the complete editable page model.`
       : "No safe editable operation matched this request.",
     assistantMessage: operations.length
-      ? `I prepared ${operations.length} local edit${operations.length === 1 ? "" : "s"}. Review the plan, then approve it to update the draft.`
-      : "I could not map that request to a safe editable field on this page. Select a component or section and describe the exact result.",
+      ? contextualIntent.carriedForward
+        ? `I carried forward the previous background and color request, then prepared ${operations.length} page-wide edit${operations.length === 1 ? "" : "s"}. Review the plan, then approve it to update the draft.`
+        : `I prepared ${operations.length} local edit${operations.length === 1 ? "" : "s"}. Review the plan, then approve it to update the draft.`
+      : conversationalReply(contextualIntent.directIntent, context),
     risk,
     estimatedEdits: operations.length,
     requiresApproval: true,
