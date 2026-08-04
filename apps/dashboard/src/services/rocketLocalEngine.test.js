@@ -119,6 +119,46 @@ describe("embedded Rocket AI engine", () => {
     fetchSpy.mockRestore();
   });
 
+  it("understands a named background color for the selected runtime section", async () => {
+    const context = connectedContext();
+    context.currentPage.selectedRegion = {
+      regionId: "api-live-preview.hero",
+      type: "section",
+      label: "Hero section",
+      pageId: "api-live-preview",
+      value: { background: "#000000", paddingY: 80 }
+    };
+    context.currentPage.editableRegionDefinitions = {
+      "api-live-preview.hero": {
+        type: "section",
+        label: "Hero section",
+        pageId: "api-live-preview"
+      }
+    };
+    context.currentPage.editableRegionValues = {
+      "api-live-preview.hero": { background: "#000000", paddingY: 80 }
+    };
+
+    const response = await rocketLocalEngine.createPlan({
+      intent: "change background colour from black to white",
+      context,
+      memory: {}
+    });
+
+    expect(response.plan.operations).toHaveLength(1);
+    expect(response.plan.operations[0]).toMatchObject({
+      type: "update_region",
+      targetId: "api-live-preview.hero",
+      patches: [{ path: "value.background", valueJson: '"#ffffff"' }]
+    });
+    const execution = applyAIPlan({
+      plan: response.plan,
+      regions: context.currentPage.editableRegionValues
+    });
+    expect(execution.changed).toBe(true);
+    expect(execution.regions["api-live-preview.hero"].background).toBe("#ffffff");
+  });
+
   it("finds the page section when it is not currently selected", async () => {
     const context = connectedContext();
     context.currentPage.selectedRegion = null;

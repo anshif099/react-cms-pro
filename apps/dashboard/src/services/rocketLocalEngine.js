@@ -231,9 +231,38 @@ function themePatches(preset) {
   ));
 }
 
+const NAMED_COLORS = Object.freeze({
+  "off white": "#f8fafc",
+  "dark gray": "#1f2937",
+  "dark grey": "#1f2937",
+  transparent: "transparent",
+  white: "#ffffff",
+  black: "#000000",
+  gray: "#6b7280",
+  grey: "#6b7280",
+  red: "#ef4444",
+  orange: "#f97316",
+  yellow: "#eab308",
+  green: "#22c55e",
+  blue: "#3b82f6",
+  purple: "#a855f7",
+  pink: "#ec4899"
+});
+
 function colorFromIntent(intent) {
-  const matches = String(intent || "").match(/#[0-9a-f]{3,8}\b/gi);
-  return matches?.at(-1) || "";
+  const source = String(intent || "");
+  const matches = source.match(/#[0-9a-f]{3,8}\b/gi);
+  if (matches?.length) return matches.at(-1);
+
+  const text = normalized(source);
+  const namedMatch = Object.entries(NAMED_COLORS)
+    .map(([name, value]) => ({ name, value, index: text.lastIndexOf(name) }))
+    .filter(({ index, name }) => (
+      index >= 0
+      && new RegExp(`\\b${name.replace(/\s+/g, "\\s+")}\\b`, "i").test(text)
+    ))
+    .sort((left, right) => right.index - left.index)[0];
+  return namedMatch?.value || "";
 }
 
 function requestsFullPageScope(intent) {
