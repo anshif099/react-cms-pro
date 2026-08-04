@@ -1,8 +1,26 @@
 import { auditAIContext, flattenContextTree } from "./aiWebsiteContextService";
 
-const MODEL_FAMILY = "rocket-embedded";
-const MODEL_DISPLAY_NAME = "Rocket Embedded";
-const ENGINE_VERSION = "1.1.0";
+const MODEL_RELEASES = Object.freeze([
+  Object.freeze({
+    releaseId: "rocket-ai-instant",
+    name: "Rocket AI Instant",
+    version: "1.01",
+    description: "Fast exact edits and short page conversations"
+  }),
+  Object.freeze({
+    releaseId: "rocket-ai-pro",
+    name: "Rocket AI Pro",
+    version: "1.2",
+    description: "Balanced planning, design, and content changes"
+  }),
+  Object.freeze({
+    releaseId: "rocket-ai-ultra",
+    name: "Rocket AI Ultra",
+    version: "1.5",
+    description: "Complex full-page planning and coordinated redesigns"
+  })
+]);
+const DEFAULT_MODEL_RELEASE = "rocket-ai-pro";
 const FEEDBACK_KEY = "reactcms_rocket_embedded_curriculum_v1";
 const MODEL_STATE_KEY = "reactcms_rocket_embedded_model_state_v1";
 
@@ -129,22 +147,44 @@ function readStoredJson(key, fallback) {
   }
 }
 
-function currentModelInfo() {
+function modelRelease(modelId) {
+  const requested = String(modelId || "").trim().toLowerCase();
+  return MODEL_RELEASES.find((release) => (
+    release.releaseId === requested
+    || `${release.releaseId}-${release.version}` === requested
+  )) || MODEL_RELEASES.find((release) => release.releaseId === DEFAULT_MODEL_RELEASE);
+}
+
+function currentModelInfo(preferredModelId = "") {
   const state = readStoredJson(MODEL_STATE_KEY, {});
+  const release = modelRelease(preferredModelId || state.activeModel);
   const curriculumRevision = Math.max(0, Number(state.curriculumRevision) || 0);
   const trainedExamples = Math.max(0, Number(state.trainedExamples) || 0);
-  const version = `${ENGINE_VERSION}-c${curriculumRevision}`;
   return {
-    id: `${MODEL_FAMILY}-v${version}`,
-    name: MODEL_DISPLAY_NAME,
-    version,
-    engineVersion: ENGINE_VERSION,
+    id: `${release.releaseId}-${release.version}`,
+    releaseId: release.releaseId,
+    name: release.name,
+    version: release.version,
+    description: release.description,
     curriculumRevision,
     trainedExamples,
     updatedAt: Number(state.updatedAt) || null,
     runtime: "browser",
     trainingMode: "approved-feedback curriculum"
   };
+}
+
+function chooseActiveModel(modelId) {
+  const release = modelRelease(modelId);
+  const target = storage();
+  if (!target) return currentModelInfo(release.releaseId);
+  const previousState = readStoredJson(MODEL_STATE_KEY, {});
+  target.setItem(MODEL_STATE_KEY, JSON.stringify({
+    ...previousState,
+    activeModel: release.releaseId,
+    updatedAt: Date.now()
+  }));
+  return currentModelInfo(release.releaseId);
 }
 
 function requestId() {
@@ -879,6 +919,7 @@ function captureFeedback(value) {
   target.setItem(FEEDBACK_KEY, JSON.stringify([...existing.slice(-49), record]));
   const previousState = readStoredJson(MODEL_STATE_KEY, {});
   target.setItem(MODEL_STATE_KEY, JSON.stringify({
+    ...previousState,
     curriculumRevision: Math.max(0, Number(previousState.curriculumRevision) || 0) + 1,
     trainedExamples: Math.max(0, Number(previousState.trainedExamples) || 0) + 1,
     updatedAt: record.capturedAt
@@ -906,7 +947,7 @@ function base64Utf8(value) {
   throw new Error("This browser cannot encode the locally generated artwork.");
 }
 
-function proceduralImage(prompt, brandContext = {}) {
+function proceduralImage(prompt, brandContext = {}, modelId = "") {
   const colors = brandContext?.theme?.colors || {};
   const primary = colors.primary || "#7c3aed";
   const accent = colors.accent || "#22d3ee";
@@ -935,19 +976,27 @@ function proceduralImage(prompt, brandContext = {}) {
   return {
     imageBase64: base64Utf8(svg),
     mimeType: "image/svg+xml",
-    model: `${currentModelInfo().id}-procedural-image`,
-    modelInfo: currentModelInfo()
+    model: `${currentModelInfo(modelId).id}-procedural-image`,
+    modelInfo: currentModelInfo(modelId)
   };
 }
 
 export const rocketLocalEngine = {
-  getModelInfo() {
-    return currentModelInfo();
+  getModelCatalog() {
+    return MODEL_RELEASES.map((release) => ({ ...release }));
+  },
+
+  getModelInfo(modelId = "") {
+    return currentModelInfo(modelId);
+  },
+
+  setActiveModel(modelId) {
+    return chooseActiveModel(modelId);
   },
 
   async createPlan(input) {
     const plan = buildPlan(input);
-    const modelInfo = currentModelInfo();
+    const modelInfo = currentModelInfo(input.modelId);
     return {
       plan,
       model: modelInfo.id,
@@ -962,8 +1011,8 @@ export const rocketLocalEngine = {
     };
   },
 
-  async generateImage({ prompt, brandContext }) {
-    return proceduralImage(prompt, brandContext);
+  async generateImage({ prompt, brandContext, modelId }) {
+    return proceduralImage(prompt, brandContext, modelId);
   },
 
   async recordFeedback(value) {

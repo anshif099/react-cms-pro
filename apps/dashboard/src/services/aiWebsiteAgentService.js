@@ -2,14 +2,23 @@ import { validateAIPlan } from "./aiBuilderContract";
 import rocketLocalEngine from "./rocketLocalEngine";
 
 export const aiWebsiteAgentService = {
-  getModelInfo() {
-    return rocketLocalEngine.getModelInfo();
+  getModelCatalog() {
+    return rocketLocalEngine.getModelCatalog();
+  },
+
+  getModelInfo(modelId = "") {
+    return rocketLocalEngine.getModelInfo(modelId);
+  },
+
+  setActiveModel(modelId) {
+    return rocketLocalEngine.setActiveModel(modelId);
   },
 
   async createPlan({
     intent,
     context,
     memory,
+    modelId = "",
     conversation = [],
     previousPlan = null,
     feedback = ""
@@ -18,6 +27,7 @@ export const aiWebsiteAgentService = {
       intent,
       context,
       memory,
+      modelId,
       conversation: conversation.slice(-12),
       previousPlan,
       feedback
@@ -31,10 +41,11 @@ export const aiWebsiteAgentService = {
     };
   },
 
-  async generateImage({ prompt, brandContext, size = "1024x1024", quality = "medium" }) {
+  async generateImage({ prompt, brandContext, modelId = "", size = "1024x1024", quality = "medium" }) {
     return rocketLocalEngine.generateImage({
       prompt,
       brandContext,
+      modelId,
       size,
       quality
     });

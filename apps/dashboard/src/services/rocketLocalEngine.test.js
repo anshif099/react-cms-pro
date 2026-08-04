@@ -96,10 +96,10 @@ describe("embedded Rocket AI engine", () => {
     });
 
     expect(fetchSpy).not.toHaveBeenCalled();
-    expect(response.model).toBe("rocket-embedded-v1.1.0-c0");
+    expect(response.model).toBe("rocket-ai-pro-1.2");
     expect(response.modelInfo).toMatchObject({
-      name: "Rocket Embedded",
-      version: "1.1.0-c0",
+      name: "Rocket AI Pro",
+      version: "1.2",
       curriculumRevision: 0
     });
     expect(response.usage.networkRequests).toBe(0);
@@ -405,12 +405,12 @@ describe("embedded Rocket AI engine", () => {
       }
     });
 
-    expect(result.model).toBe("rocket-embedded-v1.1.0-c0-procedural-image");
+    expect(result.model).toBe("rocket-ai-pro-1.2-procedural-image");
     expect(result.mimeType).toBe("image/svg+xml");
     expect(result.imageBase64.length).toBeGreaterThan(100);
   });
 
-  it("advances and reports its local curriculum version after approved feedback", async () => {
+  it("keeps release versions separate from training and supports all model tracks", async () => {
     const values = new Map();
     vi.stubGlobal("localStorage", {
       getItem: (key) => values.get(key) || null,
@@ -418,7 +418,9 @@ describe("embedded Rocket AI engine", () => {
     });
     try {
       expect(rocketLocalEngine.getModelInfo()).toMatchObject({
-        id: "rocket-embedded-v1.1.0-c0",
+        id: "rocket-ai-pro-1.2",
+        name: "Rocket AI Pro",
+        version: "1.2",
         trainedExamples: 0
       });
       const feedback = await rocketLocalEngine.recordFeedback({
@@ -430,9 +432,20 @@ describe("embedded Rocket AI engine", () => {
       });
       expect(feedback.captured).toBe(true);
       expect(feedback.modelInfo).toMatchObject({
-        id: "rocket-embedded-v1.1.0-c1",
-        version: "1.1.0-c1",
+        id: "rocket-ai-pro-1.2",
+        version: "1.2",
         curriculumRevision: 1,
+        trainedExamples: 1
+      });
+      expect(rocketLocalEngine.getModelCatalog().map(({ name, version }) => ({ name, version }))).toEqual([
+        { name: "Rocket AI Instant", version: "1.01" },
+        { name: "Rocket AI Pro", version: "1.2" },
+        { name: "Rocket AI Ultra", version: "1.5" }
+      ]);
+      expect(rocketLocalEngine.setActiveModel("rocket-ai-ultra")).toMatchObject({
+        id: "rocket-ai-ultra-1.5",
+        name: "Rocket AI Ultra",
+        version: "1.5",
         trainedExamples: 1
       });
     } finally {

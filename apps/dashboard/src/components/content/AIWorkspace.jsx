@@ -33,6 +33,11 @@ import aiBuilderPersistenceService, {
 } from "../../services/aiBuilderPersistenceService";
 import aiWebsiteAgentService from "../../services/aiWebsiteAgentService";
 import { auditAIContext } from "../../services/aiWebsiteContextService";
+import {
+  isImageRecolorRequest,
+  recolorImageAsset,
+  requestedImageColor
+} from "../../services/imageTransformService";
 import mediaService from "../../services/mediaService";
 import rocketAIAuthService from "../../services/rocketAIAuthService";
 
@@ -101,6 +106,19 @@ function generatedImageFile(base64, pageTitle, mimeType = "image/png") {
     [bytes],
     `${safeTitle}-ai-${Date.now()}.${extension}`,
     { type: mimeType }
+  );
+}
+
+function transformedImageFile(blob, pageTitle, extension = "png") {
+  const safeTitle = String(pageTitle || "website")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 50) || "website";
+  return new File(
+    [blob],
+    `${safeTitle}-logo-${Date.now()}.${extension}`,
+    { type: blob.type || (extension === "svg" ? "image/svg+xml" : "image/png") }
   );
 }
 
@@ -238,6 +256,7 @@ export function AIWorkspace({
 }) {
   const [activeTab, setActiveTab] = useState("chat");
   const [modelInfo, setModelInfo] = useState(() => aiWebsiteAgentService.getModelInfo());
+  const modelCatalog = useMemo(() => aiWebsiteAgentService.getModelCatalog(), []);
   const [prompt, setPrompt] = useState("");
   const [messages, setMessages] = useState([{
     id: "welcome",
@@ -380,6 +399,12 @@ export function AIWorkspace({
     }
   };
 
+  const changeRocketModel = (modelId) => {
+    const nextModel = aiWebsiteAgentService.setActiveModel(modelId);
+    setModelInfo(nextModel);
+    log("model", `Switched to ${nextModel.name} ${nextModel.version}.`);
+  };
+
   const requestPlan = useCallback(async ({
     intent,
     previousPlan = null,
@@ -415,12 +440,39 @@ export function AIWorkspace({
         : freshContext?.currentPage?.selectedComponent?.type === "image"
           ? freshContext.currentPage.selectedComponent
           : null;
-      if (!previousPlan && requestsGeneratedImage(cleanIntent) && imageTarget) {
+      if (!previousPlan && isImageRecolorRequest(cleanIntent) && imageTarget) {
+        setImageGenerating(true);
+        setImageProgress(0);
+        const source = typeof imageTarget.value === "string"
+          ? imageTarget.value
+          : imageTarget.value?.src || imageTarget.props?.src;
+        const targetColor = requestedImageColor(cleanIntent, freshContext?.designSystem?.theme);
+        log("image", `Recoloring ${imageTarget.label || imageTarget.regionId || imageTarget.id} to ${targetColor}.`);
+        const transformed = await recolorImageAsset({
+          source,
+          baseUrl: freshContext?.website?.record?.domain,
+          targetColor
+        });
+        const file = transformedImageFile(transformed.blob, pageTitle, transformed.extension);
+        const asset = await mediaService.upload(
+          websiteId,
+          file,
+          "ai-edited",
+          setImageProgress
+        );
+        freshContext = await refreshContext();
+        planningIntent = `Use the existing media asset with ID "${asset.id}" and URL "${asset.url}" in the selected image, with accessible alt text. The logo was recolored to ${targetColor} without white. Original request: ${cleanIntent}`;
+        log("success", `Recolored ${transformed.replacements} logo pixels and attached ${asset.name} to the pending plan.`, {
+          targetColor,
+          assetId: asset.id
+        });
+      } else if (!previousPlan && requestsGeneratedImage(cleanIntent) && imageTarget) {
         setImageGenerating(true);
         setImageProgress(0);
         log("image", `Generating an image for ${imageTarget.label || imageTarget.regionId || imageTarget.id}.`);
         const generated = await aiWebsiteAgentService.generateImage({
           prompt: cleanIntent,
+          modelId: modelInfo.releaseId,
           brandContext: {
             pageTitle,
             theme: freshContext?.designSystem?.theme,
@@ -446,6 +498,7 @@ export function AIWorkspace({
         intent: planningIntent,
         context: freshContext,
         memory,
+        modelId: modelInfo.releaseId,
         conversation: requestConversation,
         previousPlan,
         feedback
@@ -503,6 +556,7 @@ export function AIWorkspace({
     log,
     memory,
     messages,
+    modelInfo.releaseId,
     pageTitle,
     planning,
     refreshContext,
@@ -603,7 +657,7 @@ export function AIWorkspace({
         if (feedbackResult.modelInfo) setModelInfo(feedbackResult.modelInfo);
         log(
           "training",
-          `Approved plan advanced the private Rocket AI curriculum to ${feedbackResult.modelInfo?.version || feedbackResult.model}.`
+          `Saved approved lesson ${feedbackResult.modelInfo?.trainedExamples || 0} for ${feedbackResult.modelInfo?.name || modelInfo.name} ${feedbackResult.modelInfo?.version || modelInfo.version}.`
         );
       }
       const completedRun = {
@@ -624,7 +678,7 @@ export function AIWorkspace({
       setMessages((current) => [...current, {
         id: `applied_${Date.now()}`,
         role: "assistant",
-        content: `Applied ${execution.summary?.applied || 0} edits${execution.summary?.failed ? `; ${execution.summary.failed} need attention` : ""}.${changedLabels.length ? ` Changed: ${changedLabels.join("; ")}.` : ""} A draft snapshot and rollback point were created.${feedbackResult?.captured ? ` Rocket curriculum advanced to ${feedbackResult.modelInfo?.version || feedbackResult.model}.` : ""}`
+        content: `Applied ${execution.summary?.applied || 0} edits${execution.summary?.failed ? `; ${execution.summary.failed} need attention` : ""}.${changedLabels.length ? ` Changed: ${changedLabels.join("; ")}.` : ""} A draft snapshot and rollback point were created.${feedbackResult?.captured ? ` Approved lesson ${feedbackResult.modelInfo?.trainedExamples || 0} was saved for ${feedbackResult.modelInfo?.name || modelInfo.name} ${feedbackResult.modelInfo?.version || modelInfo.version}.` : ""}`
       }]);
       setPending(null);
       await refreshContext();
@@ -701,6 +755,7 @@ export function AIWorkspace({
     try {
       const generated = await aiWebsiteAgentService.generateImage({
         prompt: cleanPrompt,
+        modelId: modelInfo.releaseId,
         brandContext: {
           pageTitle,
           theme: context?.designSystem?.theme,
@@ -818,27 +873,44 @@ export function AIWorkspace({
               Checking Rocket AI account…
             </div>
           ) : rocketUser ? (
-            <div className="flex items-center gap-2.5">
-              {rocketUser.photoURL ? (
-                <img src={rocketUser.photoURL} alt="" className="h-8 w-8 rounded-full object-cover" referrerPolicy="no-referrer" />
-              ) : (
-                <div className="grid h-8 w-8 place-items-center rounded-full bg-white text-xs font-black text-slate-900">G</div>
-              )}
-              <div className="min-w-0 flex-1">
-                <p className="text-[9px] font-bold uppercase tracking-wider text-emerald-400">Rocket AI ready · {modelInfo.name}</p>
-                <p className="truncate text-[10px] text-slate-300">{rocketUser.email || rocketUser.displayName} · local runtime</p>
-                <p className="mt-0.5 truncate text-[8px] text-slate-500" title={modelInfo.id}>
-                  Model {modelInfo.id} · {modelInfo.trainedExamples} approved lesson{modelInfo.trainedExamples === 1 ? "" : "s"}
-                </p>
+            <div>
+              <div className="flex items-center gap-2.5">
+                {rocketUser.photoURL ? (
+                  <img src={rocketUser.photoURL} alt="" className="h-8 w-8 rounded-full object-cover" referrerPolicy="no-referrer" />
+                ) : (
+                  <div className="grid h-8 w-8 place-items-center rounded-full bg-white text-xs font-black text-slate-900">G</div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="text-[9px] font-bold uppercase tracking-wider text-emerald-400">Rocket AI ready · local runtime</p>
+                  <p className="truncate text-[10px] text-slate-300">{rocketUser.email || rocketUser.displayName}</p>
+                  <p className="mt-0.5 truncate text-[8px] text-slate-500">
+                    {modelInfo.trainedExamples} approved lesson{modelInfo.trainedExamples === 1 ? "" : "s"} · curriculum r{modelInfo.curriculumRevision}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={disconnectRocketAI}
+                  className="grid h-7 w-7 place-items-center rounded-lg border border-slate-800 text-slate-500 hover:border-rose-500/30 hover:text-rose-300 cursor-pointer"
+                  title="Disconnect Google account"
+                >
+                  <LogOut className="h-3.5 w-3.5" />
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={disconnectRocketAI}
-                className="grid h-7 w-7 place-items-center rounded-lg border border-slate-800 text-slate-500 hover:border-rose-500/30 hover:text-rose-300 cursor-pointer"
-                title="Disconnect Google account"
-              >
-                <LogOut className="h-3.5 w-3.5" />
-              </button>
+              <label className="mt-2 flex items-center gap-2 rounded-lg border border-slate-800/80 bg-slate-950/35 px-2.5 py-2">
+                <span className="text-[8px] font-bold uppercase tracking-wider text-slate-600">Model</span>
+                <select
+                  value={modelInfo.releaseId}
+                  onChange={(event) => changeRocketModel(event.target.value)}
+                  className="min-w-0 flex-1 bg-transparent text-[9px] font-semibold text-emerald-200 outline-none cursor-pointer"
+                  title={modelInfo.description}
+                >
+                  {modelCatalog.map((model) => (
+                    <option key={model.releaseId} value={model.releaseId} className="bg-slate-950 text-slate-200">
+                      {model.name} {model.version}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
           ) : (
             <div>
@@ -1289,7 +1361,7 @@ export function AIWorkspace({
             <p className="text-[10px] font-bold text-white">{active.label}</p>
             <p className="max-w-64 truncate text-[8px] text-slate-600" title={activeTab === "chat" ? modelInfo.id : undefined}>
               {activeTab === "chat"
-                ? `${modelInfo.name} · v${modelInfo.version} · auto curriculum`
+                ? `${modelInfo.name} · ${modelInfo.version}`
                 : `${pageTitle} · ${surface.replaceAll("-", " ")}`}
             </p>
           </div>
