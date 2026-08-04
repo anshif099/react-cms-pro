@@ -120,6 +120,24 @@ const SECTION_TERMS = [
   ["hero", ["hero"]]
 ];
 
+const ACRONYM_EXPANSIONS = Object.freeze({
+  ai: "Artificial Intelligence",
+  api: "Application Programming Interface",
+  cms: "Content Management System",
+  crm: "Customer Relationship Management",
+  cta: "Call to Action",
+  faq: "Frequently Asked Questions",
+  http: "Hypertext Transfer Protocol",
+  https: "Hypertext Transfer Protocol Secure",
+  kpi: "Key Performance Indicator",
+  roi: "Return on Investment",
+  saas: "Software as a Service",
+  seo: "Search Engine Optimization",
+  ui: "User Interface",
+  url: "Uniform Resource Locator",
+  ux: "User Experience"
+});
+
 function normalized(value) {
   return String(value || "").trim().toLowerCase();
 }
@@ -509,6 +527,17 @@ function selectedRegionCopyOperation(addOperation, context, intent) {
   ])) return null;
 
   const source = String(intent).trim();
+  const currentText = typeof selected.value === "object" && selected.value
+    ? selected.value.text
+    : selected.value;
+  const selectedAcronym = normalized(currentText).replace(/[^a-z0-9]/g, "");
+  const promptAcronym = Object.keys(ACRONYM_EXPANSIONS).find((acronym) => (
+    new RegExp(`\\b${acronym}\\b`, "i").test(source)
+  ));
+  const asksForExpansion = /\b(full\s*form|spell\s*(?:it\s*)?out|expand(?:\s+the)?\s+acronym)\b/i.test(source);
+  const expandedValue = asksForExpansion
+    ? ACRONYM_EXPANSIONS[selectedAcronym] || ACRONYM_EXPANSIONS[promptAcronym]
+    : "";
   const replacement = source.match(
     /\b(?:change|replace|set|update|rewrite)\b[\s\S]*?\b(?:to|as)\s+["'“]?([\s\S]+?)["'”]?\s*$/i
   ) || source.match(
@@ -516,7 +545,7 @@ function selectedRegionCopyOperation(addOperation, context, intent) {
   ) || source.match(
     /^(?:text|copy|heading|headline|title|label|button)\s*:\s*["'“]?([\s\S]+?)["'”]?\s*$/i
   );
-  const value = replacement?.[1]?.trim();
+  const value = expandedValue || replacement?.[1]?.trim();
   if (!value) return null;
 
   let path = "value";

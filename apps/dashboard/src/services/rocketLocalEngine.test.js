@@ -335,6 +335,34 @@ describe("embedded Rocket AI engine", () => {
     expect(execution.regions["ad.title"]).toBe("Smarter Growth Campaigns");
   });
 
+  it("expands a selected acronym from typo-tolerant natural language", async () => {
+    const context = connectedContext();
+    context.currentPage.selectedRegion = {
+      regionId: "api-live-preview.title",
+      type: "text",
+      label: "Page title",
+      value: "API"
+    };
+    context.currentPage.editableRegionDefinitions["api-live-preview.title"] = {
+      type: "text",
+      label: "Page title"
+    };
+    context.currentPage.editableRegionValues["api-live-preview.title"] = "API";
+
+    const response = await rocketLocalEngine.createPlan({
+      intent: "api to fthere full form",
+      context,
+      memory: {}
+    });
+
+    expect(response.plan.operations).toHaveLength(1);
+    expect(response.plan.operations[0]).toMatchObject({
+      type: "update_region",
+      targetId: "api-live-preview.title",
+      patches: [{ path: "value", valueJson: '"Application Programming Interface"' }]
+    });
+  });
+
   it("changes the color on the selected connected text instead of the shared theme", async () => {
     const context = connectedContext();
     context.currentPage.selectedRegion = {

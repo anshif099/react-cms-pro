@@ -49,6 +49,7 @@ import {
   buildConnectedCanvasProxyUrl,
   buildConnectedPageFallbackUrl,
   buildConnectedPageUrl,
+  connectedDraftTargets,
   createRuntimeMessage,
   discoverLocalSourceImports,
   mergeRegionSelection,
@@ -318,6 +319,7 @@ function ConnectedSourceWorkspace({
       regionId: region.regionId,
       type: region.type,
       pageId: region.pageId,
+      runtimeWebsiteId,
       value
     });
     if (!result?.changed) {
@@ -338,7 +340,7 @@ function ConnectedSourceWorkspace({
       });
     }
     return true;
-  }, [onVisualChange, sendRuntimeMessage]);
+  }, [onVisualChange, runtimeWebsiteId, sendRuntimeMessage]);
 
   useEffect(() => {
     setWorkspaceMode("visual");
@@ -887,6 +889,7 @@ function ConnectedSourceWorkspace({
         regionId,
         type: definition.type || (selectedRegion?.regionId === regionId ? selectedRegion.type : "text"),
         pageId: definition.pageId || selectedRegion?.pageId || pageKey,
+        runtimeWebsiteId,
         value
       };
       const changed = onVisualChange(change);
@@ -932,6 +935,7 @@ function ConnectedSourceWorkspace({
     onVisualChange,
     pageKey,
     pageSettings,
+    runtimeWebsiteId,
     selectedRegion,
     sendRuntimeMessage,
     theme
@@ -963,6 +967,7 @@ function ConnectedSourceWorkspace({
         regionId,
         type: selected.type || "text",
         pageId: selected.pageId || pageKey,
+        runtimeWebsiteId,
         value
       });
       if (changed?.changed) {
@@ -983,6 +988,7 @@ function ConnectedSourceWorkspace({
     onThemeChange,
     onVisualChange,
     pageKey,
+    runtimeWebsiteId,
     selectedRegion,
     sendRuntimeMessage
   ]);
@@ -2285,12 +2291,32 @@ export function VisualBuilderPage() {
     }
 
     setConnectedSaveStatus("saving");
-    const write = visualBuilderService.persistRegion(
+    const targets = connectedDraftTargets({
       websiteId,
       pageKey,
+      runtimeWebsiteId: change.runtimeWebsiteId,
+      runtimePageId: change.pageId
+    });
+    const [primaryTarget, ...mirrorTargets] = targets;
+    const write = visualBuilderService.persistRegion(
+      primaryTarget.websiteId,
+      primaryTarget.pageKey,
       change.regionId,
       change.value
-    );
+    ).then(async () => {
+      const mirrorResults = await Promise.allSettled(mirrorTargets.map((target) => (
+        visualBuilderService.persistRegion(
+          target.websiteId,
+          target.pageKey,
+          change.regionId,
+          change.value
+        )
+      )));
+      const failedMirrors = mirrorResults.filter((result) => result.status === "rejected");
+      if (failedMirrors.length) {
+        console.warn(`Connected draft saved canonically, but ${failedMirrors.length} runtime mirror write(s) failed.`);
+      }
+    });
     connectedWritesRef.current.add(write);
     write
       .then(() => {

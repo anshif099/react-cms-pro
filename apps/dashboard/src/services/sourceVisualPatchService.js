@@ -478,6 +478,38 @@ export function mergeRegionSelection(current, payload) {
   };
 }
 
+function normalizedDraftPageKey(value) {
+  const clean = String(value || "")
+    .split("?")[0]
+    .replace(/^\/+|\/+$/g, "");
+  return clean && clean !== "global" ? clean : "";
+}
+
+export function connectedDraftTargets({
+  websiteId,
+  pageKey,
+  runtimeWebsiteId = "",
+  runtimePageId = ""
+}) {
+  const primaryWebsite = String(websiteId || "").trim();
+  const primaryPage = normalizedDraftPageKey(pageKey) || "home";
+  const runtimeWebsite = String(runtimeWebsiteId || "").trim();
+  const runtimePage = normalizedDraftPageKey(runtimePageId);
+  const targets = [];
+  const add = (targetWebsiteId, targetPageKey) => {
+    if (!targetWebsiteId || !targetPageKey) return;
+    const key = `${targetWebsiteId}:${targetPageKey}`;
+    if (targets.some((target) => target.key === key)) return;
+    targets.push({ key, websiteId: targetWebsiteId, pageKey: targetPageKey });
+  };
+
+  add(primaryWebsite, primaryPage);
+  add(primaryWebsite, runtimePage);
+  add(runtimeWebsite, runtimePage || primaryPage);
+  add(runtimeWebsite, primaryPage);
+  return targets;
+}
+
 export function shouldUseConnectedWebsiteCanvas(website, page) {
   return Boolean(
     page

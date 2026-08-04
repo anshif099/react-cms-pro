@@ -3,6 +3,7 @@ import {
   buildConnectedCanvasProxyUrl,
   buildConnectedPageFallbackUrl,
   buildConnectedPageUrl,
+  connectedDraftTargets,
   createRuntimeMessage,
   discoverLocalSourceImports,
   mergeRegionSelection,
@@ -162,6 +163,20 @@ describe("connected region selections", () => {
 });
 
 describe("connected visual routes", () => {
+  it("persists a connected edit to canonical and runtime page identities", () => {
+    expect(connectedDraftTargets({
+      websiteId: "cms-site",
+      pageKey: "ad",
+      runtimeWebsiteId: "embedded-site",
+      runtimePageId: "api-live-preview"
+    })).toEqual([
+      { key: "cms-site:ad", websiteId: "cms-site", pageKey: "ad" },
+      { key: "cms-site:api-live-preview", websiteId: "cms-site", pageKey: "api-live-preview" },
+      { key: "embedded-site:api-live-preview", websiteId: "embedded-site", pageKey: "api-live-preview" },
+      { key: "embedded-site:ad", websiteId: "embedded-site", pageKey: "ad" }
+    ]);
+  });
+
   it("uses the real website canvas for CMS pages on source-connected sites", () => {
     expect(shouldUseConnectedWebsiteCanvas(
       { sourceConnected: true, domain: "https://triosis.vercel.app/" },
