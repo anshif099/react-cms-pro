@@ -17,6 +17,7 @@ import {
   Loader2,
   LogOut,
   MessageSquare,
+  MousePointer2,
   PanelRightClose,
   RefreshCw,
   Send,
@@ -37,6 +38,7 @@ import rocketAIAuthService from "../../services/rocketAIAuthService";
 
 const TABS = [
   { id: "chat", label: "Rocket Chat", icon: MessageSquare },
+  { id: "inspector", label: "Inspector", icon: MousePointer2 },
   { id: "tasks", label: "Tasks", icon: ListChecks },
   { id: "history", label: "History", icon: FileClock },
   { id: "suggestions", label: "Suggestions", icon: Lightbulb },
@@ -220,9 +222,10 @@ export function AIWorkspace({
   onRollback,
   onInsertComponent,
   renderInspector,
+  inspectorSelectionKey,
   onClose
 }) {
-  const [activeTab, setActiveTab] = useState("chat");
+  const [activeTab, setActiveTab] = useState(() => renderInspector ? "inspector" : "chat");
   const [prompt, setPrompt] = useState("");
   const [messages, setMessages] = useState([{
     id: "welcome",
@@ -254,6 +257,10 @@ export function AIWorkspace({
   useEffect(() => {
     getContextRef.current = getContext;
   }, [getContext]);
+
+  useEffect(() => {
+    if (inspectorSelectionKey) setActiveTab("inspector");
+  }, [inspectorSelectionKey]);
 
   useEffect(() => rocketAIAuthService.subscribe((user) => {
     setRocketUser(user);
@@ -924,12 +931,13 @@ export function AIWorkspace({
           ))}
         </div>
       </div>
-      {renderInspector ? (
-        <div className="min-h-96">{renderInspector()}</div>
-      ) : (
-        <EmptyPanel icon={Boxes} title="No direct inspector on this surface">Use Rocket Chat to manipulate the complete page model.</EmptyPanel>
-      )}
     </div>
+  );
+
+  const renderInspectorPanel = () => renderInspector ? (
+    <div className="min-h-full">{renderInspector()}</div>
+  ) : (
+    <EmptyPanel icon={MousePointer2} title="No direct inspector on this surface">Use Rocket Chat to manipulate the complete page model.</EmptyPanel>
   );
 
   const renderAssets = () => (
@@ -1037,6 +1045,7 @@ export function AIWorkspace({
 
   const panels = {
     chat: renderChat,
+    inspector: renderInspectorPanel,
     tasks: renderTasks,
     history: renderHistory,
     suggestions: renderSuggestions,
@@ -1045,13 +1054,16 @@ export function AIWorkspace({
     knowledge: renderKnowledge,
     console: renderConsole
   };
-  const active = TABS.find((tab) => tab.id === activeTab) || TABS[0];
+  const visibleTabs = renderInspector
+    ? TABS
+    : TABS.filter((tab) => tab.id !== "inspector");
+  const active = visibleTabs.find((tab) => tab.id === activeTab) || visibleTabs[0];
   const ActiveIcon = active.icon;
 
   return (
     <aside className="flex h-full w-[400px] flex-shrink-0 border-l border-slate-800 bg-[#0b1120] text-left 2xl:w-[440px]">
       <nav className="flex w-12 flex-shrink-0 flex-col items-center gap-1 border-r border-slate-800 bg-[#080d18] py-2">
-        {TABS.map(({ id, label, icon: Icon }) => (
+        {visibleTabs.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             type="button"

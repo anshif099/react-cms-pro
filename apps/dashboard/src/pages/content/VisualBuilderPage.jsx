@@ -1168,6 +1168,7 @@ function ConnectedSourceWorkspace({
                 onApplyPlan={applyConnectedAIPlan}
                 onRollback={rollbackConnectedAIPlan}
                 renderInspector={() => renderVisualInspector(true)}
+                inspectorSelectionKey={selectedRegion?.regionId}
                 onClose={() => setAIOpen(false)}
               />
             </Suspense>
@@ -1208,6 +1209,7 @@ function ConnectedSourceWorkspace({
                 onApplyPlan={applyConnectedAIPlan}
                 onRollback={rollbackConnectedAIPlan}
                 renderInspector={() => renderVisualInspector(true)}
+                inspectorSelectionKey={selectedRegion?.regionId}
                 onClose={() => setAIOpen(false)}
               />
             </Suspense>
@@ -1543,6 +1545,7 @@ function NativeBuilderWorkspace({
               onApplyPlan={applyNativeAIPlan}
               onRollback={rollbackNativeAIPlan}
               onInsertComponent={addNode}
+              inspectorSelectionKey={editor.selectedNode?.id}
               renderInspector={() => (
                 <NativeInspector
                   embedded
