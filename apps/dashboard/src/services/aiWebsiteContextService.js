@@ -160,6 +160,7 @@ function sourceProjectContext(sourceFiles, entryFile) {
 
 export async function collectAIWebsiteContext({
   websiteId,
+  runtimeWebsiteId = "",
   pageId,
   pageKey,
   locale = "en",
@@ -191,7 +192,10 @@ export async function collectAIWebsiteContext({
     safeRead(() => settingsService.getCMSSettings(websiteId), {}),
     safeRead(() => revisionService.getAll(websiteId, "page", pageId), []),
     safeRead(() => contentSyncService.getDraft(websiteId, pageKey), null),
-    safeRead(() => contentSyncService.getPublished(websiteId, pageKey), null)
+    safeRead(() => contentSyncService.getPublished(websiteId, pageKey), null),
+    runtimeWebsiteId && runtimeWebsiteId !== websiteId
+      ? safeRead(() => registryService.getEditableRegions(runtimeWebsiteId), {})
+      : Promise.resolve({})
   ]);
   const [
     pages,
@@ -209,9 +213,13 @@ export async function collectAIWebsiteContext({
     cmsSettings,
     revisions,
     draftContent,
-    publishedContent
+    publishedContent,
+    runtimeEditableRegions
   ] = reads;
-  const pageRegions = resolvePageRegions(editableRegions, pageKey);
+  const pageRegions = {
+    ...resolvePageRegions(runtimeEditableRegions, pageKey),
+    ...resolvePageRegions(editableRegions, pageKey)
+  };
   const decodedDraftContent = draftContent ? decodeFirebaseObject(draftContent) : null;
   const decodedPublishedContent = publishedContent
     ? decodeFirebaseObject(publishedContent)
@@ -269,6 +277,7 @@ export async function collectAIWebsiteContext({
     },
     website: {
       record: website,
+      runtimeWebsiteId: runtimeWebsiteId || websiteId,
       pages,
       routes,
       navigation,

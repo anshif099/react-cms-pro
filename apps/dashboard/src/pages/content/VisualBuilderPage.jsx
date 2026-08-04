@@ -171,6 +171,7 @@ function ConnectedSourceWorkspace({
   const [frameLoading, setFrameLoading] = useState(true);
   const [frameVersion, setFrameVersion] = useState(0);
   const [runtimeConnected, setRuntimeConnected] = useState(false);
+  const [runtimeWebsiteId, setRuntimeWebsiteId] = useState("");
   const [selectedRegion, setSelectedRegion] = useState(null);
   const [visualError, setVisualError] = useState("");
   const [liveRouteError, setLiveRouteError] = useState("");
@@ -334,6 +335,7 @@ function ConnectedSourceWorkspace({
   useEffect(() => {
     setWorkspaceMode("visual");
     setSelectedRegion(null);
+    setRuntimeWebsiteId("");
     setVisualError("");
     setFrameLoading(true);
   }, [page?.id, isPreview]);
@@ -389,6 +391,7 @@ function ConnectedSourceWorkspace({
 
       if (message.type === "rcms/v1/runtime-ready") {
         setRuntimeConnected(true);
+        if (message.websiteId) setRuntimeWebsiteId(message.websiteId);
         sendRuntimeMessage(
           isPreview ? "rcms/v1/exit-edit-mode" : "rcms/v1/enter-edit-mode"
         );
@@ -759,6 +762,7 @@ function ConnectedSourceWorkspace({
 
   const getConnectedAIContext = useCallback(() => collectAIWebsiteContext({
     websiteId,
+    runtimeWebsiteId,
     pageId,
     pageKey,
     locale,
@@ -783,7 +787,8 @@ function ConnectedSourceWorkspace({
     theme,
     visualOnly,
     website,
-    websiteId
+    websiteId,
+    runtimeWebsiteId
   ]);
 
   const applyConnectedAIPlan = useCallback(async (plan, context) => {
@@ -836,7 +841,7 @@ function ConnectedSourceWorkspace({
     }
     if (JSON.stringify(execution.theme) !== JSON.stringify(execution.before.theme)) {
       await onThemeChange?.(execution.theme);
-      sendRuntimeMessage("rcms/v1/theme-update", { theme: execution.theme });
+      sendRuntimeMessage("rcms/v1/theme-update", execution.theme);
     }
     if (JSON.stringify(execution.pageSettings) !== JSON.stringify(execution.before.pageSettings)) {
       onPageSettingsChange?.(execution.pageSettings);
@@ -917,7 +922,7 @@ function ConnectedSourceWorkspace({
     }
     if (snapshot.theme) {
       await onThemeChange?.(snapshot.theme);
-      sendRuntimeMessage("rcms/v1/theme-update", { theme: snapshot.theme });
+      sendRuntimeMessage("rcms/v1/theme-update", snapshot.theme);
     }
     if (snapshot.pageSettings) onPageSettingsChange?.(snapshot.pageSettings);
     for (const [regionId, value] of Object.entries(snapshot.regions || {})) {

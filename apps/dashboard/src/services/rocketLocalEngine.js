@@ -183,7 +183,9 @@ function regionOperation(addOperation, context, field, value, summary, reason, t
   const regionId = (
     selected?.regionId && (!type || selected.type === type)
       ? selected.regionId
-      : candidates.find((id) => /(?:hero|main|page|content|body)/i.test(id)) || candidates[0]
+      : candidates.find((id) => /(?:^|[._-])hero(?:$|[._-])/i.test(id))
+        || candidates.find((id) => /(?:main|page|content|body)/i.test(id))
+        || candidates[0]
   );
   if (!regionId) return null;
   return addOperation("update_region", {

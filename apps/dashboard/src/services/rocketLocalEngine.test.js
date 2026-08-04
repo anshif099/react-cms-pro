@@ -111,6 +111,36 @@ describe("embedded Rocket AI engine", () => {
     });
   });
 
+  it("prefers the visible hero when connected section values have not hydrated", async () => {
+    const context = connectedContext();
+    context.currentPage.selectedRegion = null;
+    context.currentPage.editableRegionDefinitions = {
+      "ad.body_section": { type: "section", label: "Main content" },
+      "ad.hero": { type: "section", label: "Ad hero" }
+    };
+    context.currentPage.editableRegionValues = {
+      "ad.body_section": null,
+      "ad.hero": null
+    };
+
+    const response = await rocketLocalEngine.createPlan({
+      intent: "Change the black background colour into #191919",
+      context,
+      memory: {}
+    });
+
+    expect(response.plan.operations[0]).toMatchObject({
+      type: "update_region",
+      targetId: "ad.hero",
+      patches: [{ path: "value.background", valueJson: '"#191919"' }]
+    });
+    const execution = applyAIPlan({
+      plan: response.plan,
+      regions: context.currentPage.editableRegionValues
+    });
+    expect(execution.regions["ad.hero"]).toEqual({ background: "#191919" });
+  });
+
   it("does not claim a fake edit for an unrelated prompt", async () => {
     const response = await rocketLocalEngine.createPlan({
       intent: "I was checking the screen sharing option, but the live ended",
