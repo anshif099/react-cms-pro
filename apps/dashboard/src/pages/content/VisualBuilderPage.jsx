@@ -1114,7 +1114,7 @@ function ConnectedSourceWorkspace({
           <>
             <span className="h-4 w-px bg-slate-800" />
             <FileCode2 className="w-3.5 h-3.5 text-slate-500" />
-            <code className="text-[10px] text-slate-400 truncate">{page.sourceFile}</code>
+            <code className="text-[10px] text-slate-400 truncate">{page?.sourceFile}</code>
           </>
         )}
 
@@ -1245,7 +1245,7 @@ function ConnectedSourceWorkspace({
                   key={`${renderedLivePageUrl}:${frameVersion}`}
                   ref={iframeRef}
                   src={renderedLivePageUrl}
-                  title={`${page.title} live visual canvas`}
+                  title={`${page?.title || "Untitled Page"} live visual canvas`}
                   onLoad={handleFrameLoad}
                   className="block h-full w-full border-0 bg-white"
                   sandbox={livePageIsCrossOrigin
@@ -1261,7 +1261,7 @@ function ConnectedSourceWorkspace({
               <AIWorkspace
                 websiteId={websiteId}
                 pageId={pageId}
-                pageTitle={page.title}
+                pageTitle={page?.title || "Untitled Page"}
                 surface={visualOnly ? "connected-runtime" : "connected-source"}
                 getContext={getConnectedAIContext}
                 onApplyPlan={applyConnectedAIPlan}
@@ -1300,7 +1300,7 @@ function ConnectedSourceWorkspace({
                 value={content}
                 onChange={(event) => onChange(event.target.value)}
                 spellCheck="false"
-                aria-label={`Source code for ${page.title}`}
+                aria-label={`Source code for ${page?.title || "Untitled Page"}`}
                 className="w-full h-full resize-none rounded-xl border border-slate-800 bg-[#050914] p-5 font-mono text-[12px] leading-5 text-slate-300 outline-none focus:border-blue-500"
               />
             )}
@@ -1310,7 +1310,7 @@ function ConnectedSourceWorkspace({
               <AIWorkspace
                 websiteId={websiteId}
                 pageId={pageId}
-                pageTitle={page.title}
+                pageTitle={page?.title || "Untitled Page"}
                 surface="connected-source"
                 getContext={getConnectedAIContext}
                 onApplyPlan={applyConnectedAIPlan}
@@ -1336,11 +1336,11 @@ function ConnectedSourceWorkspace({
 }
 
 function buildInitialTree(page, document, locale, pageKey) {
-  const localeData = page.locales?.[locale] || {};
-  if (isPageComponentTree(document.tree)) return document.tree;
+  const localeData = page?.locales?.[locale] || {};
+  if (isPageComponentTree(document?.tree)) return document.tree;
   if (isPageComponentTree(localeData.componentTree)) return localeData.componentTree;
 
-  const blocks = document.blocks?.length
+  const blocks = document?.blocks?.length
     ? document.blocks
     : Array.isArray(localeData.blocks)
       ? localeData.blocks
@@ -1348,22 +1348,22 @@ function buildInitialTree(page, document, locale, pageKey) {
   if (blocks.length) {
     return blocksToPageTree(blocks, {
       id: pageKey,
-      title: localeData.title || page.title,
+      title: localeData.title || page?.title || "Untitled Page",
       locale
     });
   }
 
-  if (Object.keys(document.regions || {}).length) {
+  if (Object.keys(document?.regions || {}).length) {
     return regionsToPageTree(document.regions, {
       id: pageKey,
-      title: localeData.title || page.title,
+      title: localeData.title || page?.title || "Untitled Page",
       locale
     });
   }
 
   return regionsToPageTree({}, {
     id: pageKey,
-    title: localeData.title || page.title,
+    title: localeData.title || page?.title || "Untitled Page",
     locale
   });
 }
@@ -1407,7 +1407,7 @@ function NativeBuilderWorkspace({
   const isPreview = mode === "preview";
   const [aiOpen, setAIOpen] = useState(true);
   const blocks = useMemo(() => pageTreeToBlocks(editor.tree), [editor.tree]);
-  const importedSourceEmptyState = page.isImported ? (
+  const importedSourceEmptyState = page?.isImported ? (
     <div className="max-w-lg px-8 py-10 text-center">
       <div className="mx-auto mb-4 h-10 w-10 rounded-xl border border-amber-300/40 bg-amber-50 text-amber-600 grid place-items-center text-lg">
         !
@@ -1420,7 +1420,7 @@ function NativeBuilderWorkspace({
         has not produced an editor-safe component tree. No generated template
         or placeholder page is being substituted.
       </p>
-      {page.sourceFile && (
+      {page?.sourceFile && (
         <code className="mt-4 inline-block max-w-full truncate rounded-md bg-slate-100 px-2.5 py-1.5 text-[10px] text-slate-600">
           {page.sourceFile}
         </code>
