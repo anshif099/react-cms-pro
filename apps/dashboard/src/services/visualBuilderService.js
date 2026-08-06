@@ -225,11 +225,17 @@ function decodePageDocument(raw) {
 
 function stableJson(value) {
   const normalize = (entry) => {
+    if (entry === undefined || entry === null) return null;
     if (Array.isArray(entry)) return entry.map(normalize);
-    if (!entry || typeof entry !== "object") return entry;
-    return Object.fromEntries(
-      Object.keys(entry).sort().map((key) => [key, normalize(entry[key])])
-    );
+    if (typeof entry !== "object") return entry;
+    const cleanObj = {};
+    for (const key of Object.keys(entry).sort()) {
+      const val = entry[key];
+      if (val !== undefined && val !== null) {
+        cleanObj[key] = normalize(val);
+      }
+    }
+    return cleanObj;
   };
   return JSON.stringify(normalize(value));
 }
@@ -390,7 +396,7 @@ export const visualBuilderService = {
     }
 
     const encodedRegionId = encodeFirebaseKey(regionId);
-    const encodedValue = encodeFirebaseObject(value);
+    const encodedValue = value === undefined ? null : encodeFirebaseObject(value);
     const regionPaths = uniqueTargets.map((target) => (
       `${paths.contentDraft(target.websiteId, target.pageKey)}/regions/${encodedRegionId}`
     ));
@@ -402,8 +408,8 @@ export const visualBuilderService = {
     const expected = stableJson(value);
     const missingTargets = uniqueTargets.filter((_target, index) => {
       const snapshot = snapshots[index];
-      return !snapshot.exists()
-        || stableJson(decodeFirebaseObject(snapshot.val())) !== expected;
+      const actualVal = snapshot?.exists?.() ? decodeFirebaseObject(snapshot.val()) : null;
+      return stableJson(actualVal) !== expected;
     });
     if (missingTargets.length) {
       throw new Error(

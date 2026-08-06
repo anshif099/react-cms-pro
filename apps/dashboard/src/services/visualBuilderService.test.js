@@ -73,4 +73,36 @@ describe("visualBuilderService draft persistence & hydration", () => {
       expect.anything()
     );
   });
+
+  it("successfully verifies persistRegionTargets when values contain null or undefined properties", async () => {
+    firebaseMocks.get.mockImplementation((_refObj) => Promise.resolve({
+      exists: () => true,
+      val: () => ({ text: "Heading" }) // Firebase stripped null/undefined fields
+    }));
+
+    const targets = [{ websiteId: "website-1", pageKey: "home" }];
+    const result = await visualBuilderService.persistRegionTargets(
+      targets,
+      "hero.title",
+      { text: "Heading", href: null, subtitle: undefined }
+    );
+
+    expect(result).toEqual(targets);
+  });
+
+  it("successfully verifies persistRegionTargets when region value is null or undefined", async () => {
+    firebaseMocks.get.mockImplementation((_refObj) => Promise.resolve({
+      exists: () => false,
+      val: () => null
+    }));
+
+    const targets = [{ websiteId: "website-1", pageKey: "home" }];
+    const result = await visualBuilderService.persistRegionTargets(
+      targets,
+      "hero.title",
+      null
+    );
+
+    expect(result).toEqual(targets);
+  });
 });

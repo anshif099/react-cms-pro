@@ -33,13 +33,16 @@ export function decodeFirebaseKey(key: string): string {
  * Recursively encodes keys in an object for Firebase RTDB storage.
  */
 export function encodeFirebaseObject<T>(obj: T): T {
-  if (obj === null || typeof obj !== 'object' || Array.isArray(obj)) {
+  if (obj === null || typeof obj !== 'object') {
     return obj;
+  }
+  if (Array.isArray(obj)) {
+    return obj.map((item) => encodeFirebaseObject(item)) as unknown as T;
   }
   const result: Record<string, any> = {};
   for (const [key, val] of Object.entries(obj)) {
     const encodedKey = encodeFirebaseKey(key);
-    result[encodedKey] = val && typeof val === 'object' && !Array.isArray(val) ? encodeFirebaseObject(val) : val;
+    result[encodedKey] = val && typeof val === 'object' ? encodeFirebaseObject(val) : val;
   }
   return result as T;
 }
@@ -48,13 +51,16 @@ export function encodeFirebaseObject<T>(obj: T): T {
  * Recursively decodes keys in an object read from Firebase RTDB.
  */
 export function decodeFirebaseObject<T>(obj: T): T {
-  if (obj === null || typeof obj !== 'object' || Array.isArray(obj)) {
+  if (obj === null || typeof obj !== 'object') {
     return obj;
+  }
+  if (Array.isArray(obj)) {
+    return obj.map((item) => decodeFirebaseObject(item)) as unknown as T;
   }
   const result: Record<string, any> = {};
   for (const [key, val] of Object.entries(obj)) {
     const decodedKey = decodeFirebaseKey(key);
-    result[decodedKey] = val && typeof val === 'object' && !Array.isArray(val) ? decodeFirebaseObject(val) : val;
+    result[decodedKey] = val && typeof val === 'object' ? decodeFirebaseObject(val) : val;
   }
   return result as T;
 }
