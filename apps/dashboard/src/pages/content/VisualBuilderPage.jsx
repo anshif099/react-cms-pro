@@ -2486,13 +2486,14 @@ export function VisualBuilderPage() {
   const saveConnectedAIChanges = useCallback(async (snapshot) => {
     stageAIExecution(snapshot);
     if (snapshot?.regions) {
+      const fallbackWebsiteId = String(sourceWebsite?.websiteId || websiteId || "").trim();
       Object.entries(snapshot.regions).forEach(([regionId, value]) => {
         persistConnectedRegion({
           regionId,
           value,
-          pageId: canvasRuntimePageId || pageKey,
-          runtimeWebsiteId,
-          runtimeWebsiteIds: [runtimeWebsiteIdFallback]
+          pageId: snapshot?.pageId || pageKey,
+          runtimeWebsiteId: fallbackWebsiteId,
+          runtimeWebsiteIds: [fallbackWebsiteId].filter(Boolean)
         });
       });
     }
@@ -2504,7 +2505,7 @@ export function VisualBuilderPage() {
       throw new Error("The Rocket AI page draft could not be committed completely.");
     }
     return true;
-  }, [canvasRuntimePageId, pageKey, performSave, persistConnectedRegion, runtimeWebsiteId, runtimeWebsiteIdFallback, saveConnectedDraft, stageAIExecution]);
+  }, [pageKey, performSave, persistConnectedRegion, saveConnectedDraft, sourceWebsite?.websiteId, stageAIExecution, websiteId]);
 
   if (isConnectedSourcePage) {
     return (
