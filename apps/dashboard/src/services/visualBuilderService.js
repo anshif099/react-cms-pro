@@ -1,6 +1,7 @@
 import { ref, get, set, update } from "firebase/database";
 import {
   decodeFirebaseKey,
+  decodeFirebaseObject,
   encodeFirebaseKey,
   encodeFirebaseObject,
   paths

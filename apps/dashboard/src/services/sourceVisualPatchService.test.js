@@ -170,16 +170,13 @@ describe("connected visual routes", () => {
       runtimeWebsiteId: "embedded-site",
       runtimeWebsiteIds: ["website-record-site"],
       runtimePageId: "api/live-preview",
-      regionId: "api-live-preview.hero"
+      regionId: "hero.title"
     })).toEqual([
       { key: "cms-site:ad", websiteId: "cms-site", pageKey: "ad" },
-      { key: "cms-site:api/live-preview", websiteId: "cms-site", pageKey: "api/live-preview" },
-      { key: "cms-site:api-live-preview", websiteId: "cms-site", pageKey: "api-live-preview" },
-      { key: "embedded-site:api/live-preview", websiteId: "embedded-site", pageKey: "api/live-preview" },
-      { key: "embedded-site:api-live-preview", websiteId: "embedded-site", pageKey: "api-live-preview" },
+      { key: "cms-site:hero", websiteId: "cms-site", pageKey: "hero" },
+      { key: "embedded-site:hero", websiteId: "embedded-site", pageKey: "hero" },
       { key: "embedded-site:ad", websiteId: "embedded-site", pageKey: "ad" },
-      { key: "website-record-site:api/live-preview", websiteId: "website-record-site", pageKey: "api/live-preview" },
-      { key: "website-record-site:api-live-preview", websiteId: "website-record-site", pageKey: "api-live-preview" },
+      { key: "website-record-site:hero", websiteId: "website-record-site", pageKey: "hero" },
       { key: "website-record-site:ad", websiteId: "website-record-site", pageKey: "ad" }
     ]);
   });

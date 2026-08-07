@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import sourceProviderService, {
   bindRuntimeWebsiteId,
+  ensureSpaHtaccess,
   versionLocalBuildAssets
 } from "./sourceProviderService";
 
@@ -242,5 +243,15 @@ describe("connected source providers", () => {
         content: "<h1>Updated through SFTP</h1>"
       }
     }));
+  });
+
+  it("generates SPA rewrite rules in .htaccess for cPanel/SFTP servers without duplicating", () => {
+    const fresh = ensureSpaHtaccess("");
+    expect(fresh.changed).toBe(true);
+    expect(fresh.content).toContain("RewriteEngine On");
+    expect(fresh.content).toContain("RewriteRule . /index.html [L]");
+
+    const existing = ensureSpaHtaccess(fresh.content);
+    expect(existing.changed).toBe(false);
   });
 });

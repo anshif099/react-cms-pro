@@ -197,6 +197,36 @@ export function versionLocalBuildAssets(html, version = Date.now()) {
   };
 }
 
+export function ensureSpaHtaccess(existingContent = "") {
+  const content = String(existingContent || "");
+  if (
+    content.includes("RewriteEngine On")
+    && (
+      content.includes("RewriteRule . /index.html")
+      || content.includes("RewriteRule ^ index.html")
+      || content.includes("RewriteRule . index.html")
+      || content.includes("RewriteRule ^/ index.html")
+    )
+  ) {
+    return { content, changed: false };
+  }
+
+  const spaBlock = `# ReactCMS SPA Routing
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+  RewriteRule ^index\\.html$ - [L]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteCond %{REQUEST_FILENAME} !-l
+  RewriteRule . /index.html [L]
+</IfModule>
+`;
+
+  const updated = content ? `${content.trimEnd()}\n\n${spaBlock}` : spaBlock;
+  return { content: updated, changed: true };
+}
+
 export const sourceProviderService = {
   async readGitHubFile(connection, filePath, token = "") {
     const repository = normalizeRepository(connection?.repository);
@@ -365,12 +395,43 @@ export const sourceProviderService = {
     throw new Error("This website is not connected to a writable source provider.");
   },
 
-  async writeFiles(website, files, message) {
-    if (!Array.isArray(files) || !files.length) {
-      throw new Error("No connected source files were provided.");
+  async ensureSpaRouting(website) {
+    const provider = website?.connection?.provider;
+    if (provider !== "cpanel" && provider !== "sftp") {
+      return { changed: false };
     }
+    try {
+      let currentContent = "";
+      try {
+        const file = await this.readFile(website, ".htaccess");
+        currentContent = file?.content || "";
+      } catch {
+        currentContent = "";
+      }
+      const result = ensureSpaHtaccess(currentContent);
+      if (result.changed) {
+        await this.writeFile(
+          website,
+          ".htaccess",
+          result.content,
+          "Configure SPA routing for ReactCMS"
+        );
+        return { changed: true, provider, path: ".htaccess" };
+      }
+    } catch (error) {
+      console.warn("Could not ensure SPA routing .htaccess:", error);
+    }
+    return { changed: false };
+  },
+
+  async writeFiles(website, files = [], message) {
     const provider = website?.connection?.provider;
     const verifiesRemoteWrites = provider === "cpanel" || provider === "sftp";
+
+    if (!Array.isArray(files) || (!files.length && !verifiesRemoteWrites)) {
+      throw new Error("No connected source files were provided.");
+    }
+
     const preparedFiles = files.map((file) => {
       const binding = bindRuntimeWebsiteId(file.content, website?.id);
       return {
@@ -431,6 +492,19 @@ export const sourceProviderService = {
         });
         cacheBusted = true;
         cacheVersion = versioned.version;
+      }
+    }
+
+    if (verifiesRemoteWrites) {
+      const htaccessResult = await this.ensureSpaRouting(website);
+      if (htaccessResult.changed) {
+        results.push({
+          provider,
+          path: ".htaccess",
+          revision: Date.now(),
+          verified: true,
+          spaRoutingConfigured: true
+        });
       }
     }
 

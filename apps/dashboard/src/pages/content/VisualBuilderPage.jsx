@@ -191,13 +191,38 @@ function ConnectedSourceWorkspace({
   );
   const [livePageUrl, setLivePageUrl] = useState("");
   const canvasRuntimePageId = useMemo(() => {
-    try {
-      return new URL(livePageUrl, window.location.origin).pathname
-        .replace(/^\/+|\/+$/g, "");
-    } catch {
-      return "";
+    const cleanKey = String(pageKey || "").split("?")[0].replace(/^\/+|\/+$/g, "");
+    if (cleanKey && cleanKey !== "api/live-preview" && cleanKey !== "api-live-preview") {
+      return cleanKey;
     }
-  }, [livePageUrl]);
+    try {
+      if (!livePageUrl) return cleanKey || "home";
+      const url = new URL(livePageUrl, window.location.origin);
+      const routeParam = url.searchParams.get("route");
+      if (routeParam) {
+        const routePath = new URL(routeParam, "https://dummy.invalid").pathname;
+        const clean = routePath.split("?")[0].replace(/^\/+|\/+$/g, "");
+        if (clean && clean !== "api/live-preview" && clean !== "api-live-preview") {
+          return clean;
+        }
+      }
+      const targetParam = url.searchParams.get("target");
+      if (targetParam) {
+        const targetPath = new URL(targetParam).pathname;
+        const clean = targetPath.split("?")[0].replace(/^\/+|\/+$/g, "");
+        if (clean && clean !== "api/live-preview" && clean !== "api-live-preview") {
+          return clean;
+        }
+      }
+      const path = url.pathname.replace(/^\/+|\/+$/g, "");
+      if (path && path !== "api/live-preview" && path !== "api-live-preview") {
+        return path;
+      }
+    } catch {
+      // fallback
+    }
+    return cleanKey || "home";
+  }, [livePageUrl, pageKey]);
   const [routeResolving, setRouteResolving] = useState(true);
   const renderedLivePageUrl = useMemo(() => {
     if (!livePageUrl || frameVersion === 0) return livePageUrl;
@@ -2418,6 +2443,19 @@ export function VisualBuilderPage() {
         pageId,
         selectedPage?.routeId
       );
+
+      if (sourceWebsite?.connection?.provider === "cpanel" || sourceWebsite?.connection?.provider === "sftp") {
+        try {
+          await sourceProviderService.writeFiles(
+            sourceWebsite,
+            [],
+            `Publish ${selectedPage?.title || pageKey} from ReactCMS`
+          );
+        } catch (hostingError) {
+          console.warn("Hosting SPA route verification warning:", hostingError);
+        }
+      }
+
       setSelectedPage((current) => current ? {
         ...current,
         status: "published",

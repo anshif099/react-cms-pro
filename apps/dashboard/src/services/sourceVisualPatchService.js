@@ -482,7 +482,10 @@ function normalizedDraftPageKey(value) {
   const clean = String(value || "")
     .split("?")[0]
     .replace(/^\/+|\/+$/g, "");
-  return clean && clean !== "global" ? clean : "";
+  if (!clean || clean === "global" || clean === "api/live-preview" || clean === "api-live-preview") {
+    return "";
+  }
+  return clean;
 }
 
 export function connectedDraftTargets({
@@ -508,8 +511,6 @@ export function connectedDraftTargets({
   addRuntimePage(runtimePageId);
   const regionPagePrefix = String(regionId || "").match(/^([^.]+)\./)?.[1] || "";
   addRuntimePage(regionPagePrefix);
-  if (runtimePages.includes("api/live-preview")) addRuntimePage("api-live-preview");
-  if (runtimePages.includes("api-live-preview")) addRuntimePage("api/live-preview");
   const targets = [];
   const add = (targetWebsiteId, targetPageKey) => {
     if (!targetWebsiteId || !targetPageKey) return;
