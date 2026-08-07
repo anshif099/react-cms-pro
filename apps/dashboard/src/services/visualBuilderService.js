@@ -1,7 +1,6 @@
 import { ref, get, set, update } from "firebase/database";
 import {
   decodeFirebaseKey,
-  decodeFirebaseObject,
   encodeFirebaseKey,
   encodeFirebaseObject,
   paths
@@ -223,22 +222,7 @@ function decodePageDocument(raw) {
   };
 }
 
-function stableJson(value) {
-  const normalize = (entry) => {
-    if (entry === undefined || entry === null) return null;
-    if (Array.isArray(entry)) return entry.map(normalize);
-    if (typeof entry !== "object") return entry;
-    const cleanObj = {};
-    for (const key of Object.keys(entry).sort()) {
-      const val = entry[key];
-      if (val !== undefined && val !== null) {
-        cleanObj[key] = normalize(val);
-      }
-    }
-    return cleanObj;
-  };
-  return JSON.stringify(normalize(value));
-}
+
 
 export const visualBuilderService = {
   resolvePageKey(page) {
@@ -404,18 +388,6 @@ export const visualBuilderService = {
       regionPaths.map((path) => [path, encodedValue])
     ));
 
-    const snapshots = await Promise.all(regionPaths.map((path) => get(ref(database, path))));
-    const expected = stableJson(value);
-    const missingTargets = uniqueTargets.filter((_target, index) => {
-      const snapshot = snapshots[index];
-      const actualVal = snapshot?.exists?.() ? decodeFirebaseObject(snapshot.val()) : null;
-      return stableJson(actualVal) !== expected;
-    });
-    if (missingTargets.length) {
-      throw new Error(
-        `Connected draft verification failed for ${missingTargets.length} runtime destination(s).`
-      );
-    }
     return uniqueTargets;
   },
 
