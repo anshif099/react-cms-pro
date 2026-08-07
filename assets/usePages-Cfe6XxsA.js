@@ -1,0 +1,1 @@
+import{T as e}from"./index-DeVQ3ta5.js";function t(){return e()}export{t};

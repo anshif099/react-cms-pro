@@ -1,1 +1,0 @@
-import{T as e}from"./index-CgD49CtY.js";function t(){return e()}export{t};
