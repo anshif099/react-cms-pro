@@ -1,0 +1,1 @@
+import{T as e}from"./index-CLN8Tm_q.js";function t(){return e()}export{t};
