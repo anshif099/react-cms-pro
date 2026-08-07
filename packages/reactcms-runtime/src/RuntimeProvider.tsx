@@ -194,7 +194,7 @@ export function RuntimeProvider({
       apiKey,
       websiteId,
       pageId,
-      (published) => {
+      (published: Record<string, any>) => {
         Object.entries(published).forEach(([regionId, value]) => {
           dispatchRegionValue(websiteId, pageId, regionId, value);
         });
