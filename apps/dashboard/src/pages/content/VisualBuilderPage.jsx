@@ -1181,7 +1181,7 @@ function ConnectedSourceWorkspace({
         </div>
       </div>
 
-      {!isPreview && isGitHub && !visualOnly && (
+      {!isPreview && isGitHub && (
         <div className="px-4 py-2 border-b border-slate-800 bg-slate-950/40 flex items-center gap-2">
           <KeyRound className="w-3.5 h-3.5 text-slate-500" />
           <span className="shrink-0 text-[10px] font-bold text-slate-400">
@@ -1196,7 +1196,7 @@ function ConnectedSourceWorkspace({
             className="h-8 flex-1 rounded-lg border border-slate-800 bg-[#080d18] px-3 text-[11px] text-slate-200 outline-none focus:border-blue-500"
           />
           <span className="hidden lg:inline text-[9px] text-slate-600">
-            Kept only for this browser session
+            Stored only in this browser, never in Firebase
           </span>
         </div>
       )}
@@ -2447,6 +2447,16 @@ export function VisualBuilderPage() {
         && sourceWebsite?.connection?.sourceMode === "provider"
         && sourceWebsite?.connection?.writebackEnabled !== false
       );
+      if (publishesToGit) {
+        const token = sourceWriteToken.trim()
+          || sourceCredentialService.get(websiteId).token;
+        if (!token) {
+          throw new Error(
+            "Enter a GitHub token with Contents: Read and write permission in the Publish token field above the canvas."
+          );
+        }
+        sourceCredentialService.rememberGitHub(websiteId, token);
+      }
       let gitPublish = null;
       let spaRouting = {
         changed: false,
@@ -2534,6 +2544,7 @@ export function VisualBuilderPage() {
     selectedPage?.routeId,
     setSelectedPage,
     sourceWebsite,
+    sourceWriteToken,
     toast,
     websiteId
   ]);
@@ -2687,8 +2698,8 @@ export function VisualBuilderPage() {
         saveStatus={connectedSaveStatus}
         saving={connectedSaving}
         publishing={connectedPublishing}
-        writeToken=""
-        onWriteTokenChange={() => {}}
+        writeToken={sourceWriteToken}
+        onWriteTokenChange={setSourceWriteToken}
         onBack={() => navigate(`/content/${websiteId}/pages`)}
         onChange={() => {}}
         onVisualChange={persistConnectedRegion}
