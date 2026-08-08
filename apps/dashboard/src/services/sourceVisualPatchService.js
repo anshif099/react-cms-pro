@@ -488,6 +488,20 @@ function normalizedDraftPageKey(value) {
   return clean;
 }
 
+export function connectedRegionAliases(pageKey, regionId) {
+  const original = String(regionId || "").trim();
+  if (!original) return [];
+
+  const page = normalizedDraftPageKey(pageKey);
+  const match = original.match(/^api(?:\/|-)live-preview\.(.+)$/);
+  if (!page || !match?.[1]) return [original];
+
+  return Array.from(new Set([
+    original,
+    `${page}.${match[1]}`
+  ]));
+}
+
 export function connectedDraftTargets({
   websiteId,
   pageKey,

@@ -227,6 +227,58 @@ export function ensureSpaHtaccess(existingContent = "") {
   return { content: updated, changed: true };
 }
 
+export function isVercelWebsite(website) {
+  try {
+    const hostname = new URL(String(website?.domain || "")).hostname.toLowerCase();
+    return hostname === "vercel.app" || hostname.endsWith(".vercel.app");
+  } catch {
+    return false;
+  }
+}
+
+export function ensureVercelSpaConfig(existingContent = "") {
+  const source = String(existingContent || "").trim();
+  let config = {};
+  if (source) {
+    try {
+      config = JSON.parse(source);
+    } catch {
+      throw new Error("The connected project's vercel.json is not valid JSON.");
+    }
+    if (!config || typeof config !== "object" || Array.isArray(config)) {
+      throw new Error("The connected project's vercel.json must contain a JSON object.");
+    }
+  }
+
+  if (config.rewrites !== undefined && !Array.isArray(config.rewrites)) {
+    throw new Error("The connected project's vercel.json rewrites value must be an array.");
+  }
+
+  const rewrites = config.rewrites || [];
+  const catchAllIndex = rewrites.findIndex((rewrite) => {
+    const ruleSource = String(rewrite?.source || "");
+    return ["/:path*", "/(.*)", "/**"].includes(ruleSource);
+  });
+  const configured = catchAllIndex >= 0
+    && String(rewrites[catchAllIndex]?.destination || "").split("?")[0] === "/";
+  if (configured) {
+    return { content: source || `${JSON.stringify(config, null, 2)}\n`, changed: false };
+  }
+
+  const spaRewrite = { source: "/:path*", destination: "/" };
+  const nextRewrites = catchAllIndex >= 0
+    ? rewrites.map((rewrite, index) => index === catchAllIndex ? spaRewrite : rewrite)
+    : [...rewrites, spaRewrite];
+
+  return {
+    content: `${JSON.stringify({
+      ...config,
+      rewrites: nextRewrites
+    }, null, 2)}\n`,
+    changed: true
+  };
+}
+
 export const sourceProviderService = {
   async readGitHubFile(connection, filePath, token = "") {
     const repository = normalizeRepository(connection?.repository);
@@ -397,13 +449,16 @@ export const sourceProviderService = {
 
   async ensureSpaRouting(website) {
     const provider = website?.connection?.provider;
-    if (provider !== "cpanel" && provider !== "sftp") {
+    const usesHtaccess = provider === "cpanel" || provider === "sftp";
+    const usesVercelConfig = provider === "github" && isVercelWebsite(website);
+    if (!usesHtaccess && !usesVercelConfig) {
       return { changed: false, configured: false };
     }
 
+    const configPath = usesVercelConfig ? "vercel.json" : ".htaccess";
     let currentContent = "";
     try {
-      const file = await this.readFile(website, ".htaccess");
+      const file = await this.readFile(website, configPath);
       currentContent = file?.content || "";
     } catch (error) {
       if (!/not found|no such file|does not exist|could not find/i.test(error?.message || "")) {
@@ -411,29 +466,42 @@ export const sourceProviderService = {
       }
     }
 
-    const result = ensureSpaHtaccess(currentContent);
+    const result = usesVercelConfig
+      ? ensureVercelSpaConfig(currentContent)
+      : ensureSpaHtaccess(currentContent);
     if (!result.changed) {
-      return { changed: false, configured: true, provider, path: ".htaccess" };
+      return {
+        changed: false,
+        configured: true,
+        deploymentPending: false,
+        provider,
+        path: configPath
+      };
     }
 
-    await this.writeFile(
+    const writeResult = await this.writeFile(
       website,
-      ".htaccess",
+      configPath,
       result.content,
-      "Configure SPA routing for ReactCMS"
+      usesVercelConfig
+        ? "Configure Vercel SPA routing for ReactCMS"
+        : "Configure SPA routing for ReactCMS"
     );
-    const remote = await this.readFile(website, ".htaccess");
+    const remote = await this.readFile(website, configPath);
     if (String(remote?.content ?? "") !== result.content) {
       throw new Error(
-        "The hosting server accepted .htaccess, but SPA route verification did not match."
+        `The hosting provider accepted ${configPath}, but SPA route verification did not match.`
       );
     }
 
     return {
       changed: true,
       configured: true,
+      deploymentPending: usesVercelConfig,
       provider,
-      path: ".htaccess"
+      path: configPath,
+      revision: writeResult?.revision || null,
+      url: writeResult?.url || null
     };
   },
 
@@ -508,14 +576,12 @@ export const sourceProviderService = {
       }
     }
 
-    if (verifiesRemoteWrites) {
+    if (verifiesRemoteWrites || isVercelWebsite(website)) {
       const htaccessResult = await this.ensureSpaRouting(website);
       if (htaccessResult.changed) {
         results.push({
-          provider,
-          path: ".htaccess",
-          revision: Date.now(),
-          verified: true,
+          ...htaccessResult,
+          verified: verifiesRemoteWrites,
           spaRoutingConfigured: true
         });
       }

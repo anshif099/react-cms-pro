@@ -4,6 +4,7 @@ import {
   buildConnectedPageFallbackUrl,
   buildConnectedPageUrl,
   connectedDraftTargets,
+  connectedRegionAliases,
   createRuntimeMessage,
   discoverLocalSourceImports,
   mergeRegionSelection,
@@ -163,6 +164,14 @@ describe("connected region selections", () => {
 });
 
 describe("connected visual routes", () => {
+  it("mirrors proxy region ids to the real connected page slug", () => {
+    expect(connectedRegionAliases("ad", "api-live-preview.title")).toEqual([
+      "api-live-preview.title",
+      "ad.title"
+    ]);
+    expect(connectedRegionAliases("ad", "ad.title")).toEqual(["ad.title"]);
+  });
+
   it("persists a connected edit to canonical and runtime page identities", () => {
     expect(connectedDraftTargets({
       websiteId: "cms-site",

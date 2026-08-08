@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import sourceProviderService, {
   bindRuntimeWebsiteId,
   ensureSpaHtaccess,
+  ensureVercelSpaConfig,
   versionLocalBuildAssets
 } from "./sourceProviderService";
 
@@ -255,6 +256,40 @@ describe("connected source providers", () => {
     expect(existing.changed).toBe(false);
   });
 
+  it("merges a Vercel SPA rewrite without replacing existing project configuration", () => {
+    const result = ensureVercelSpaConfig(JSON.stringify({
+      framework: "vite",
+      headers: [{ source: "/assets/:path*", headers: [] }]
+    }));
+    const config = JSON.parse(result.content);
+
+    expect(result.changed).toBe(true);
+    expect(config.framework).toBe("vite");
+    expect(config.headers).toHaveLength(1);
+    expect(config.rewrites).toContainEqual({
+      source: "/:path*",
+      destination: "/"
+    });
+    expect(ensureVercelSpaConfig(result.content).changed).toBe(false);
+  });
+
+  it("repairs a cleanUrls rewrite that incorrectly targets index.html", () => {
+    const result = ensureVercelSpaConfig(JSON.stringify({
+      cleanUrls: true,
+      rewrites: [{ source: "/(.*)", destination: "/index.html" }]
+    }));
+
+    expect(result.changed).toBe(true);
+    expect(JSON.parse(result.content).rewrites).toEqual([
+      { source: "/:path*", destination: "/" }
+    ]);
+  });
+
+  it("rejects an invalid connected vercel.json instead of overwriting it", () => {
+    expect(() => ensureVercelSpaConfig("{ invalid"))
+      .toThrow("vercel.json is not valid JSON");
+  });
+
   it("writes and verifies SPA routing for a connected StackCP website", async () => {
     let remoteContent = null;
     vi.spyOn(sourceProviderService, "readFile").mockImplementation(
@@ -294,5 +329,45 @@ describe("connected source providers", () => {
       connection: { provider: "sftp" }
     })).rejects.toThrow("Reconnect the StackCP SFTP session");
     expect(write).not.toHaveBeenCalled();
+  });
+
+  it("commits and verifies SPA routing for a GitHub-connected Vercel site", async () => {
+    let remoteContent = null;
+    vi.spyOn(sourceProviderService, "readFile").mockImplementation(
+      async (_website, path) => {
+        if (path !== "vercel.json") throw new Error("Unexpected path");
+        if (remoteContent === null) throw new Error("Not Found");
+        return { path, content: remoteContent };
+      }
+    );
+    vi.spyOn(sourceProviderService, "writeFile").mockImplementation(
+      async (_website, path, content) => {
+        remoteContent = content;
+        return {
+          provider: "github",
+          path,
+          revision: "routing-commit",
+          url: "https://github.com/example/site/commit/routing-commit"
+        };
+      }
+    );
+
+    const result = await sourceProviderService.ensureSpaRouting({
+      domain: "https://triosis.vercel.app",
+      connection: { provider: "github" }
+    });
+
+    expect(result).toEqual(expect.objectContaining({
+      changed: true,
+      configured: true,
+      deploymentPending: true,
+      provider: "github",
+      path: "vercel.json",
+      revision: "routing-commit"
+    }));
+    expect(JSON.parse(remoteContent).rewrites).toContainEqual({
+      source: "/:path*",
+      destination: "/"
+    });
   });
 });

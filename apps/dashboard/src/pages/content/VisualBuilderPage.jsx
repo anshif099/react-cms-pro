@@ -50,6 +50,7 @@ import {
   buildConnectedPageFallbackUrl,
   buildConnectedPageUrl,
   connectedDraftTargets,
+  connectedRegionAliases,
   createRuntimeMessage,
   discoverLocalSourceImports,
   mergeRegionSelection,
@@ -547,7 +548,7 @@ function ConnectedSourceWorkspace({
 
   const publishConnectedSource = async () => {
     const result = await onPublish();
-    if (result?.verified) {
+    if (result?.verified && !result?.deploymentPending) {
       setFrameLoading(true);
       setFrameVersion((current) => current + 1);
     }
@@ -1790,6 +1791,7 @@ export function VisualBuilderPage() {
   const sourceFilesRef = useRef({});
   const sourceDirtyPathsRef = useRef(new Set());
   const connectedWritesRef = useRef(new Set());
+  const connectedPublishTargetsRef = useRef(new Map());
 
   const pageKey = useMemo(
     () => visualBuilderService.resolvePageKey(selectedPage),
@@ -2385,10 +2387,16 @@ export function VisualBuilderPage() {
       runtimePageId: change.pageId,
       regionId: change.regionId
     });
-    const write = visualBuilderService.persistRegionTargets(
-      targets,
-      change.regionId,
-      change.value
+    targets.forEach((target) => {
+      connectedPublishTargetsRef.current.set(target.key, target);
+    });
+    const regionIds = connectedRegionAliases(pageKey, change.regionId);
+    const write = Promise.all(
+      regionIds.map((regionId) => visualBuilderService.persistRegionTargets(
+        targets,
+        regionId,
+        change.value
+      ))
     );
     connectedWritesRef.current.add(write);
     write
@@ -2432,19 +2440,26 @@ export function VisualBuilderPage() {
       const saved = await saveConnectedDraft(false);
       if (!saved) return null;
 
-      let spaRouting = { changed: false, configured: false };
-      if (
-        sourceWebsite?.connection?.provider === "cpanel"
-        || sourceWebsite?.connection?.provider === "sftp"
-      ) {
+      let spaRouting = {
+        changed: false,
+        configured: false,
+        deploymentPending: false
+      };
+      if (sourceWebsite) {
         spaRouting = await sourceProviderService.ensureSpaRouting(sourceWebsite);
       }
 
-      const contentPublished = await contentSyncService.publishDraft(
-        websiteId,
-        pageKey
+      const publishTargets = Array.from(new Map([
+        [`${websiteId}:${pageKey}`, { websiteId, pageKey }],
+        ...connectedPublishTargetsRef.current.entries()
+      ]).values());
+      const publishResults = await Promise.all(
+        publishTargets.map((target) => contentSyncService.publishDraft(
+          target.websiteId,
+          target.pageKey
+        ))
       );
-      if (!contentPublished) {
+      if (!publishResults[0]) {
         throw new Error("The connected page draft is empty.");
       }
       const publishedAt = await pageService.markPublished(
@@ -2459,11 +2474,17 @@ export function VisualBuilderPage() {
         publishedAt
       } : current);
       toast.success(
-        spaRouting.changed
+        spaRouting.deploymentPending
+          ? "Page published and Vercel routing committed. The live deployment is rebuilding."
+          : spaRouting.changed
           ? "Page published and live URL routing configured on the connected website."
           : "Page content published to the connected website."
       );
-      return { verified: true, spaRoutingConfigured: spaRouting.configured };
+      return {
+        verified: true,
+        deploymentPending: spaRouting.deploymentPending,
+        spaRoutingConfigured: spaRouting.configured
+      };
     } catch (error) {
       console.error(error);
       toast.error(error.message || "The connected page could not be published.");
