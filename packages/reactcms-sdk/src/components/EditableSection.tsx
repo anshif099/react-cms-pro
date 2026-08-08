@@ -29,15 +29,16 @@ export function EditableSection({
   const [value] = useEditable<Record<string, unknown>>(regionId, defaultValue, 'section', label);
   const editMode = cms?.editMode || false;
   const pageId = page?.currentPage?.id || 'global';
+  const sectionValue = value && typeof value === 'object' ? value : {};
   const sectionStyle: React.CSSProperties = { ...style };
-  if (typeof value.background === 'string') sectionStyle.background = value.background;
-  if (typeof value.paddingY === 'number') {
-    sectionStyle.paddingTop = `${value.paddingY}px`;
-    sectionStyle.paddingBottom = `${value.paddingY}px`;
+  if (typeof sectionValue.background === 'string') sectionStyle.background = sectionValue.background;
+  if (typeof sectionValue.paddingY === 'number') {
+    sectionStyle.paddingTop = `${sectionValue.paddingY}px`;
+    sectionStyle.paddingBottom = `${sectionValue.paddingY}px`;
   }
-  if (value.layout === 'flex') sectionStyle.display = 'flex';
-  if (value.layout === 'grid') sectionStyle.display = 'grid';
-  if (value.layout === 'full') sectionStyle.width = '100%';
+  if (sectionValue.layout === 'flex') sectionStyle.display = 'flex';
+  if (sectionValue.layout === 'grid') sectionStyle.display = 'grid';
+  if (sectionValue.layout === 'full') sectionStyle.width = '100%';
 
   const handleClick = (e: React.MouseEvent) => {
     if (editMode && cms?.websiteId) {
