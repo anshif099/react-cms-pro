@@ -398,30 +398,43 @@ export const sourceProviderService = {
   async ensureSpaRouting(website) {
     const provider = website?.connection?.provider;
     if (provider !== "cpanel" && provider !== "sftp") {
-      return { changed: false };
+      return { changed: false, configured: false };
     }
+
+    let currentContent = "";
     try {
-      let currentContent = "";
-      try {
-        const file = await this.readFile(website, ".htaccess");
-        currentContent = file?.content || "";
-      } catch {
-        currentContent = "";
-      }
-      const result = ensureSpaHtaccess(currentContent);
-      if (result.changed) {
-        await this.writeFile(
-          website,
-          ".htaccess",
-          result.content,
-          "Configure SPA routing for ReactCMS"
-        );
-        return { changed: true, provider, path: ".htaccess" };
-      }
+      const file = await this.readFile(website, ".htaccess");
+      currentContent = file?.content || "";
     } catch (error) {
-      console.warn("Could not ensure SPA routing .htaccess:", error);
+      if (!/not found|no such file|does not exist|could not find/i.test(error?.message || "")) {
+        throw error;
+      }
     }
-    return { changed: false };
+
+    const result = ensureSpaHtaccess(currentContent);
+    if (!result.changed) {
+      return { changed: false, configured: true, provider, path: ".htaccess" };
+    }
+
+    await this.writeFile(
+      website,
+      ".htaccess",
+      result.content,
+      "Configure SPA routing for ReactCMS"
+    );
+    const remote = await this.readFile(website, ".htaccess");
+    if (String(remote?.content ?? "") !== result.content) {
+      throw new Error(
+        "The hosting server accepted .htaccess, but SPA route verification did not match."
+      );
+    }
+
+    return {
+      changed: true,
+      configured: true,
+      provider,
+      path: ".htaccess"
+    };
   },
 
   async writeFiles(website, files = [], message) {

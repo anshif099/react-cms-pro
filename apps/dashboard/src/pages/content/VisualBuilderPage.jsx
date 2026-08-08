@@ -2431,6 +2431,15 @@ export function VisualBuilderPage() {
     try {
       const saved = await saveConnectedDraft(false);
       if (!saved) return null;
+
+      let spaRouting = { changed: false, configured: false };
+      if (
+        sourceWebsite?.connection?.provider === "cpanel"
+        || sourceWebsite?.connection?.provider === "sftp"
+      ) {
+        spaRouting = await sourceProviderService.ensureSpaRouting(sourceWebsite);
+      }
+
       const contentPublished = await contentSyncService.publishDraft(
         websiteId,
         pageKey
@@ -2444,25 +2453,17 @@ export function VisualBuilderPage() {
         selectedPage?.routeId
       );
 
-      if (sourceWebsite?.connection?.provider === "cpanel" || sourceWebsite?.connection?.provider === "sftp") {
-        try {
-          await sourceProviderService.writeFiles(
-            sourceWebsite,
-            [],
-            `Publish ${selectedPage?.title || pageKey} from ReactCMS`
-          );
-        } catch (hostingError) {
-          console.warn("Hosting SPA route verification warning:", hostingError);
-        }
-      }
-
       setSelectedPage((current) => current ? {
         ...current,
         status: "published",
         publishedAt
       } : current);
-      toast.success("Page content published to the connected website.");
-      return { verified: true };
+      toast.success(
+        spaRouting.changed
+          ? "Page published and live URL routing configured on the connected website."
+          : "Page content published to the connected website."
+      );
+      return { verified: true, spaRoutingConfigured: spaRouting.configured };
     } catch (error) {
       console.error(error);
       toast.error(error.message || "The connected page could not be published.");
@@ -2470,7 +2471,16 @@ export function VisualBuilderPage() {
     } finally {
       setConnectedPublishing(false);
     }
-  }, [pageId, pageKey, saveConnectedDraft, selectedPage?.routeId, setSelectedPage, toast, websiteId]);
+  }, [
+    pageId,
+    pageKey,
+    saveConnectedDraft,
+    selectedPage?.routeId,
+    setSelectedPage,
+    sourceWebsite,
+    toast,
+    websiteId
+  ]);
 
   const getAISourceFiles = useCallback(() => sourceFilesRef.current, []);
 

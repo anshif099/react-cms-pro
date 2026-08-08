@@ -254,4 +254,45 @@ describe("connected source providers", () => {
     const existing = ensureSpaHtaccess(fresh.content);
     expect(existing.changed).toBe(false);
   });
+
+  it("writes and verifies SPA routing for a connected StackCP website", async () => {
+    let remoteContent = null;
+    vi.spyOn(sourceProviderService, "readFile").mockImplementation(
+      async (_website, path) => {
+        if (path !== ".htaccess") throw new Error("Unexpected path");
+        if (remoteContent === null) throw new Error("The source file was not found.");
+        return { path, content: remoteContent };
+      }
+    );
+    vi.spyOn(sourceProviderService, "writeFile").mockImplementation(
+      async (_website, path, content) => {
+        remoteContent = content;
+        return { provider: "sftp", path, revision: 10 };
+      }
+    );
+
+    const result = await sourceProviderService.ensureSpaRouting({
+      connection: { provider: "sftp" }
+    });
+
+    expect(result).toEqual(expect.objectContaining({
+      changed: true,
+      configured: true,
+      provider: "sftp",
+      path: ".htaccess"
+    }));
+    expect(remoteContent).toContain("RewriteRule . /index.html [L]");
+  });
+
+  it("does not report publish routing success when StackCP cannot be reached", async () => {
+    vi.spyOn(sourceProviderService, "readFile").mockRejectedValue(
+      new Error("Reconnect the StackCP SFTP session before publishing.")
+    );
+    const write = vi.spyOn(sourceProviderService, "writeFile");
+
+    await expect(sourceProviderService.ensureSpaRouting({
+      connection: { provider: "sftp" }
+    })).rejects.toThrow("Reconnect the StackCP SFTP session");
+    expect(write).not.toHaveBeenCalled();
+  });
 });
