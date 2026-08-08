@@ -18,7 +18,7 @@ const MAX_DEPTH = 12;
 const MAX_SOURCE_CONTEXT = 1200000;
 const SOURCE_TRUNCATED_MARKER = "\n/* ReactCMS context truncated */";
 
-function asSerializable(value, depth = 0, seen = new WeakSet()) {
+export function asSerializable(value, depth = 0, ancestors = new WeakSet()) {
   if (value === null || value === undefined) return value ?? null;
   if (typeof value === "string") {
     return value.length > MAX_STRING
@@ -28,16 +28,17 @@ function asSerializable(value, depth = 0, seen = new WeakSet()) {
   if (["number", "boolean"].includes(typeof value)) return value;
   if (typeof value !== "object") return String(value);
   if (depth >= MAX_DEPTH) return "[context depth limit]";
-  if (seen.has(value)) return "[circular]";
-  seen.add(value);
+  if (ancestors.has(value)) return "[circular]";
+  ancestors.add(value);
 
-  if (Array.isArray(value)) {
-    return value.slice(0, MAX_ARRAY).map((item) => asSerializable(item, depth + 1, seen));
-  }
-  return Object.fromEntries(Object.entries(value).map(([key, item]) => [
-    key,
-    asSerializable(item, depth + 1, seen)
-  ]));
+  const serialized = Array.isArray(value)
+    ? value.slice(0, MAX_ARRAY).map((item) => asSerializable(item, depth + 1, ancestors))
+    : Object.fromEntries(Object.entries(value).map(([key, item]) => [
+        key,
+        asSerializable(item, depth + 1, ancestors)
+      ]));
+  ancestors.delete(value);
+  return serialized;
 }
 
 async function safeRead(read, fallback) {

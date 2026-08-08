@@ -47,6 +47,41 @@ describe("visualBuilderService draft persistence & hydration", () => {
     });
   });
 
+  it("hydrates corrupted draft values from registered defaults", async () => {
+    firebaseMocks.get.mockImplementation((refObj) => {
+      const path = refObj.path || "";
+      if (path.includes("/editableRegions/")) {
+        return Promise.resolve({
+          exists: () => true,
+          val: () => ({
+            "header~2Enav_link_2": {
+              type: "button",
+              defaultValue: { text: "ABOUT US", href: "about" }
+            }
+          })
+        });
+      }
+      if (path.includes("/draft/pages/")) {
+        return Promise.resolve({
+          exists: () => true,
+          val: () => ({
+            regions: { "header~2Enav_link_2": "[circular]" }
+          })
+        });
+      }
+      return Promise.resolve({ exists: () => false });
+    });
+
+    const regions = await visualBuilderService.loadSavedDraftRegions(
+      "website-1",
+      "ad"
+    );
+
+    expect(regions).toEqual({
+      "header.nav_link_2": { text: "ABOUT US", href: "about" }
+    });
+  });
+
   it("persists draft payloads across all target candidate keys during saveDraft", async () => {
     await visualBuilderService.saveDraft({
       websiteId: "website-1",
@@ -104,5 +139,14 @@ describe("visualBuilderService draft persistence & hydration", () => {
     );
 
     expect(result).toEqual(targets);
+  });
+
+  it("does not persist internal serialization placeholders", async () => {
+    await expect(visualBuilderService.persistRegionTargets(
+      [{ websiteId: "website-1", pageKey: "home" }],
+      "header.nav_link_1",
+      "[circular]"
+    )).rejects.toThrow("internal serialization placeholder");
+    expect(firebaseMocks.update).not.toHaveBeenCalled();
   });
 });

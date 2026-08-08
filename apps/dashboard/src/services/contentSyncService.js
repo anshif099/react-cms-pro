@@ -1,16 +1,30 @@
 import { database } from "../lib/firebase";
 import { ref, set, get, remove } from "firebase/database";
 import { paths, encodeFirebaseObject } from "@anshif.rainhopes/shared";
+import { repairSerializedRegionValues } from "./regionValueService";
 
 export const contentSyncService = {
   async publishDraft(websiteId, pageSlug) {
     const draftRef = ref(database, paths.contentDraft(websiteId, pageSlug));
-    const draftSnapshot = await get(draftRef);
+    const [draftSnapshot, definitionsSnapshot] = await Promise.all([
+      get(draftRef),
+      get(ref(database, paths.registryRegions(websiteId, pageSlug)))
+    ]);
     if (!draftSnapshot.exists()) return false;
 
     const draft = draftSnapshot.val();
+    const repaired = repairSerializedRegionValues(
+      draft?.regions,
+      definitionsSnapshot.exists() ? definitionsSnapshot.val() : {}
+    );
+    const publishableDraft = repaired.changed
+      ? { ...draft, regions: repaired.regions }
+      : draft;
+    if (repaired.changed) {
+      await set(draftRef, publishableDraft);
+    }
     await set(ref(database, paths.contentPublished(websiteId, pageSlug)), {
-      ...(draft && typeof draft === "object" ? draft : {}),
+      ...(publishableDraft && typeof publishableDraft === "object" ? publishableDraft : {}),
       publishedAt: Date.now()
     });
     return true;

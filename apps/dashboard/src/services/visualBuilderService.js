@@ -12,6 +12,11 @@ import {
   blockToComponentNode,
   isPageComponentTree
 } from "@anshif.rainhopes/reactcms-renderer";
+import {
+  isSerializedRegionPlaceholder,
+  regionDefaultsFromDefinitions,
+  repairSerializedRegionValues
+} from "./regionValueService";
 
 export const BUILDER_BLOCKS_REGION = "__rcms_builder_blocks__";
 export const NATIVE_PAGE_TREE_FIELD = "tree";
@@ -297,24 +302,36 @@ export const visualBuilderService = {
       snapshot.exists() && isPageComponentTree(snapshot.val())
     ))?.val() || null;
 
-    const registeredRegions = registeredRegionSnapshots.reduce((all, snapshot) => {
+    const registeredRegionDefinitions = registeredRegionSnapshots.reduce((all, snapshot) => {
       if (!snapshot.exists()) return all;
       return {
         ...all,
         ...decodeFirebaseObject(snapshot.val())
       };
     }, {});
+    const registeredRegions = regionDefaultsFromDefinitions(registeredRegionDefinitions);
+    const cleanPublishedRegions = repairSerializedRegionValues(
+      published.regions,
+      registeredRegionDefinitions
+    ).regions;
+    const cleanDraftRegions = repairSerializedRegionValues(
+      draftDocument.regions,
+      registeredRegionDefinitions
+    ).regions;
 
     return {
-      published,
+      published: {
+        ...published,
+        regions: cleanPublishedRegions
+      },
       draft: {
         ...draftDocument,
         tree: draftDocument.tree || published.tree || registeredTree,
         blocks: draftDocument.blocks.length ? draftDocument.blocks : published.blocks,
         regions: {
           ...registeredRegions,
-          ...published.regions,
-          ...draftDocument.regions
+          ...cleanPublishedRegions,
+          ...cleanDraftRegions
         }
       }
     };
@@ -347,9 +364,14 @@ export const visualBuilderService = {
       .filter(Boolean)
       .map((value) => String(value).split("?")[0].replace(/^\/+|\/+$/g, "") || "home")));
 
-    const snapshots = await Promise.all(
-      candidateKeys.map((key) => get(ref(database, paths.contentDraft(websiteId, key))))
-    );
+    const [snapshots, registeredRegionSnapshots] = await Promise.all([
+      Promise.all(candidateKeys.map((key) => (
+        get(ref(database, paths.contentDraft(websiteId, key)))
+      ))),
+      Promise.all(candidateKeys.map((key) => (
+        get(ref(database, paths.registryRegions(websiteId, key)))
+      )))
+    ]);
 
     const mergedRegions = {};
     snapshots.forEach((snapshot) => {
@@ -358,8 +380,18 @@ export const visualBuilderService = {
         Object.assign(mergedRegions, decoded.regions);
       }
     });
+    const registeredRegionDefinitions = registeredRegionSnapshots.reduce((all, snapshot) => {
+      if (!snapshot.exists()) return all;
+      return {
+        ...all,
+        ...decodeFirebaseObject(snapshot.val())
+      };
+    }, {});
 
-    return mergedRegions;
+    return repairSerializedRegionValues(
+      mergedRegions,
+      registeredRegionDefinitions
+    ).regions;
   },
 
   async persistRegion(websiteId, pageKey, regionId, value) {
@@ -371,6 +403,9 @@ export const visualBuilderService = {
   },
 
   async persistRegionTargets(targets, regionId, value) {
+    if (isSerializedRegionPlaceholder(value)) {
+      throw new Error(`Region "${regionId}" contains an internal serialization placeholder.`);
+    }
     const uniqueTargets = Array.from(new Map(
       (targets || [])
         .filter((target) => target?.websiteId && target?.pageKey)
