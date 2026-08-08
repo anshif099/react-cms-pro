@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import sourceProviderService, {
   bindRuntimeWebsiteId,
+  ensureReactCmsContentLoader,
   ensureSpaHtaccess,
   ensureVercelSpaConfig,
+  mergeReactCmsGitContent,
+  parseReactCmsGitContent,
   versionLocalBuildAssets
 } from "./sourceProviderService";
 
@@ -52,6 +55,65 @@ describe("connected source providers", () => {
     expect(result.content).toContain('./assets/index.js?rcms=12345');
     expect(result.content).toContain('https://cdn.example.com/library.js');
     expect(result.content).toContain('/assets/logo.png');
+  });
+
+  it("merges page values into a deterministic Git content manifest", () => {
+    const existing = 'window.__REACTCMS_GIT_CONTENT__ = {"home":{"home.title":"Home"}};\n';
+    const content = mergeReactCmsGitContent(existing, "ad", {
+      "ad.title": "API KEY",
+      "ad.hero": { background: "#fff" }
+    });
+
+    expect(parseReactCmsGitContent(content)).toEqual({
+      home: { "home.title": "Home" },
+      ad: {
+        "ad.title": "API KEY",
+        "ad.hero": { background: "#fff" }
+      }
+    });
+  });
+
+  it("loads the Git content manifest before the application module", () => {
+    const html = '<body>\n  <div id="root"></div>\n  <script type="module" src="/src/main.jsx"></script>\n</body>';
+    const result = ensureReactCmsContentLoader(html);
+
+    expect(result.changed).toBe(true);
+    expect(result.content.indexOf('/reactcms-content.js')).toBeLessThan(
+      result.content.indexOf('/src/main.jsx')
+    );
+    expect(ensureReactCmsContentLoader(result.content).changed).toBe(false);
+  });
+
+  it("writes page content and its loader to the connected Git source", async () => {
+    const remoteFiles = new Map([
+      ["index.html", '<script type="module" src="/src/main.jsx"></script>']
+    ]);
+    vi.spyOn(sourceProviderService, "readFile").mockImplementation(
+      async (_website, path) => {
+        if (!remoteFiles.has(path)) throw new Error("Not Found");
+        return { path, content: remoteFiles.get(path) };
+      }
+    );
+    vi.spyOn(sourceProviderService, "writeFiles").mockImplementation(
+      async (_website, files) => {
+        files.forEach((file) => remoteFiles.set(file.path, file.content));
+        return { provider: "github", revision: "content-commit", files };
+      }
+    );
+
+    const result = await sourceProviderService.writeContentManifest({
+      domain: "https://triosis.vercel.app",
+      connection: { provider: "github" }
+    }, "ad", { "ad.title": "API KEY" });
+
+    expect(result).toEqual(expect.objectContaining({
+      provider: "github",
+      revision: "content-commit",
+      deploymentPending: true
+    }));
+    expect(parseReactCmsGitContent(remoteFiles.get("public/reactcms-content.js")))
+      .toEqual({ ad: { "ad.title": "API KEY" } });
+    expect(remoteFiles.get("index.html")).toContain('/reactcms-content.js');
   });
 
   it("verifies StackCP writes, reconnects the runtime, and refreshes asset URLs", async () => {

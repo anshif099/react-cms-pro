@@ -279,6 +279,77 @@ export function ensureVercelSpaConfig(existingContent = "") {
   };
 }
 
+const GIT_CONTENT_GLOBAL = "__REACTCMS_GIT_CONTENT__";
+
+export function parseReactCmsGitContent(existingContent = "") {
+  const source = String(existingContent || "").trim();
+  if (!source) return {};
+
+  const match = source.match(
+    /^(?:window|globalThis)\.__REACTCMS_GIT_CONTENT__\s*=\s*([\s\S]*?);?\s*$/
+  );
+  if (!match) {
+    throw new Error(
+      "public/reactcms-content.js is not a ReactCMS Git content manifest."
+    );
+  }
+
+  let manifest;
+  try {
+    manifest = JSON.parse(match[1]);
+  } catch {
+    throw new Error("public/reactcms-content.js contains invalid JSON content.");
+  }
+  if (!manifest || typeof manifest !== "object" || Array.isArray(manifest)) {
+    throw new Error("public/reactcms-content.js must contain a page content object.");
+  }
+  return manifest;
+}
+
+export function mergeReactCmsGitContent(existingContent, pageKey, regions = {}) {
+  const page = String(pageKey || "").replace(/^\/+|\/+$/g, "") || "home";
+  const manifest = parseReactCmsGitContent(existingContent);
+  const currentPage = manifest[page];
+  const currentRegions = currentPage && typeof currentPage === "object" && !Array.isArray(currentPage)
+    ? currentPage
+    : {};
+  const safeRegions = Object.fromEntries(
+    Object.entries(regions || {}).filter(([, value]) => value !== undefined)
+  );
+  const nextManifest = {
+    ...manifest,
+    [page]: {
+      ...currentRegions,
+      ...safeRegions
+    }
+  };
+
+  return `window.${GIT_CONTENT_GLOBAL} = ${JSON.stringify(nextManifest, null, 2)};\n`;
+}
+
+export function ensureReactCmsContentLoader(existingHtml = "") {
+  const source = String(existingHtml || "");
+  if (/\bsrc=["']\/reactcms-content\.js["']/i.test(source)) {
+    return { content: source, changed: false };
+  }
+
+  const loader = '  <script src="/reactcms-content.js"></script>\n';
+  const moduleScript = /[ \t]*<script\b[^>]*\btype=["']module["'][^>]*>/i;
+  if (moduleScript.test(source)) {
+    return {
+      content: source.replace(moduleScript, (match) => `${loader}${match.trimStart()}`),
+      changed: true
+    };
+  }
+  if (/<\/head>/i.test(source)) {
+    return {
+      content: source.replace(/<\/head>/i, `${loader}</head>`),
+      changed: true
+    };
+  }
+  throw new Error("The connected index.html does not contain a script or head element.");
+}
+
 export const sourceProviderService = {
   async readGitHubFile(connection, filePath, token = "") {
     const repository = normalizeRepository(connection?.repository);
@@ -502,6 +573,54 @@ export const sourceProviderService = {
       path: configPath,
       revision: writeResult?.revision || null,
       url: writeResult?.url || null
+    };
+  },
+
+  async writeContentManifest(website, pageKey, regions) {
+    const manifestPath = "public/reactcms-content.js";
+    let currentManifest = "";
+    try {
+      currentManifest = (await this.readFile(website, manifestPath))?.content || "";
+    } catch (error) {
+      if (!/not found|no such file|does not exist|could not find/i.test(error?.message || "")) {
+        throw error;
+      }
+    }
+
+    const indexFile = await this.readFile(website, "index.html");
+    const nextManifest = mergeReactCmsGitContent(
+      currentManifest,
+      pageKey,
+      regions
+    );
+    const nextIndex = ensureReactCmsContentLoader(indexFile.content);
+    const files = [];
+    if (nextManifest !== currentManifest) {
+      files.push({ path: manifestPath, content: nextManifest });
+    }
+    if (nextIndex.changed) {
+      files.push({ path: "index.html", content: nextIndex.content });
+    }
+
+    if (!files.length) {
+      return {
+        provider: website?.connection?.provider,
+        revision: null,
+        files: [],
+        changed: false,
+        deploymentPending: false
+      };
+    }
+
+    const result = await this.writeFiles(
+      website,
+      files,
+      `Publish ${pageKey || "home"} content from ReactCMS`
+    );
+    return {
+      ...result,
+      changed: true,
+      deploymentPending: isVercelWebsite(website)
     };
   },
 

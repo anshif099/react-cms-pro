@@ -1,3 +1,5 @@
+import { isSerializedRegionPlaceholder } from "./regionValueService";
+
 const EDITABLE_COMPONENT_PATTERN = /<Editable(?:Text|RichText|Button|Image|Video|Section|Repeater)\b/g;
 
 function scanQuotedValue(source, start, quote) {
@@ -502,6 +504,23 @@ export function connectedRegionAliases(pageKey, regionId) {
   ]));
 }
 
+export function selectGitContentRegions(regions = {}, definitions = {}) {
+  return Object.fromEntries(
+    Object.keys(definitions || {}).flatMap((regionId) => {
+      if (
+        regionId.includes("~")
+        || /^api(?:\/|-)live-preview\./.test(regionId)
+        || !Object.prototype.hasOwnProperty.call(regions || {}, regionId)
+      ) {
+        return [];
+      }
+      const value = regions[regionId];
+      if (value === undefined || isSerializedRegionPlaceholder(value)) return [];
+      return [[regionId, value]];
+    })
+  );
+}
+
 export function connectedDraftTargets({
   websiteId,
   pageKey,
@@ -604,9 +623,11 @@ export function buildConnectedCanvasProxyUrl(connectedPageUrl, mode = "edit") {
     if (pageUrl.protocol !== "https:") return "";
     const targetUrl = new URL(pageUrl.origin);
     const route = `${pageUrl.pathname}${pageUrl.search}${pageUrl.hash}`;
+    const page = pageUrl.pathname.replace(/^\/+|\/+$/g, "") || "home";
     const parameters = new URLSearchParams({
       target: targetUrl.toString(),
       route,
+      page,
       mode: mode === "edit" ? "edit" : "preview"
     });
     return `/api/live-preview?${parameters.toString()}`;

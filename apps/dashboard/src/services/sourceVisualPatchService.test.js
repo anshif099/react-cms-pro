@@ -9,6 +9,7 @@ import {
   discoverLocalSourceImports,
   mergeRegionSelection,
   patchEditableRegionSource,
+  selectGitContentRegions,
   shouldUseConnectedWebsiteCanvas
 } from "./sourceVisualPatchService";
 
@@ -190,6 +191,25 @@ describe("connected visual routes", () => {
     ]);
   });
 
+  it("selects only registered canonical values for a Git content commit", () => {
+    expect(selectGitContentRegions({
+      "ad.title": "API KEY",
+      "ad.hero": { background: "#fff" },
+      "api-live-preview.title": "Wrong alias",
+      "ad.title~7E2Epolluted": "Wrong key",
+      "ad.subtext": "[circular]"
+    }, {
+      "ad.title": { type: "text" },
+      "ad.hero": { type: "section" },
+      "api-live-preview.title": { type: "text" },
+      "ad.title~7E2Epolluted": { type: "text" },
+      "ad.subtext": { type: "text" }
+    })).toEqual({
+      "ad.title": "API KEY",
+      "ad.hero": { background: "#fff" }
+    });
+  });
+
   it("uses the real website canvas for CMS pages on source-connected sites", () => {
     expect(shouldUseConnectedWebsiteCanvas(
       { sourceConnected: true, domain: "https://triosis.vercel.app/" },
@@ -242,6 +262,7 @@ describe("connected visual routes", () => {
     expect(url.pathname).toBe("/api/live-preview");
     expect(url.searchParams.get("target")).toBe("https://triosis.vercel.app/");
     expect(url.searchParams.get("route")).toBe("/ad?rcms_edit=1");
+    expect(url.searchParams.get("page")).toBe("ad");
     expect(url.searchParams.get("mode")).toBe("edit");
   });
 

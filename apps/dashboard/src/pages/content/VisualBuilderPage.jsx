@@ -43,6 +43,7 @@ import themeService from "../../services/themeService";
 import websiteService from "../../services/websiteService";
 import sourceCredentialService from "../../services/sourceCredentialService";
 import sourceProviderService from "../../services/sourceProviderService";
+import registryService from "../../services/registryService";
 import pageService from "../../services/pageService";
 import contentSyncService from "../../services/contentSyncService";
 import {
@@ -55,6 +56,7 @@ import {
   discoverLocalSourceImports,
   mergeRegionSelection,
   patchEditableRegionSource,
+  selectGitContentRegions,
   shouldUseConnectedWebsiteCanvas
 } from "../../services/sourceVisualPatchService";
 import {
@@ -2374,10 +2376,11 @@ export function VisualBuilderPage() {
     }
 
     setConnectedSaveStatus("saving");
-    regionsRef.current = {
-      ...regionsRef.current,
-      [change.regionId]: change.value
-    };
+    const regionIds = connectedRegionAliases(pageKey, change.regionId);
+    regionsRef.current = regionIds.reduce((regions, regionId) => ({
+      ...regions,
+      [regionId]: change.value
+    }), regionsRef.current);
     setLegacyRegions(regionsRef.current);
     const targets = connectedDraftTargets({
       websiteId,
@@ -2390,7 +2393,6 @@ export function VisualBuilderPage() {
     targets.forEach((target) => {
       connectedPublishTargetsRef.current.set(target.key, target);
     });
-    const regionIds = connectedRegionAliases(pageKey, change.regionId);
     const write = Promise.all(
       regionIds.map((regionId) => visualBuilderService.persistRegionTargets(
         targets,
@@ -2440,27 +2442,54 @@ export function VisualBuilderPage() {
       const saved = await saveConnectedDraft(false);
       if (!saved) return null;
 
+      const publishesToGit = Boolean(
+        sourceWebsite?.connection?.provider === "github"
+        && sourceWebsite?.connection?.sourceMode === "provider"
+        && sourceWebsite?.connection?.writebackEnabled !== false
+      );
+      let gitPublish = null;
       let spaRouting = {
         changed: false,
         configured: false,
         deploymentPending: false
       };
-      if (sourceWebsite) {
+      if (publishesToGit) {
+        const editableRegions = await registryService.getEditableRegions(websiteId);
+        const gitRegions = selectGitContentRegions(
+          regionsRef.current,
+          editableRegions?.[pageKey] || {}
+        );
+        if (!Object.keys(gitRegions).length) {
+          throw new Error("No registered page fields are ready for the Git publish.");
+        }
+        gitPublish = await sourceProviderService.writeContentManifest(
+          sourceWebsite,
+          pageKey,
+          gitRegions
+        );
+        spaRouting = {
+          changed: gitPublish.changed,
+          configured: true,
+          deploymentPending: gitPublish.deploymentPending
+        };
+      } else if (sourceWebsite) {
         spaRouting = await sourceProviderService.ensureSpaRouting(sourceWebsite);
       }
 
-      const publishTargets = Array.from(new Map([
-        [`${websiteId}:${pageKey}`, { websiteId, pageKey }],
-        ...connectedPublishTargetsRef.current.entries()
-      ]).values());
-      const publishResults = await Promise.all(
-        publishTargets.map((target) => contentSyncService.publishDraft(
-          target.websiteId,
-          target.pageKey
-        ))
-      );
-      if (!publishResults[0]) {
-        throw new Error("The connected page draft is empty.");
+      if (!gitPublish) {
+        const publishTargets = Array.from(new Map([
+          [`${websiteId}:${pageKey}`, { websiteId, pageKey }],
+          ...connectedPublishTargetsRef.current.entries()
+        ]).values());
+        const publishResults = await Promise.all(
+          publishTargets.map((target) => contentSyncService.publishDraft(
+            target.websiteId,
+            target.pageKey
+          ))
+        );
+        if (!publishResults[0]) {
+          throw new Error("The connected page draft is empty.");
+        }
       }
       const publishedAt = await pageService.markPublished(
         websiteId,
@@ -2470,11 +2499,16 @@ export function VisualBuilderPage() {
 
       setSelectedPage((current) => current ? {
         ...current,
+        sourceRevision: gitPublish?.revision || current.sourceRevision,
         status: "published",
         publishedAt
       } : current);
       toast.success(
-        spaRouting.deploymentPending
+        gitPublish?.deploymentPending
+          ? "Page content committed to GitHub. Vercel is rebuilding the live site."
+          : gitPublish
+          ? "Page content committed to the connected Git repository."
+          : spaRouting.deploymentPending
           ? "Page published and Vercel routing committed. The live deployment is rebuilding."
           : spaRouting.changed
           ? "Page published and live URL routing configured on the connected website."
@@ -2482,8 +2516,9 @@ export function VisualBuilderPage() {
       );
       return {
         verified: true,
-        deploymentPending: spaRouting.deploymentPending,
-        spaRoutingConfigured: spaRouting.configured
+        deploymentPending: gitPublish?.deploymentPending || spaRouting.deploymentPending,
+        spaRoutingConfigured: spaRouting.configured,
+        sourceRevision: gitPublish?.revision || null
       };
     } catch (error) {
       console.error(error);
