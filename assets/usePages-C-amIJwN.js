@@ -1,0 +1,1 @@
+import{T as e}from"./index-Dy6yGTJ5.js";function t(){return e()}export{t};
