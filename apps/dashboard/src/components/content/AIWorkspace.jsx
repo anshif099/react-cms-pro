@@ -23,6 +23,7 @@ import {
   MousePointer2,
   PanelRightClose,
   ClipboardPaste,
+  Plus,
   RefreshCw,
   Send,
   ShieldCheck,
@@ -77,6 +78,28 @@ const MEMORY_FIELDS = [
   ["typography", "Typography"],
   ["designLanguage", "Design language"]
 ];
+
+const WELCOME_MESSAGE = {
+  id: "welcome",
+  role: "assistant",
+  content: "I am Rocket AI, running inside ReactCMS without an external AI API. I understand this complete page, its component tree, website theme, assets, navigation, SEO, draft, and revision history. Tell me the outcome you want."
+};
+
+function freshConversationMessages() {
+  return [{ ...WELCOME_MESSAGE }];
+}
+
+function conversationSignature(messages, modelId) {
+  return JSON.stringify({
+    modelId: modelId || "",
+    messages: (messages || []).map((message) => ({
+      id: message.id,
+      role: message.role,
+      content: message.content,
+      error: Boolean(message.error)
+    }))
+  });
+}
 
 function requestsGeneratedImage(value) {
   const text = String(value || "").trim().toLowerCase();
@@ -299,11 +322,14 @@ export function AIWorkspace({
   const [modelInfo, setModelInfo] = useState(() => aiWebsiteAgentService.getModelInfo());
   const modelCatalog = useMemo(() => aiWebsiteAgentService.getModelCatalog(), []);
   const [prompt, setPrompt] = useState("");
-  const [messages, setMessages] = useState([{
-    id: "welcome",
-    role: "assistant",
-    content: "I am Rocket AI, running inside ReactCMS without an external AI API. I understand this complete page, its component tree, website theme, assets, navigation, SEO, draft, and revision history. Tell me the outcome you want."
-  }]);
+  const [messages, setMessages] = useState(freshConversationMessages);
+  const [conversations, setConversations] = useState([]);
+  const [activeConversationId, setActiveConversationId] = useState("");
+  const [conversationListOpen, setConversationListOpen] = useState(false);
+  const [conversationHydrated, setConversationHydrated] = useState(false);
+  const [conversationWorkspaceKey, setConversationWorkspaceKey] = useState("");
+  const [conversationSaving, setConversationSaving] = useState(false);
+  const [conversationSwitching, setConversationSwitching] = useState(false);
   const [planning, setPlanning] = useState(false);
   const [applying, setApplying] = useState(false);
   const [pending, setPending] = useState(null);
@@ -329,6 +355,16 @@ export function AIWorkspace({
   const chatEndRef = useRef(null);
   const getContextRef = useRef(getContext);
   const areaSelectionStartKeyRef = useRef("");
+  const conversationSaveQueueRef = useRef(Promise.resolve());
+  const pendingConversationSavesRef = useRef(0);
+  const savedConversationSignaturesRef = useRef(new Map());
+  const workspaceKey = `${websiteId}:${pageId}`;
+  const workspaceKeyRef = useRef(workspaceKey);
+  const pageTitleRef = useRef(pageTitle);
+  const surfaceRef = useRef(surface);
+  workspaceKeyRef.current = workspaceKey;
+  pageTitleRef.current = pageTitle;
+  surfaceRef.current = surface;
 
   useEffect(() => {
     getContextRef.current = getContext;
@@ -382,20 +418,153 @@ export function AIWorkspace({
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([
-      aiBuilderPersistenceService.getRuns(websiteId, pageId),
-      aiBuilderPersistenceService.getMemory(websiteId)
-    ]).then(([savedRuns, savedMemory]) => {
-      if (cancelled) return;
-      setRuns(savedRuns);
-      setMemory(savedMemory);
-    }).catch((error) => {
-      if (!cancelled) log("error", error.message || "Rocket workspace state could not be loaded.");
-    });
+    const loadingWorkspaceKey = `${websiteId}:${pageId}`;
+    setConversationHydrated(false);
+    setConversationWorkspaceKey("");
+    setConversationSaving(false);
+    setConversationSwitching(true);
+    setConversationListOpen(false);
+    setConversations([]);
+    setActiveConversationId("");
+    setMessages(freshConversationMessages());
+    setRuns([]);
+    setPending(null);
+    setTasks([]);
+    setPrompt("");
+
+    (async () => {
+      try {
+        const [savedRuns, savedMemory, savedConversations, savedActiveConversationId] = await Promise.all([
+          aiBuilderPersistenceService.getRuns(websiteId, pageId),
+          aiBuilderPersistenceService.getMemory(websiteId),
+          aiBuilderPersistenceService.getConversations(websiteId, pageId),
+          aiBuilderPersistenceService.getActiveConversationId(websiteId, pageId)
+        ]);
+        if (cancelled || workspaceKeyRef.current !== loadingWorkspaceKey) return;
+
+        let conversationList = savedConversations;
+        let activeConversation = conversationList.find((item) => item.id === savedActiveConversationId)
+          || conversationList[0];
+        if (!activeConversation) {
+          activeConversation = await aiBuilderPersistenceService.createConversation(websiteId, pageId, {
+            title: "New chat",
+            messages: freshConversationMessages(),
+            modelId: aiWebsiteAgentService.getModelInfo().releaseId,
+            surface: surfaceRef.current,
+            pageTitle: pageTitleRef.current
+          });
+          conversationList = [activeConversation];
+        } else if (activeConversation.id !== savedActiveConversationId) {
+          await aiBuilderPersistenceService.setActiveConversationId(
+            websiteId,
+            pageId,
+            activeConversation.id
+          );
+        }
+        if (cancelled || workspaceKeyRef.current !== loadingWorkspaceKey) return;
+
+        const restoredMessages = activeConversation.messages?.length
+          ? activeConversation.messages
+          : freshConversationMessages();
+        const restoredModel = aiWebsiteAgentService.setActiveModel(
+          activeConversation.modelId || aiWebsiteAgentService.getModelInfo().releaseId
+        );
+        savedConversationSignaturesRef.current.set(
+          `${loadingWorkspaceKey}:${activeConversation.id}`,
+          conversationSignature(restoredMessages, restoredModel.releaseId)
+        );
+        setRuns(savedRuns);
+        setMemory(savedMemory);
+        setConversations(conversationList);
+        setActiveConversationId(activeConversation.id);
+        setMessages(restoredMessages);
+        setModelInfo(restoredModel);
+        setConversationWorkspaceKey(loadingWorkspaceKey);
+        setConversationHydrated(true);
+        log(
+          "memory",
+          `Continued Rocket chat: ${activeConversation.title || "New chat"}.`,
+          { conversationId: activeConversation.id, messages: restoredMessages.length }
+        );
+      } catch (error) {
+        if (!cancelled) log("error", error.message || "Rocket workspace state could not be loaded.");
+      } finally {
+        if (!cancelled && workspaceKeyRef.current === loadingWorkspaceKey) {
+          setConversationSwitching(false);
+        }
+      }
+    })();
     return () => {
       cancelled = true;
     };
   }, [pageId, websiteId, log]);
+
+  useEffect(() => {
+    const capturedWorkspaceKey = `${websiteId}:${pageId}`;
+    if (
+      !conversationHydrated
+      || !activeConversationId
+      || conversationWorkspaceKey !== capturedWorkspaceKey
+    ) return;
+    const signatureKey = `${capturedWorkspaceKey}:${activeConversationId}`;
+    const signature = conversationSignature(messages, modelInfo.releaseId);
+    if (savedConversationSignaturesRef.current.get(signatureKey) === signature) return;
+    savedConversationSignaturesRef.current.set(signatureKey, signature);
+
+    const currentConversation = conversations.find((item) => item.id === activeConversationId);
+    const payload = {
+      title: currentConversation?.title || "New chat",
+      messages,
+      modelId: modelInfo.releaseId,
+      surface: surfaceRef.current,
+      pageTitle: pageTitleRef.current
+    };
+    pendingConversationSavesRef.current += 1;
+    setConversationSaving(true);
+
+    const save = conversationSaveQueueRef.current
+      .catch(() => undefined)
+      .then(() => aiBuilderPersistenceService.saveConversation(
+        websiteId,
+        pageId,
+        activeConversationId,
+        payload
+      ));
+    conversationSaveQueueRef.current = save;
+    save.then((savedConversation) => {
+      if (workspaceKeyRef.current !== capturedWorkspaceKey) return;
+      setConversations((current) => current
+        .map((item) => item.id === savedConversation.id
+          ? { ...item, ...savedConversation }
+          : item)
+        .sort((first, second) => (second.updatedAt || 0) - (first.updatedAt || 0)));
+    }).catch((error) => {
+      if (savedConversationSignaturesRef.current.get(signatureKey) === signature) {
+        savedConversationSignaturesRef.current.delete(signatureKey);
+      }
+      if (workspaceKeyRef.current === capturedWorkspaceKey) {
+        log("error", error.message || "Rocket chat memory could not be saved.");
+      }
+    }).finally(() => {
+      pendingConversationSavesRef.current = Math.max(0, pendingConversationSavesRef.current - 1);
+      if (
+        workspaceKeyRef.current === capturedWorkspaceKey
+        && pendingConversationSavesRef.current === 0
+      ) {
+        setConversationSaving(false);
+      }
+    });
+  }, [
+    activeConversationId,
+    conversationHydrated,
+    conversationWorkspaceKey,
+    conversations,
+    messages,
+    modelInfo.releaseId,
+    pageId,
+    websiteId,
+    log
+  ]);
 
   useEffect(() => {
     refreshContext().catch(() => undefined);
@@ -415,6 +584,108 @@ export function AIWorkspace({
       .filter(Boolean)
       .map((target) => [target.regionId || target.id, target])).values());
   }, [selectedTarget, selectedTargets]);
+  const activeConversation = conversations.find((item) => item.id === activeConversationId)
+    || null;
+
+  const openConversation = async (conversation) => {
+    if (!conversation?.id || conversation.id === activeConversationId || conversationSwitching) {
+      setConversationListOpen(false);
+      return;
+    }
+    if (planning || applying || imageGenerating) {
+      log("warning", "Finish the current Rocket operation before switching chats.");
+      return;
+    }
+    setConversationSwitching(true);
+    setConversationHydrated(false);
+    try {
+      await conversationSaveQueueRef.current.catch(() => undefined);
+      await aiBuilderPersistenceService.setActiveConversationId(
+        websiteId,
+        pageId,
+        conversation.id
+      );
+      const restoredMessages = conversation.messages?.length
+        ? conversation.messages
+        : freshConversationMessages();
+      const restoredModel = aiWebsiteAgentService.setActiveModel(
+        conversation.modelId || modelInfo.releaseId
+      );
+      savedConversationSignaturesRef.current.set(
+        `${websiteId}:${pageId}:${conversation.id}`,
+        conversationSignature(restoredMessages, restoredModel.releaseId)
+      );
+      setActiveConversationId(conversation.id);
+      setMessages(restoredMessages);
+      setModelInfo(restoredModel);
+      setPrompt("");
+      setPending(null);
+      setTasks([]);
+      setModifyOpen(false);
+      setConversationListOpen(false);
+      setActiveTab("chat");
+      setConversationHydrated(true);
+      log("memory", `Continued Rocket chat: ${conversation.title || "New chat"}.`, {
+        conversationId: conversation.id,
+        messages: restoredMessages.length
+      });
+    } catch (error) {
+      log("error", error.message || "The selected Rocket chat could not be opened.");
+      setConversationHydrated(true);
+    } finally {
+      setConversationSwitching(false);
+    }
+  };
+
+  const createNewConversation = async () => {
+    if (conversationSwitching) return;
+    if (planning || applying || imageGenerating) {
+      log("warning", "Finish the current Rocket operation before starting a new chat.");
+      return;
+    }
+    if (!messages.some((message) => message.role === "user")) {
+      setConversationListOpen(false);
+      setActiveTab("chat");
+      return;
+    }
+    setConversationSwitching(true);
+    setConversationHydrated(false);
+    try {
+      await conversationSaveQueueRef.current.catch(() => undefined);
+      const nextMessages = freshConversationMessages();
+      const conversation = await aiBuilderPersistenceService.createConversation(
+        websiteId,
+        pageId,
+        {
+          title: "New chat",
+          messages: nextMessages,
+          modelId: modelInfo.releaseId,
+          surface: surfaceRef.current,
+          pageTitle: pageTitleRef.current
+        }
+      );
+      savedConversationSignaturesRef.current.set(
+        `${websiteId}:${pageId}:${conversation.id}`,
+        conversationSignature(nextMessages, modelInfo.releaseId)
+      );
+      setConversations((current) => [conversation, ...current]);
+      setActiveConversationId(conversation.id);
+      setMessages(nextMessages);
+      setPrompt("");
+      setPending(null);
+      setTasks([]);
+      setModifyOpen(false);
+      setConversationListOpen(false);
+      setActiveTab("chat");
+      setConversationHydrated(true);
+      log("memory", "Started a new saved Rocket chat.", { conversationId: conversation.id });
+    } catch (error) {
+      log("error", error.message || "A new Rocket chat could not be created.");
+      setConversationHydrated(true);
+    } finally {
+      setConversationSwitching(false);
+    }
+  };
 
   const connectRocketAI = async () => {
     if (rocketSigningIn) return;
@@ -645,7 +916,8 @@ export function AIWorkspace({
         prompt: pending.prompt,
         plan: pending.plan,
         model: pending.model,
-        requestId: pending.requestId
+        requestId: pending.requestId,
+        ...(activeConversationId ? { conversationId: activeConversationId } : {})
       });
       const execution = await onApplyPlan(pending.plan, pending.context);
       if (!execution) {
@@ -954,6 +1226,77 @@ export function AIWorkspace({
   const renderChat = () => (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex-1 space-y-3 overflow-y-auto p-3">
+        <div className="sticky top-0 z-20 rounded-xl border border-slate-800 bg-[#0b1120]/95 p-2.5 shadow-lg backdrop-blur">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setConversationListOpen((value) => !value)}
+              disabled={conversationSwitching}
+              className="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-1.5 py-1 text-left hover:bg-slate-900/70 disabled:opacity-50 cursor-pointer"
+              title="Open saved Rocket chats"
+            >
+              <MessageSquare className="h-3.5 w-3.5 flex-shrink-0 text-violet-300" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[10px] font-bold text-slate-200">
+                  {activeConversation?.title || "New chat"}
+                </p>
+                <p className="mt-0.5 text-[8px] text-slate-600">
+                  {conversationSwitching
+                    ? "Opening chat..."
+                    : conversationSaving
+                      ? "Saving memory..."
+                      : `${messages.length} messages · saved chat memory`}
+                </p>
+              </div>
+              <ChevronDown className={`h-3.5 w-3.5 flex-shrink-0 text-slate-600 transition-transform ${conversationListOpen ? "rotate-180" : ""}`} />
+            </button>
+            <button
+              type="button"
+              onClick={createNewConversation}
+              disabled={conversationSwitching || planning || applying || imageGenerating}
+              className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-lg border border-slate-800 text-slate-500 hover:border-violet-500/30 hover:text-white disabled:opacity-35 cursor-pointer"
+              title="Start a new saved chat"
+            >
+              {conversationSwitching
+                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                : <Plus className="h-3.5 w-3.5" />}
+            </button>
+          </div>
+
+          {conversationListOpen && (
+            <div className="mt-2 max-h-56 space-y-1 overflow-y-auto border-t border-slate-800 pt-2">
+              <div className="flex items-center justify-between px-1.5 pb-1">
+                <p className="text-[8px] font-extrabold uppercase tracking-wider text-slate-600">Recent chats</p>
+                <span className="text-[8px] text-slate-700">{conversations.length} saved</span>
+              </div>
+              {conversations.map((conversation) => {
+                const runCount = runs.filter((run) => run.conversationId === conversation.id).length;
+                const isActive = conversation.id === activeConversationId;
+                return (
+                  <button
+                    key={conversation.id}
+                    type="button"
+                    onClick={() => openConversation(conversation)}
+                    disabled={conversationSwitching || planning || applying || imageGenerating}
+                    className={`w-full rounded-lg border px-2.5 py-2 text-left disabled:opacity-40 cursor-pointer ${
+                      isActive
+                        ? "border-violet-500/30 bg-violet-500/10"
+                        : "border-transparent hover:border-slate-800 hover:bg-slate-900/60"
+                    }`}
+                  >
+                    <p className={`truncate text-[9px] font-semibold ${isActive ? "text-violet-100" : "text-slate-400"}`}>
+                      {conversation.title || "New chat"}
+                    </p>
+                    <p className="mt-1 text-[8px] text-slate-700">
+                      {dateLabel(conversation.updatedAt || conversation.createdAt)} · {conversation.messages?.length || 0} messages{runCount ? ` · ${runCount} edits` : ""}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
         <div className="rounded-xl border border-blue-500/15 bg-blue-500/5 p-3">
           <div className="flex items-center gap-2">
             <Database className="h-3.5 w-3.5 text-blue-400" />
@@ -1517,7 +1860,8 @@ export function AIWorkspace({
   const active = visibleTabs.find((tab) => tab.id === activeTab) || visibleTabs[0];
   const ActiveIcon = active.icon;
   const latestUndoableRun = runs.find((run) => (
-    run.beforeSnapshotJson
+    (!run.conversationId || run.conversationId === activeConversationId)
+    && run.beforeSnapshotJson
     && !["rolled_back", "no_change"].includes(run.status)
   ));
 

@@ -2,6 +2,8 @@ import { get, push, ref, set, update } from "firebase/database";
 import { database } from "../lib/firebase";
 
 const MAX_SNAPSHOT_LENGTH = 1800000;
+const MAX_CONVERSATION_MESSAGES = 120;
+const MAX_MESSAGE_LENGTH = 6000;
 
 function compactPlan(plan) {
   return {
@@ -25,6 +27,14 @@ function runPath(websiteId, pageId) {
   return `aiBuilder/${websiteId}/pages/${pageId}/runs`;
 }
 
+function conversationsPath(websiteId, pageId) {
+  return `aiBuilder/${websiteId}/pages/${pageId}/conversations`;
+}
+
+function activeConversationPath(websiteId, pageId) {
+  return `aiBuilder/${websiteId}/pages/${pageId}/activeConversationId`;
+}
+
 function memoryPath(websiteId) {
   return `aiBuilder/${websiteId}/memory`;
 }
@@ -42,7 +52,89 @@ export function parseAISnapshot(value) {
   return JSON.parse(value);
 }
 
+export function compactAIConversationMessages(messages = []) {
+  return (Array.isArray(messages) ? messages : [])
+    .filter((message) => message && ["assistant", "user"].includes(message.role))
+    .slice(-MAX_CONVERSATION_MESSAGES)
+    .map((message, index) => ({
+      id: String(message.id || `message_${index}`),
+      role: message.role,
+      content: String(message.content || "").slice(0, MAX_MESSAGE_LENGTH),
+      ...(message.error ? { error: true } : {})
+    }));
+}
+
+export function inferAIConversationTitle(messages = [], fallback = "New chat") {
+  const firstUserMessage = (Array.isArray(messages) ? messages : []).find((message) => (
+    message?.role === "user" && String(message.content || "").trim()
+  ));
+  const title = String(firstUserMessage?.content || fallback || "New chat")
+    .replace(/\s+/g, " ")
+    .trim();
+  return title.length > 64 ? `${title.slice(0, 61).trimEnd()}...` : title || "New chat";
+}
+
 export const aiBuilderPersistenceService = {
+  async createConversation(websiteId, pageId, data = {}) {
+    const conversationsRef = ref(database, conversationsPath(websiteId, pageId));
+    const nextRef = push(conversationsRef);
+    const now = Date.now();
+    const messages = compactAIConversationMessages(data.messages);
+    const conversation = {
+      id: nextRef.key,
+      title: inferAIConversationTitle(messages, data.title),
+      messages,
+      modelId: String(data.modelId || ""),
+      surface: String(data.surface || ""),
+      pageTitle: String(data.pageTitle || ""),
+      createdAt: now,
+      updatedAt: now
+    };
+    await set(nextRef, conversation);
+    await set(ref(database, activeConversationPath(websiteId, pageId)), nextRef.key);
+    return conversation;
+  },
+
+  async saveConversation(websiteId, pageId, conversationId, data = {}) {
+    if (!conversationId) throw new Error("A Rocket AI conversation ID is required.");
+    const messages = compactAIConversationMessages(data.messages);
+    const changes = {
+      title: inferAIConversationTitle(messages, data.title),
+      messages,
+      modelId: String(data.modelId || ""),
+      surface: String(data.surface || ""),
+      pageTitle: String(data.pageTitle || ""),
+      updatedAt: Date.now()
+    };
+    await update(
+      ref(database, `${conversationsPath(websiteId, pageId)}/${conversationId}`),
+      changes
+    );
+    return { id: conversationId, ...changes };
+  },
+
+  async getConversations(websiteId, pageId) {
+    const snapshot = await get(ref(database, conversationsPath(websiteId, pageId)));
+    if (!snapshot.exists()) return [];
+    return Object.entries(snapshot.val()).map(([id, conversation]) => ({
+      id,
+      ...conversation,
+      messages: compactAIConversationMessages(conversation?.messages)
+    })).sort((first, second) => (second.updatedAt || 0) - (first.updatedAt || 0));
+  },
+
+  async getActiveConversationId(websiteId, pageId) {
+    const snapshot = await get(ref(database, activeConversationPath(websiteId, pageId)));
+    return snapshot.exists() ? String(snapshot.val() || "") : "";
+  },
+
+  async setActiveConversationId(websiteId, pageId, conversationId) {
+    await set(
+      ref(database, activeConversationPath(websiteId, pageId)),
+      String(conversationId || "")
+    );
+  },
+
   async createRun(websiteId, pageId, data) {
     const runsRef = ref(database, runPath(websiteId, pageId));
     const nextRef = push(runsRef);

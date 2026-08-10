@@ -28,7 +28,7 @@ export const aiWebsiteAgentService = {
       context,
       memory,
       modelId,
-      conversation: conversation.slice(-12),
+      conversation: conversation.slice(-60),
       previousPlan,
       feedback
     });
