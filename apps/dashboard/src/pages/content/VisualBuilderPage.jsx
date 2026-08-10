@@ -32,6 +32,7 @@ import {
   blocksToPageTree,
   isPageComponentTree,
   pageTreeToBlocks,
+  RUNTIME_ADDITIONS_REGION,
   regionsToPageTree
 } from "@anshif.rainhopes/reactcms-renderer";
 import { usePages } from "../../hooks/usePages";
@@ -985,24 +986,34 @@ function ConnectedSourceWorkspace({
     );
   };
 
-  const getConnectedAIContext = useCallback(() => collectAIWebsiteContext({
-    websiteId,
-    runtimeWebsiteId,
-    pageId,
-    pageKey,
-    locale,
-    surface: visualOnly ? "connected-runtime" : "connected-source",
-    page,
-    website,
-    tree: null,
-    selectedNode: null,
-    selectedRegion,
-    selectedRegions,
-    pageSettings,
-    theme,
-    sourceFiles: visualOnly ? {} : getSourceFiles?.() || {},
-    editorHistory: []
-  }), [
+  const getConnectedAIContext = useCallback(() => {
+    const selectedRuntimeNodes = visualOnly
+      ? selectedRegions.map((region) => (
+        region?.type === "runtime-component" && isPageComponentTree(region.value)
+          ? findNode(region.value, region.componentId)
+          : null
+      )).filter(Boolean)
+      : [];
+    return collectAIWebsiteContext({
+      websiteId,
+      runtimeWebsiteId,
+      pageId,
+      pageKey,
+      locale,
+      surface: visualOnly ? "connected-runtime" : "connected-source",
+      page,
+      website,
+      tree: null,
+      selectedNode: selectedRuntimeNodes.at(-1) || null,
+      selectedNodes: selectedRuntimeNodes,
+      selectedRegion,
+      selectedRegions,
+      pageSettings,
+      theme,
+      sourceFiles: visualOnly ? {} : getSourceFiles?.() || {},
+      editorHistory: []
+    });
+  }, [
     getSourceFiles,
     locale,
     page,
@@ -1026,9 +1037,11 @@ function ConnectedSourceWorkspace({
       if (region?.regionId) initialRegions[region.regionId] = region.value;
     });
     if (selectedRegion?.regionId) initialRegions[selectedRegion.regionId] = selectedRegion.value;
-    const execution = applyAIPlan({
+    let execution = applyAIPlan({
       plan,
-      tree: null,
+      tree: visualOnly && isPageComponentTree(context?.currentPage?.componentTree)
+        ? context.currentPage.componentTree
+        : null,
       theme: context?.designSystem?.theme || theme || {},
       pageSettings: context?.currentPage?.settings || pageSettings || {},
       regions: initialRegions,
@@ -1039,6 +1052,20 @@ function ConnectedSourceWorkspace({
       componentTypes: AI_COMPONENT_LIBRARY.map((component) => component.type),
       createNode: (type) => createVisualNode(type, locale)
     });
+    if (visualOnly && isPageComponentTree(execution.tree)) {
+      const nextRegions = {
+        ...execution.regions,
+        [RUNTIME_ADDITIONS_REGION]: execution.tree
+      };
+      execution = {
+        ...execution,
+        regions: nextRegions,
+        after: {
+          ...execution.after,
+          regions: structuredClone(nextRegions)
+        }
+      };
+    }
     const changedSourcePaths = Array.from(new Set([
       ...Object.keys(execution.before.sourceFiles || {}),
       ...Object.keys(execution.sourceFiles || {})
@@ -1139,7 +1166,8 @@ function ConnectedSourceWorkspace({
     selectedRegions,
     sendRuntimeMessage,
     theme,
-    updateConnectedSelection
+    updateConnectedSelection,
+    visualOnly
   ]);
 
   const rollbackConnectedAIPlan = useCallback(async (snapshot) => {

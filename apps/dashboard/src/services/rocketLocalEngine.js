@@ -457,33 +457,102 @@ function requestedSections(text) {
   if (includesAny(text, ["landing page", "homepage", "home page", "saas website", "agency website"])) {
     return ["hero", "features", "testimonials", "pricing", "faq", "cta"];
   }
-  return SECTION_TERMS
-    .filter(([, terms]) => includesAny(text, terms))
+  const beforeFooter = /\b(?:above|before)\s+(?:the\s+)?footer\b/.test(text);
+  const requested = SECTION_TERMS
+    .filter(([type, terms]) => (
+      !(type === "footer" && beforeFooter) && includesAny(text, terms)
+    ))
     .map(([type]) => type);
+  if (requested.length) return requested;
+  if (/\b(?:api|apis|advertising|advertisement|ad campaign|ad campaigns|ads)\b/.test(text)) {
+    return ["features"];
+  }
+  if (/\b(?:message|description|notes?)\s+(?:input\s+)?field\b/.test(text)) {
+    return ["textarea-field"];
+  }
+  if (/\b(?:dropdown|select)\s+(?:input\s+)?field\b/.test(text)) {
+    return ["select-field"];
+  }
+  if (/\bcheckbox(?:\s+field)?\b/.test(text)) return ["checkbox"];
+  if (/\b(?:input\s+field|form\s+field|email\s+field|phone\s+field|new\s+field|fields?)\b/.test(text)) {
+    return ["input"];
+  }
+  if (/\b(?:component|section|block)\b/.test(text)) return ["section"];
+  return [];
 }
 
-function addSections(operations, addOperation, context, types) {
+function componentIntentPatches(type, intent, locale) {
+  const text = normalized(intent);
+  if (
+    type === "features"
+    && /\b(?:api|apis|advertising|advertisement|ad campaign|ad campaigns|ads)\b/.test(text)
+  ) {
+    return [
+      patch(`props.locales.${locale}.title`, "API-Powered Advertising"),
+      patch(
+        `props.locales.${locale}.subtitle`,
+        "Connect advertising platforms, automate campaign workflows, and turn live performance data into measurable growth."
+      ),
+      patch(`props.locales.${locale}.items`, [
+        {
+          title: "Advertising API Integration",
+          description: "Connect Google, Meta, and other campaign APIs through one reliable integration layer."
+        },
+        {
+          title: "Campaign Automation",
+          description: "Synchronize audiences, budgets, creatives, and reporting without repetitive manual work."
+        },
+        {
+          title: "Real-Time Ad Insights",
+          description: "Monitor performance data and use actionable analytics to improve return on ad spend."
+        }
+      ])
+    ];
+  }
+  if (["input", "textarea-field", "select-field", "checkbox"].includes(type)) {
+    const label = text.match(/\b(email|phone|name|company|website|budget|message|description|notes?)\b/)?.[1];
+    if (!label) return [];
+    const fieldLabel = label.charAt(0).toUpperCase() + label.slice(1);
+    return [
+      patch(`props.locales.${locale}.label`, fieldLabel),
+      ...(["input", "textarea-field"].includes(type)
+        ? [patch(`props.locales.${locale}.placeholder`, `Enter ${label}`)]
+        : [])
+    ];
+  }
+  return [];
+}
+
+function addSections(operations, addOperation, context, types, intent = "") {
   const capabilities = new Set(context?.capabilities || []);
   if (!capabilities.has("insert_component") || !types.length) return false;
   const allowed = new Set(context?.constraints?.registeredComponentTypes || []);
   const roots = context?.currentPage?.componentTree?.children || [];
-  let targetId = roots.at(-1)?.id || null;
+  const beforeFooter = /\b(?:above|before)\s+(?:the\s+)?footer\b/.test(normalized(intent));
+  const footer = beforeFooter ? roots.find((node) => node.type === "footer") : null;
+  let targetId = footer?.id || roots.at(-1)?.id || null;
+  let position = footer ? "before" : "after";
   let inserted = 0;
+  const locale = context?.currentPage?.locale || "en";
 
   types.forEach((type) => {
     if (allowed.size && !allowed.has(type)) return;
     const item = addOperation("insert_component", {
       targetId,
-      position: "after",
+      position,
       componentType: type,
       summary: `Add ${type.replaceAll("-", " ")} section`,
       reason: "Build the requested page structure with a native editable component.",
-      patches: [patch("label", type.split("-").map((part) => (
-        part.charAt(0).toUpperCase() + part.slice(1)
-      )).join(" "))]
+      patches: [
+        patch("label", type.split("-").map((part) => (
+          part.charAt(0).toUpperCase() + part.slice(1)
+        )).join(" ")),
+        ...componentIntentPatches(type, intent, locale)
+      ]
     });
     operations.push(item);
     targetId = `$op:${item.id}`;
+    position = "after";
     inserted += 1;
   });
   return inserted > 0;
@@ -908,7 +977,7 @@ function buildPlan({ intent, context, memory = {}, conversation = [], previousPl
   }
 
   const sections = requestedSections(text);
-  if (addSections(operations, addOperation, context, sections)) {
+  if (addSections(operations, addOperation, context, sections, combinedIntent)) {
     sections.forEach((section) => affected.add(section.replaceAll("-", " ")));
   }
 

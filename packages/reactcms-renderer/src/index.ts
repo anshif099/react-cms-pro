@@ -3,8 +3,10 @@ export {
   blockToComponentNode,
   blocksToPageTree,
   componentNodeToBlock,
+  createRuntimeAdditionsTree,
   isPageComponentTree,
   pageTreeToBlocks,
+  RUNTIME_ADDITIONS_REGION,
   regionsToPageTree,
 } from './treeConversion';
 export {

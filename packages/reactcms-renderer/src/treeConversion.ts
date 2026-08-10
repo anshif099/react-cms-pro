@@ -1,5 +1,25 @@
 import type { ComponentNode, PageComponentTree } from './types';
 
+export const RUNTIME_ADDITIONS_REGION = '__rcms_runtime_additions__';
+
+export function createRuntimeAdditionsTree(
+  pageId = 'page',
+  locale = 'en',
+): PageComponentTree {
+  return {
+    id: `runtime_additions_${String(pageId || 'page').replace(/[^a-zA-Z0-9_-]/g, '_')}`,
+    type: 'page',
+    version: 2,
+    title: 'Runtime additions',
+    locale,
+    children: [],
+    metadata: {
+      supplemental: true,
+      placement: 'before-footer',
+    },
+  };
+}
+
 function labelFromType(type: string) {
   return type
     .split(/[-_]/g)

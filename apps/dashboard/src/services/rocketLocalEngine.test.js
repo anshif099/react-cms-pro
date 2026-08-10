@@ -37,6 +37,37 @@ function connectedContext() {
   };
 }
 
+function connectedRuntimeAdditionsContext() {
+  const context = connectedContext();
+  context.capabilities = [
+    ...context.capabilities,
+    "insert_component",
+    "update_component",
+    "remove_component",
+    "move_component",
+    "duplicate_component"
+  ];
+  context.currentPage.componentTree = {
+    id: "runtime_additions_ad",
+    type: "page",
+    version: 2,
+    locale: "en",
+    children: [],
+    metadata: { supplemental: true, placement: "before-footer" }
+  };
+  context.currentPage.flattenedComponentIndex = [];
+  context.constraints.runtimeAdditionsRegion = "__rcms_runtime_additions__";
+  context.constraints.registeredComponentTypes = [
+    ...context.constraints.registeredComponentTypes,
+    "section",
+    "input",
+    "textarea-field",
+    "select-field",
+    "checkbox"
+  ];
+  return context;
+}
+
 function nativeContext() {
   return {
     editorSurface: "native",
@@ -87,6 +118,79 @@ function connectedFullPageContext() {
 }
 
 describe("embedded Rocket AI engine", () => {
+  it("adds an API advertising component to a connected page above its footer", async () => {
+    const context = connectedRuntimeAdditionsContext();
+    const response = await rocketLocalEngine.createPlan({
+      intent: "add a component above footer api and ads related",
+      context,
+      memory: {}
+    });
+
+    expect(response.plan.operations).toHaveLength(1);
+    expect(response.plan.operations[0]).toMatchObject({
+      type: "insert_component",
+      targetId: null,
+      position: "after",
+      componentType: "features"
+    });
+    expect(response.plan.operations[0].patches).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        path: "props.locales.en.title",
+        valueJson: '"API-Powered Advertising"'
+      }),
+      expect.objectContaining({ path: "props.locales.en.items" })
+    ]));
+
+    const execution = applyAIPlan({
+      plan: response.plan,
+      tree: context.currentPage.componentTree,
+      componentTypes: context.constraints.registeredComponentTypes,
+      createNode: (type) => ({
+        id: "generated_features",
+        type,
+        label: "Features",
+        props: { locales: { en: {} } },
+        children: []
+      })
+    });
+    expect(execution.changed).toBe(true);
+    expect(execution.tree.children[0]).toMatchObject({
+      type: "features",
+      props: {
+        locales: {
+          en: {
+            title: "API-Powered Advertising"
+          }
+        }
+      }
+    });
+    expect(execution.tree.children[0].props.locales.en.items).toHaveLength(3);
+  });
+
+  it("adds a requested field to the connected runtime component tree", async () => {
+    const response = await rocketLocalEngine.createPlan({
+      intent: "add an email field above the footer",
+      context: connectedRuntimeAdditionsContext(),
+      memory: {}
+    });
+
+    expect(response.plan.operations).toHaveLength(1);
+    expect(response.plan.operations[0]).toMatchObject({
+      type: "insert_component",
+      componentType: "input",
+      patches: expect.arrayContaining([
+        expect.objectContaining({
+          path: "props.locales.en.label",
+          valueJson: '"Email"'
+        }),
+        expect.objectContaining({
+          path: "props.locales.en.placeholder",
+          valueJson: '"Enter email"'
+        })
+      ])
+    });
+  });
+
   it("changes the selected connected section background without an API request", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     const response = await aiWebsiteAgentService.createPlan({

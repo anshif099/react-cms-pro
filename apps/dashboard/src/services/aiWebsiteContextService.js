@@ -1,5 +1,10 @@
 import BLOCK_SCHEMAS from "../components/blocks/blockSchemas";
 import { decodeFirebaseObject } from "@anshif.rainhopes/shared";
+import {
+  createRuntimeAdditionsTree,
+  isPageComponentTree,
+  RUNTIME_ADDITIONS_REGION
+} from "@anshif.rainhopes/reactcms-renderer";
 import contentSyncService from "./contentSyncService";
 import contentTypeService from "./contentTypeService";
 import globalService from "./globalService";
@@ -245,10 +250,19 @@ export async function collectAIWebsiteContext({
     selectedRegion,
     selectedRegions
   );
+  const runtimeAdditionsTree = surface === "connected-runtime"
+    ? isPageComponentTree(regionValues[RUNTIME_ADDITIONS_REGION])
+      ? regionValues[RUNTIME_ADDITIONS_REGION]
+      : createRuntimeAdditionsTree(pageKey || pageId, locale)
+    : null;
+  if (runtimeAdditionsTree) {
+    regionValues[RUNTIME_ADDITIONS_REGION] = runtimeAdditionsTree;
+  }
+  const editableTree = tree || runtimeAdditionsTree;
   const sourceFileCount = Object.keys(sourceFiles || {}).length;
   const componentTypes = BLOCK_SCHEMAS.map((schema) => schema.type);
   const capabilities = ["update_page", "update_theme"];
-  if (tree) capabilities.push(
+  if (editableTree) capabilities.push(
     "insert_component",
     "update_component",
     "remove_component",
@@ -278,8 +292,8 @@ export async function collectAIWebsiteContext({
       draftContent: decodedDraftContent,
       publishedContent: decodedPublishedContent,
       editableRegionValues: regionValues,
-      componentTree: tree,
-      flattenedComponentIndex: flattenContextTree(tree).map((node) => ({
+      componentTree: editableTree,
+      flattenedComponentIndex: flattenContextTree(editableTree).map((node) => ({
         id: node.id,
         type: node.type,
         label: node.label,
@@ -335,7 +349,8 @@ export async function collectAIWebsiteContext({
       requireApproval: true,
       maxOperations: 80,
       registeredComponentTypes: componentTypes,
-      sourceChangesRemainDraftUntilPublish: true
+      sourceChangesRemainDraftUntilPublish: true,
+      runtimeAdditionsRegion: runtimeAdditionsTree ? RUNTIME_ADDITIONS_REGION : null
     }
   };
 
