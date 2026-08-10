@@ -102,7 +102,7 @@ function EditorState({
   const [tree, setTree] = useState(initial);
   const [, setHistoryVersion] = useState(0);
   const historyRef = useRef(new HistoryEngine<PageComponentTree>(initial, { maxEntries: 120 }));
-  const clipboardRef = useRef<ComponentNode | null>(null);
+  const clipboardRef = useRef<ComponentNode[]>([]);
   const { manager: selection, state: selectionState } = useSelection();
 
   useEffect(() => {
@@ -183,19 +183,39 @@ function EditorState({
   }, [commit, selection, tree]);
 
   const copy = useCallback((nodeId?: string) => {
-    const sourceId = nodeId || selectionState.activeId;
-    const node = sourceId ? findNode(tree, sourceId) : null;
-    if (node) clipboardRef.current = structuredClone(node);
-  }, [selectionState.activeId, tree]);
+    const sourceIds = nodeId
+      ? [nodeId]
+      : selectionState.selectedIds.length
+        ? selectionState.selectedIds
+        : selectionState.activeId
+          ? [selectionState.activeId]
+          : [];
+    clipboardRef.current = sourceIds
+      .map((sourceId) => findNode(tree, sourceId))
+      .filter((node): node is ComponentNode => !!node)
+      .map((node) => structuredClone(node));
+  }, [selectionState.activeId, selectionState.selectedIds, tree]);
 
   const paste = useCallback((
     targetId: string | null = selectionState.activeId,
     position: DropPosition = 'after',
   ) => {
-    if (!clipboardRef.current) return;
-    const copyNode = cloneWithFreshIds(clipboardRef.current);
-    insert(copyNode, targetId, position, 'Paste component');
-  }, [insert, selectionState.activeId]);
+    if (!clipboardRef.current.length) return;
+    let nextTree = tree;
+    let nextTargetId = targetId;
+    const pastedIds: string[] = [];
+    clipboardRef.current.forEach((clipboardNode) => {
+      const copyNode = cloneWithFreshIds(clipboardNode);
+      nextTree = insertTreeNode(nextTree, copyNode, nextTargetId, position);
+      pastedIds.push(copyNode.id);
+      if (position !== 'inside') nextTargetId = copyNode.id;
+    });
+    commit(nextTree, {
+      label: pastedIds.length > 1 ? `Paste ${pastedIds.length} components` : 'Paste component',
+      source: 'keyboard',
+    });
+    selection.selectMany(pastedIds);
+  }, [commit, selection, selectionState.activeId, tree]);
 
   const toggleHidden = useCallback((nodeId: string) => {
     const node = findNode(tree, nodeId);
@@ -273,7 +293,18 @@ function EditorState({
       }
       if ((event.key === 'Delete' || event.key === 'Backspace') && selectionState.activeId) {
         event.preventDefault();
-        remove(selectionState.activeId);
+        const removableIds = selectionState.selectedIds.length
+          ? selectionState.selectedIds
+          : [selectionState.activeId];
+        const nextTree = removableIds.reduce((currentTree, nodeId) => {
+          const node = findNode(currentTree, nodeId);
+          return !node || node.locked ? currentTree : removeNode(currentTree, nodeId);
+        }, tree);
+        commit(nextTree, {
+          label: removableIds.length > 1 ? `Delete ${removableIds.length} components` : 'Delete component',
+          source: 'keyboard',
+        });
+        selection.clear();
         return;
       }
       if (event.key === 'Escape') {
@@ -285,7 +316,7 @@ function EditorState({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [copy, duplicate, paste, readOnly, redo, remove, selection, selectionState.activeId, tree, undo]);
+  }, [commit, copy, duplicate, paste, readOnly, redo, selection, selectionState.activeId, selectionState.selectedIds, tree, undo]);
 
   const selectedNode = selectionState.activeId ? findNode(tree, selectionState.activeId) : null;
   const historyState = historyRef.current.getState();

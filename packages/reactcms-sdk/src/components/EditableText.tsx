@@ -226,6 +226,7 @@ export function EditableText({
         pageId,
         value,
         computedStyle,
+        additive: e.metaKey || e.ctrlKey || e.shiftKey,
       });
       MessageBus.send('rcms/v1/open-inspector', cms.websiteId, {
         regionId,
@@ -313,6 +314,7 @@ export function EditableText({
         pageId,
         value,
         computedStyle,
+        additive: e.metaKey || e.ctrlKey || e.shiftKey,
       });
       MessageBus.send('rcms/v1/open-inspector', cms.websiteId, {
         regionId,

@@ -96,10 +96,10 @@ describe("embedded Rocket AI engine", () => {
     });
 
     expect(fetchSpy).not.toHaveBeenCalled();
-    expect(response.model).toBe("rocket-ai-pro-1.2");
+    expect(response.model).toBe("rocket-ai-ultra-1.5");
     expect(response.modelInfo).toMatchObject({
-      name: "Rocket AI Pro",
-      version: "1.2",
+      name: "Rocket AI Ultra",
+      version: "1.5",
       curriculumRevision: 0
     });
     expect(response.usage.networkRequests).toBe(0);
@@ -326,6 +326,44 @@ describe("embedded Rocket AI engine", () => {
     });
   });
 
+  it("writes a selected media asset to every selected image", async () => {
+    const context = connectedContext();
+    context.currentPage.selectedRegion = null;
+    context.currentPage.selectedRegions = ["first", "second"].map((name) => ({
+      regionId: `ad.${name}_image`,
+      type: "image",
+      label: `${name} visual`,
+      value: { src: `https://example.com/${name}.jpg` }
+    }));
+    context.currentPage.selectedRegions.forEach((region) => {
+      context.currentPage.editableRegionDefinitions[region.regionId] = { type: "image" };
+      context.currentPage.editableRegionValues[region.regionId] = region.value;
+    });
+    context.contentSystem = {
+      assets: [{
+        id: "asset-shared",
+        name: "Shared visual",
+        alt: "Shared campaign visual",
+        type: "image/png",
+        url: "https://cdn.example.com/shared.png"
+      }]
+    };
+
+    const response = await rocketLocalEngine.createPlan({
+      intent: 'Use the existing media asset with ID "asset-shared" in all selected images',
+      context,
+      memory: {}
+    });
+
+    expect(response.plan.operations.map((operation) => operation.targetId)).toEqual([
+      "ad.first_image",
+      "ad.second_image"
+    ]);
+    expect(response.plan.operations.every((operation) => (
+      operation.patches[0].valueJson === '"https://cdn.example.com/shared.png"'
+    ))).toBe(true);
+  });
+
   it("asks for an image area when an image request has no selection", async () => {
     const context = connectedContext();
     context.currentPage.selectedRegion = null;
@@ -446,6 +484,39 @@ describe("embedded Rocket AI engine", () => {
     });
   });
 
+  it("changes every selected text region in one coordinated plan", async () => {
+    const context = connectedContext();
+    context.currentPage.selectedRegion = null;
+    context.currentPage.selectedRegions = ["campaigns", "satisfaction", "impressions", "brands"]
+      .map((name) => ({
+        regionId: `ad.${name}`,
+        type: "text",
+        label: name,
+        value: name
+      }));
+    context.currentPage.selectedRegions.forEach((region) => {
+      context.currentPage.editableRegionDefinitions[region.regionId] = { type: "text" };
+      context.currentPage.editableRegionValues[region.regionId] = region.value;
+    });
+
+    const response = await rocketLocalEngine.createPlan({
+      intent: "change selected text color to black",
+      context,
+      memory: {}
+    });
+
+    expect(response.plan.operations).toHaveLength(4);
+    expect(response.plan.operations.map((operation) => operation.targetId)).toEqual([
+      "ad.campaigns",
+      "ad.satisfaction",
+      "ad.impressions",
+      "ad.brands"
+    ]);
+    expect(response.plan.operations.every((operation) => (
+      JSON.parse(operation.patches[0].valueJson).color === "#000000"
+    ))).toBe(true);
+  });
+
   it("builds a native landing page from real registered components", async () => {
     const response = await rocketLocalEngine.createPlan({
       intent: "Build a SaaS landing page",
@@ -473,7 +544,7 @@ describe("embedded Rocket AI engine", () => {
       }
     });
 
-    expect(result.model).toBe("rocket-ai-pro-1.2-procedural-image");
+    expect(result.model).toBe("rocket-ai-ultra-1.5-procedural-image");
     expect(result.mimeType).toBe("image/svg+xml");
     expect(result.imageBase64.length).toBeGreaterThan(100);
   });
@@ -486,9 +557,9 @@ describe("embedded Rocket AI engine", () => {
     });
     try {
       expect(rocketLocalEngine.getModelInfo()).toMatchObject({
-        id: "rocket-ai-pro-1.2",
-        name: "Rocket AI Pro",
-        version: "1.2",
+        id: "rocket-ai-ultra-1.5",
+        name: "Rocket AI Ultra",
+        version: "1.5",
         trainedExamples: 0
       });
       const feedback = await rocketLocalEngine.recordFeedback({
@@ -500,8 +571,8 @@ describe("embedded Rocket AI engine", () => {
       });
       expect(feedback.captured).toBe(true);
       expect(feedback.modelInfo).toMatchObject({
-        id: "rocket-ai-pro-1.2",
-        version: "1.2",
+        id: "rocket-ai-ultra-1.5",
+        version: "1.5",
         curriculumRevision: 1,
         trainedExamples: 1
       });

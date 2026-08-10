@@ -27,6 +27,7 @@ import {
   NativeEditorProvider,
   useNativeEditor
 } from "@anshif.rainhopes/reactcms-editor";
+import { findNode } from "@anshif.rainhopes/reactcms-layout-engine";
 import {
   blocksToPageTree,
   isPageComponentTree,
@@ -180,6 +181,13 @@ function ConnectedSourceWorkspace({
   const runtimeWebsiteIdFallback = String(website?.websiteId || "").trim();
   const [runtimeWebsiteId, setRuntimeWebsiteId] = useState(runtimeWebsiteIdFallback);
   const [selectedRegion, setSelectedRegion] = useState(null);
+  const [selectedRegions, setSelectedRegions] = useState([]);
+  const selectedRegionRef = useRef(null);
+  const selectedRegionsRef = useRef([]);
+  const additiveSelectionRequestRef = useRef(false);
+  const connectedUndoRef = useRef([]);
+  const connectedRedoRef = useRef([]);
+  const [connectedHistoryVersion, setConnectedHistoryVersion] = useState(0);
   const [visualError, setVisualError] = useState("");
   const [liveRouteError, setLiveRouteError] = useState("");
   const [aiOpen, setAIOpen] = useState(true);
@@ -352,7 +360,50 @@ function ConnectedSourceWorkspace({
     );
   }, []);
 
-  const applyVisualValue = useCallback((region, value, sendToRuntime = true) => {
+  const updateConnectedSelection = useCallback((regions) => {
+    const nextRegions = Array.from(new Map((regions || [])
+      .filter((region) => region?.regionId)
+      .map((region) => [region.regionId, region])).values());
+    const activeRegion = nextRegions[nextRegions.length - 1] || null;
+    selectedRegionsRef.current = nextRegions;
+    selectedRegionRef.current = activeRegion;
+    setSelectedRegions(nextRegions);
+    setSelectedRegion(activeRegion);
+  }, []);
+
+  const clearConnectedSelection = useCallback(() => {
+    additiveSelectionRequestRef.current = false;
+    updateConnectedSelection([]);
+  }, [updateConnectedSelection]);
+
+  const recordConnectedHistory = useCallback((region, before, after) => {
+    if (JSON.stringify(before) === JSON.stringify(after)) return;
+    connectedUndoRef.current = [...connectedUndoRef.current.slice(-99), {
+      region: {
+        regionId: region.regionId,
+        type: region.type,
+        pageId: region.pageId,
+        label: region.label
+      },
+      before: structuredClone(before),
+      after: structuredClone(after)
+    }];
+    connectedRedoRef.current = [];
+    setConnectedHistoryVersion((value) => value + 1);
+  }, []);
+
+  const applyVisualValue = useCallback((
+    region,
+    value,
+    sendToRuntime = true,
+    recordHistory = true
+  ) => {
+    const currentRegion = selectedRegionsRef.current.find((item) => (
+      item.regionId === region.regionId
+    )) || (selectedRegionRef.current?.regionId === region.regionId
+      ? selectedRegionRef.current
+      : null);
+    const before = region.value !== undefined ? region.value : currentRegion?.value;
     const result = onVisualChange({
       regionId: region.regionId,
       type: region.type,
@@ -370,7 +421,16 @@ function ConnectedSourceWorkspace({
     }
 
     setVisualError("");
-    setSelectedRegion((current) => current ? { ...current, value } : current);
+    if (recordHistory) recordConnectedHistory(region, before, value);
+    const nextRegion = { ...(currentRegion || region), ...region, value };
+    const nextRegions = selectedRegionsRef.current.some((item) => (
+      item.regionId === region.regionId
+    ))
+      ? selectedRegionsRef.current.map((item) => (
+        item.regionId === region.regionId ? nextRegion : item
+      ))
+      : [nextRegion];
+    updateConnectedSelection(nextRegions);
     if (sendToRuntime) {
       sendRuntimeMessage("rcms/v1/field-update", {
         pageId: region.pageId || canvasRuntimePageId,
@@ -382,19 +442,40 @@ function ConnectedSourceWorkspace({
   }, [
     canvasRuntimePageId,
     onVisualChange,
+    recordConnectedHistory,
     runtimeWebsiteId,
     runtimeWebsiteIdFallback,
-    sendRuntimeMessage
+    sendRuntimeMessage,
+    updateConnectedSelection
   ]);
+
+  const undoConnectedEdit = useCallback(() => {
+    const entry = connectedUndoRef.current.pop();
+    if (!entry) return;
+    connectedRedoRef.current.push(entry);
+    applyVisualValue({ ...entry.region, value: entry.before }, entry.before, true, false);
+    setConnectedHistoryVersion((value) => value + 1);
+  }, [applyVisualValue]);
+
+  const redoConnectedEdit = useCallback(() => {
+    const entry = connectedRedoRef.current.pop();
+    if (!entry) return;
+    connectedUndoRef.current.push(entry);
+    applyVisualValue({ ...entry.region, value: entry.before }, entry.after, true, false);
+    setConnectedHistoryVersion((value) => value + 1);
+  }, [applyVisualValue]);
 
   useEffect(() => {
     setWorkspaceMode("visual");
-    setSelectedRegion(null);
+    clearConnectedSelection();
     setRuntimeWebsiteId(runtimeWebsiteIdFallback);
+    connectedUndoRef.current = [];
+    connectedRedoRef.current = [];
+    setConnectedHistoryVersion((value) => value + 1);
     connectedDraftHydratedRef.current = false;
     setVisualError("");
     setFrameLoading(true);
-  }, [page?.id, isPreview, runtimeWebsiteIdFallback]);
+  }, [clearConnectedSelection, page?.id, isPreview, runtimeWebsiteIdFallback]);
 
   useEffect(() => {
     if (!livePageUrl) return undefined;
@@ -500,10 +581,38 @@ function ConnectedSourceWorkspace({
       }
 
       if (!isPreview && message.type === "rcms/v1/region-selected") {
-        setSelectedRegion((current) => mergeRegionSelection(
-          current,
-          message.payload
+        const payload = message.payload || {};
+        const metadataOnly = !payload.type
+          && !Object.prototype.hasOwnProperty.call(payload, "value");
+        if (metadataOnly) {
+          const nextRegions = selectedRegionsRef.current.map((region) => (
+            region.regionId === payload.regionId
+              ? mergeRegionSelection(region, payload)
+              : region
+          ));
+          if (nextRegions.length) updateConnectedSelection(nextRegions);
+          return;
+        }
+
+        const nextRegion = mergeRegionSelection(
+          selectedRegionsRef.current.find((region) => (
+            region.regionId === payload.regionId
+          )) || null,
+          payload
+        );
+        const alreadySelected = selectedRegionsRef.current.some((region) => (
+          region.regionId === nextRegion?.regionId
         ));
+        const additive = Boolean(payload.additive || additiveSelectionRequestRef.current);
+        additiveSelectionRequestRef.current = false;
+        const nextRegions = additive
+          ? alreadySelected
+            ? selectedRegionsRef.current.filter((region) => (
+              region.regionId !== nextRegion.regionId
+            ))
+            : [...selectedRegionsRef.current, nextRegion]
+          : [nextRegion];
+        updateConnectedSelection(nextRegions);
         setVisualError("");
         return;
       }
@@ -512,11 +621,14 @@ function ConnectedSourceWorkspace({
         if (visualOnly && !connectedDraftHydratedRef.current) return;
         const payload = message.payload || {};
         if (!payload.regionId) return;
-        setSelectedRegion((current) => ({
-          ...(current || {}),
-          ...payload
-        }));
-        applyVisualValue(payload, payload.value, false);
+        const currentRegion = selectedRegionsRef.current.find((region) => (
+          region.regionId === payload.regionId
+        ));
+        applyVisualValue({
+          ...(currentRegion || {}),
+          ...payload,
+          value: currentRegion?.value
+        }, payload.value, false);
       }
     };
 
@@ -535,6 +647,7 @@ function ConnectedSourceWorkspace({
     pageKey,
     runtimeWebsiteIdFallback,
     sendRuntimeMessage,
+    updateConnectedSelection,
     visualOnly,
     websiteId
   ]);
@@ -884,6 +997,7 @@ function ConnectedSourceWorkspace({
     tree: null,
     selectedNode: null,
     selectedRegion,
+    selectedRegions,
     pageSettings,
     theme,
     sourceFiles: visualOnly ? {} : getSourceFiles?.() || {},
@@ -896,6 +1010,7 @@ function ConnectedSourceWorkspace({
     pageKey,
     pageSettings,
     selectedRegion,
+    selectedRegions,
     theme,
     visualOnly,
     website,
@@ -907,9 +1022,10 @@ function ConnectedSourceWorkspace({
     const initialRegions = {
       ...(context?.currentPage?.editableRegionValues || {})
     };
-    if (selectedRegion?.regionId) {
-      initialRegions[selectedRegion.regionId] = selectedRegion.value;
-    }
+    selectedRegions.forEach((region) => {
+      if (region?.regionId) initialRegions[region.regionId] = region.value;
+    });
+    if (selectedRegion?.regionId) initialRegions[selectedRegion.regionId] = selectedRegion.value;
     const execution = applyAIPlan({
       plan,
       tree: null,
@@ -963,10 +1079,12 @@ function ConnectedSourceWorkspace({
     for (const [regionId, value] of Object.entries(execution.regions)) {
       if (JSON.stringify(value) === JSON.stringify(initialRegions[regionId])) continue;
       const definition = regionDefinitions[regionId] || {};
+      const selected = selectedRegions.find((region) => region.regionId === regionId)
+        || (selectedRegion?.regionId === regionId ? selectedRegion : null);
       const change = {
         regionId,
-        type: definition.type || (selectedRegion?.regionId === regionId ? selectedRegion.type : "text"),
-        pageId: definition.pageId || selectedRegion?.pageId || canvasRuntimePageId || pageKey,
+        type: definition.type || selected?.type || "text",
+        pageId: definition.pageId || selected?.pageId || canvasRuntimePageId || pageKey,
         runtimeWebsiteId,
         runtimeWebsiteIds: [runtimeWebsiteIdFallback],
         value
@@ -975,9 +1093,9 @@ function ConnectedSourceWorkspace({
       if (!changed?.changed) {
         throw new Error(changed?.error || `Region "${regionId}" could not be updated.`);
       }
-      setSelectedRegion((current) => (
-        current?.regionId === regionId ? { ...current, value } : current
-      ));
+      updateConnectedSelection(selectedRegionsRef.current.map((region) => (
+        region.regionId === regionId ? { ...region, value } : region
+      )));
       sendRuntimeMessage("rcms/v1/field-update", change);
     }
     const saved = await onAIDraftSave?.(execution);
@@ -1018,8 +1136,10 @@ function ConnectedSourceWorkspace({
     runtimeWebsiteId,
     runtimeWebsiteIdFallback,
     selectedRegion,
+    selectedRegions,
     sendRuntimeMessage,
-    theme
+    theme,
+    updateConnectedSelection
   ]);
 
   const rollbackConnectedAIPlan = useCallback(async (snapshot) => {
@@ -1043,7 +1163,8 @@ function ConnectedSourceWorkspace({
     }
     if (snapshot.pageSettings) onPageSettingsChange?.(snapshot.pageSettings);
     for (const [regionId, value] of Object.entries(snapshot.regions || {})) {
-      const selected = selectedRegion?.regionId === regionId ? selectedRegion : {};
+      const selected = selectedRegions.find((region) => region.regionId === regionId)
+        || (selectedRegion?.regionId === regionId ? selectedRegion : {});
       const changed = onVisualChange({
         regionId,
         type: selected.type || "text",
@@ -1074,6 +1195,7 @@ function ConnectedSourceWorkspace({
     runtimeWebsiteId,
     runtimeWebsiteIdFallback,
     selectedRegion,
+    selectedRegions,
     sendRuntimeMessage
   ]);
 
@@ -1086,12 +1208,12 @@ function ConnectedSourceWorkspace({
         saveStatus={saveStatus}
         saving={saving}
         publishing={publishing}
-        canUndo={false}
-        canRedo={false}
+        canUndo={connectedHistoryVersion >= 0 && connectedUndoRef.current.length > 0}
+        canRedo={connectedHistoryVersion >= 0 && connectedRedoRef.current.length > 0}
         onBack={onBack}
         onDeviceChange={setDevice}
-        onUndo={() => {}}
-        onRedo={() => {}}
+        onUndo={undoConnectedEdit}
+        onRedo={redoConnectedEdit}
         onSave={onSave}
         onPublish={publishConnectedSource}
         onSettings={() => {}}
@@ -1295,15 +1417,17 @@ function ConnectedSourceWorkspace({
                 onApplyPlan={applyConnectedAIPlan}
                 onRollback={rollbackConnectedAIPlan}
                 renderInspector={() => renderVisualInspector(true)}
-                inspectorSelectionKey={selectedRegion?.regionId}
+                inspectorSelectionKey={selectedRegions.map((region) => region.regionId).join("|")}
                 selectedTarget={selectedRegion}
-                onRequestAreaSelect={() => {
+                selectedTargets={selectedRegions}
+                onRequestAreaSelect={(options) => {
                   setWorkspaceMode("visual");
-                  setSelectedRegion(null);
+                  additiveSelectionRequestRef.current = Boolean(options?.additive);
+                  if (!options?.additive) clearConnectedSelection();
                   sendRuntimeMessage("rcms/v1/enter-edit-mode");
                   window.setTimeout(() => iframeRef.current?.focus(), 0);
                 }}
-                onClearAreaSelection={() => setSelectedRegion(null)}
+                onClearAreaSelection={clearConnectedSelection}
                 onClose={() => setAIOpen(false)}
               />
             </Suspense>
@@ -1344,15 +1468,17 @@ function ConnectedSourceWorkspace({
                 onApplyPlan={applyConnectedAIPlan}
                 onRollback={rollbackConnectedAIPlan}
                 renderInspector={() => renderVisualInspector(true)}
-                inspectorSelectionKey={selectedRegion?.regionId}
+                inspectorSelectionKey={selectedRegions.map((region) => region.regionId).join("|")}
                 selectedTarget={selectedRegion}
-                onRequestAreaSelect={() => {
+                selectedTargets={selectedRegions}
+                onRequestAreaSelect={(options) => {
                   setWorkspaceMode("visual");
-                  setSelectedRegion(null);
+                  additiveSelectionRequestRef.current = Boolean(options?.additive);
+                  if (!options?.additive) clearConnectedSelection();
                   sendRuntimeMessage("rcms/v1/enter-edit-mode");
                   window.setTimeout(() => iframeRef.current?.focus(), 0);
                 }}
-                onClearAreaSelection={() => setSelectedRegion(null)}
+                onClearAreaSelection={clearConnectedSelection}
                 onClose={() => setAIOpen(false)}
               />
             </Suspense>
@@ -1472,7 +1598,11 @@ function NativeBuilderWorkspace({
     website,
     tree: editor.tree,
     selectedNode: editor.selectedNode,
+    selectedNodes: editor.selectedIds
+      .map((nodeId) => findNode(editor.tree, nodeId))
+      .filter(Boolean),
     selectedRegion: null,
+    selectedRegions: [],
     pageSettings,
     theme,
     regions,
@@ -1480,6 +1610,7 @@ function NativeBuilderWorkspace({
     editorHistory: editor.history
   }), [
     editor.history,
+    editor.selectedIds,
     editor.selectedNode,
     editor.tree,
     locale,
@@ -1688,9 +1819,14 @@ function NativeBuilderWorkspace({
               onApplyPlan={applyNativeAIPlan}
               onRollback={rollbackNativeAIPlan}
               onInsertComponent={addNode}
-              inspectorSelectionKey={editor.selectedNode?.id}
+              inspectorSelectionKey={editor.selectedIds.join("|")}
               selectedTarget={editor.selectedNode}
-              onRequestAreaSelect={editor.clearSelection}
+              selectedTargets={editor.selectedIds
+                .map((nodeId) => findNode(editor.tree, nodeId))
+                .filter(Boolean)}
+              onRequestAreaSelect={(options) => {
+                if (!options?.additive) editor.clearSelection();
+              }}
               onClearAreaSelection={editor.clearSelection}
               renderInspector={() => (
                 <NativeInspector

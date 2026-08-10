@@ -57,17 +57,23 @@ export class SelectionManager {
   }
 
   select(nodeId: string, additive = false) {
+    const removing = additive && this.state.selectedIds.includes(nodeId);
     const selectedIds = additive
-      ? this.state.selectedIds.includes(nodeId)
+      ? removing
         ? this.state.selectedIds.filter((id) => id !== nodeId)
         : [...this.state.selectedIds, nodeId]
       : [nodeId];
+    const activeId = removing
+      ? selectedIds[selectedIds.length - 1] || null
+      : nodeId;
     return this.update({
       ...this.state,
       selectedIds,
-      activeId: nodeId,
-      focusedId: nodeId,
-      anchorId: additive ? this.state.anchorId || nodeId : nodeId,
+      activeId,
+      focusedId: activeId,
+      anchorId: selectedIds.length
+        ? additive ? this.state.anchorId || nodeId : nodeId
+        : null,
     });
   }
 
@@ -85,7 +91,9 @@ export class SelectionManager {
 
   boxSelect(nodeIds: string[], additive = false) {
     return this.selectMany(
-      additive ? [...this.state.selectedIds, ...nodeIds] : nodeIds,
+      additive
+        ? Array.from(new Set([...this.state.selectedIds, ...nodeIds]))
+        : nodeIds,
     );
   }
 

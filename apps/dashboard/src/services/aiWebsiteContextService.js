@@ -112,7 +112,14 @@ function resolvePageRegions(editableRegions, pageKey) {
     || {};
 }
 
-function resolveRegionValues(definitions, draft, published, current, selectedRegion) {
+function resolveRegionValues(
+  definitions,
+  draft,
+  published,
+  current,
+  selectedRegion,
+  selectedRegions = []
+) {
   const values = {
     ...(published?.regions || {})
   };
@@ -122,6 +129,9 @@ function resolveRegionValues(definitions, draft, published, current, selectedReg
   });
   Object.assign(values, draft?.regions || {}, current || {});
   if (selectedRegion?.regionId) values[selectedRegion.regionId] = selectedRegion.value;
+  selectedRegions.forEach((region) => {
+    if (region?.regionId) values[region.regionId] = region.value;
+  });
   return values;
 }
 
@@ -170,7 +180,9 @@ export async function collectAIWebsiteContext({
   website,
   tree = null,
   selectedNode = null,
+  selectedNodes = [],
   selectedRegion = null,
+  selectedRegions = [],
   pageSettings = {},
   theme = null,
   regions = null,
@@ -230,7 +242,8 @@ export async function collectAIWebsiteContext({
     decodedDraftContent,
     decodedPublishedContent,
     regions,
-    selectedRegion
+    selectedRegion,
+    selectedRegions
   );
   const sourceFileCount = Object.keys(sourceFiles || {}).length;
   const componentTypes = BLOCK_SCHEMAS.map((schema) => schema.type);
@@ -259,7 +272,9 @@ export async function collectAIWebsiteContext({
       record: page,
       settings: pageSettings,
       selectedComponent: selectedNode,
+      selectedComponents: selectedNodes,
       selectedRegion,
+      selectedRegions,
       draftContent: decodedDraftContent,
       publishedContent: decodedPublishedContent,
       editableRegionValues: regionValues,

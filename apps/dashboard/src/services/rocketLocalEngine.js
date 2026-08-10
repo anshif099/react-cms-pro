@@ -20,7 +20,8 @@ const MODEL_RELEASES = Object.freeze([
     description: "Complex full-page planning and coordinated redesigns"
   })
 ]);
-const DEFAULT_MODEL_RELEASE = "rocket-ai-pro";
+const DEFAULT_MODEL_RELEASE = "rocket-ai-ultra";
+const MODEL_PREFERENCE_VERSION = 2;
 const FEEDBACK_KEY = "reactcms_rocket_embedded_curriculum_v1";
 const MODEL_STATE_KEY = "reactcms_rocket_embedded_model_state_v1";
 
@@ -175,7 +176,10 @@ function modelRelease(modelId) {
 
 function currentModelInfo(preferredModelId = "") {
   const state = readStoredJson(MODEL_STATE_KEY, {});
-  const release = modelRelease(preferredModelId || state.activeModel);
+  const storedPreference = state.modelPreferenceVersion === MODEL_PREFERENCE_VERSION
+    ? state.activeModel
+    : "";
+  const release = modelRelease(preferredModelId || storedPreference);
   const curriculumRevision = Math.max(0, Number(state.curriculumRevision) || 0);
   const trainedExamples = Math.max(0, Number(state.trainedExamples) || 0);
   return {
@@ -200,6 +204,7 @@ function chooseActiveModel(modelId) {
   target.setItem(MODEL_STATE_KEY, JSON.stringify({
     ...previousState,
     activeModel: release.releaseId,
+    modelPreferenceVersion: MODEL_PREFERENCE_VERSION,
     updatedAt: Date.now()
   }));
   return currentModelInfo(release.releaseId);
@@ -330,11 +335,34 @@ function companyFromContext(context, memory) {
     || "your business";
 }
 
-function regionOperation(addOperation, context, field, value, summary, reason, type = "") {
+function selectedRegions(context, type = "") {
   const page = context?.currentPage || {};
-  const selected = page.selectedRegion;
+  const regions = Array.isArray(page.selectedRegions) && page.selectedRegions.length
+    ? page.selectedRegions
+    : page.selectedRegion
+      ? [page.selectedRegion]
+      : [];
+  return Array.from(new Map(regions
+    .filter((region) => region?.regionId && (!type || region.type === type))
+    .map((region) => [region.regionId, region])).values());
+}
+
+function selectedComponents(context, type = "") {
+  const page = context?.currentPage || {};
+  const components = Array.isArray(page.selectedComponents) && page.selectedComponents.length
+    ? page.selectedComponents
+    : page.selectedComponent
+      ? [page.selectedComponent]
+      : [];
+  return Array.from(new Map(components
+    .filter((component) => component?.id && (!type || component.type === type))
+    .map((component) => [component.id, component])).values());
+}
+
+function regionOperations(addOperation, context, field, value, summary, reason, type = "") {
+  const page = context?.currentPage || {};
   const capabilities = new Set(context?.capabilities || []);
-  if (!capabilities.has("update_region")) return null;
+  if (!capabilities.has("update_region")) return [];
   const definitions = page.editableRegionDefinitions || {};
   const values = page.editableRegionValues || {};
   const candidates = Object.entries(definitions)
@@ -350,20 +378,17 @@ function regionOperation(addOperation, context, field, value, summary, reason, t
       ) candidates.push(regionId);
     });
   }
-  const regionId = (
-    selected?.regionId && (!type || selected.type === type)
-      ? selected.regionId
-      : candidates.find((id) => /(?:^|[._-])hero(?:$|[._-])/i.test(id))
-        || candidates.find((id) => /(?:main|page|content|body)/i.test(id))
-        || candidates[0]
-  );
-  if (!regionId) return null;
-  return addOperation("update_region", {
+  const selectedIds = selectedRegions(context, type).map((region) => region.regionId);
+  const fallbackId = candidates.find((id) => /(?:^|[._-])hero(?:$|[._-])/i.test(id))
+    || candidates.find((id) => /(?:main|page|content|body)/i.test(id))
+    || candidates[0];
+  const regionIds = selectedIds.length ? selectedIds : fallbackId ? [fallbackId] : [];
+  return regionIds.map((regionId) => addOperation("update_region", {
     targetId: regionId,
     summary,
     reason,
     patches: [patch(`value.${field}`, value)]
-  });
+  }));
 }
 
 function sectionRegionEntries(context) {
@@ -399,16 +424,15 @@ function pageSectionOperations(addOperation, context, color) {
   }));
 }
 
-function selectedComponentOperation(addOperation, context, path, value, summary, reason) {
-  const selected = context?.currentPage?.selectedComponent;
+function selectedComponentOperations(addOperation, context, path, value, summary, reason) {
   const capabilities = new Set(context?.capabilities || []);
-  if (!selected?.id || !capabilities.has("update_component")) return null;
-  return addOperation("update_component", {
+  if (!capabilities.has("update_component")) return [];
+  return selectedComponents(context).map((selected) => addOperation("update_component", {
     targetId: selected.id,
     summary,
     reason,
     patches: [patch(path, value)]
-  });
+  }));
 }
 
 function addThemeOperation(operations, addOperation, patches, summary, reason) {
@@ -540,22 +564,24 @@ function addCopyEdit(operations, addOperation, context, intent) {
   return true;
 }
 
-function selectedRegionCopyOperation(addOperation, context, intent) {
-  const selected = context?.currentPage?.selectedRegion;
+function selectedRegionCopyOperations(addOperation, context, intent) {
+  const targets = selectedRegions(context).filter((selected) => (
+    ["text", "richtext", "button"].includes(selected.type)
+  ));
   const capabilities = new Set(context?.capabilities || []);
   if (
-    !selected?.regionId
+    !targets.length
     || !capabilities.has("update_region")
-    || !["text", "richtext", "button"].includes(selected.type)
-  ) return null;
+  ) return [];
 
   const text = normalized(intent);
   if (includesAny(text, [
     "background", "text color", "text colour", "font color", "font colour",
     "font size", "image", "photo", "picture", "media asset", "link url", "href"
-  ])) return null;
+  ])) return [];
 
   const source = String(intent).trim();
+  const selected = targets[targets.length - 1];
   const currentText = typeof selected.value === "object" && selected.value
     ? selected.value.text
     : selected.value;
@@ -575,51 +601,56 @@ function selectedRegionCopyOperation(addOperation, context, intent) {
     /^(?:text|copy|heading|headline|title|label|button)\s*:\s*["'“]?([\s\S]+?)["'”]?\s*$/i
   );
   const value = expandedValue || replacement?.[1]?.trim();
-  if (!value) return null;
+  if (!value) return [];
 
-  let path = "value";
-  if (selected.type === "button") {
-    path = selected.value && typeof selected.value === "object"
-      ? "value.text"
-      : "value";
-  } else if (
-    selected.type === "text"
-    && selected.value
-    && typeof selected.value === "object"
-  ) {
-    path = "value.text";
-  }
-  const patchValue = selected.type === "button" && path === "value"
-    ? { text: value }
-    : value;
+  return targets.map((target) => {
+    let path = "value";
+    if (target.type === "button") {
+      path = target.value && typeof target.value === "object"
+        ? "value.text"
+        : "value";
+    } else if (
+      target.type === "text"
+      && target.value
+      && typeof target.value === "object"
+    ) {
+      path = "value.text";
+    }
+    const patchValue = target.type === "button" && path === "value"
+      ? { text: value }
+      : value;
 
-  return addOperation("update_region", {
-    targetId: selected.regionId,
-    summary: `Rewrite ${selected.label || "selected content"}`,
-    reason: "Apply the requested copy only to the area attached to this chat.",
-    patches: [patch(path, patchValue)]
+    return addOperation("update_region", {
+      targetId: target.regionId,
+      summary: `Rewrite ${target.label || "selected content"}`,
+      reason: "Apply the requested copy to the selected areas attached to this chat.",
+      patches: [patch(path, patchValue)]
+    });
   });
 }
 
-function selectedRegionTextColorOperation(addOperation, context, color) {
-  const selected = context?.currentPage?.selectedRegion;
+function selectedRegionTextColorOperations(addOperation, context, color) {
+  const targets = selectedRegions(context).filter((selected) => (
+    ["text", "button"].includes(selected.type)
+  ));
   const capabilities = new Set(context?.capabilities || []);
   if (
     !color
-    || !selected?.regionId
+    || !targets.length
     || !capabilities.has("update_region")
-    || !["text", "button"].includes(selected.type)
-  ) return null;
+  ) return [];
 
-  const currentValue = selected.value;
-  const nextValue = currentValue && typeof currentValue === "object"
-    ? { ...currentValue, color }
-    : { text: String(currentValue ?? ""), color };
-  return addOperation("update_region", {
-    targetId: selected.regionId,
-    summary: `Change ${selected.label || "selected text"} color to ${color}`,
-    reason: "Apply the requested color only to the editable area attached to this chat.",
-    patches: [patch("value", nextValue)]
+  return targets.map((selected) => {
+    const currentValue = selected.value;
+    const nextValue = currentValue && typeof currentValue === "object"
+      ? { ...currentValue, color }
+      : { text: String(currentValue ?? ""), color };
+    return addOperation("update_region", {
+      targetId: selected.regionId,
+      summary: `Change ${selected.label || "selected text"} color to ${color}`,
+      reason: "Apply the requested color to the selected editable areas attached to this chat.",
+      patches: [patch("value", nextValue)]
+    });
   });
 }
 
@@ -639,19 +670,17 @@ function mediaAssetFromIntent(intent, context) {
   }) || null;
 }
 
-function selectedImageTarget(context, allowProminent = false) {
+function selectedImageTargets(context, allowProminent = false) {
   const page = context?.currentPage || {};
-  if (page.selectedRegion?.regionId && page.selectedRegion.type === "image") {
-    return { kind: "region", target: page.selectedRegion };
-  }
-  if (page.selectedComponent?.id && page.selectedComponent.type === "image") {
-    return { kind: "component", target: page.selectedComponent };
-  }
-  if (!allowProminent) return null;
+  const targets = [
+    ...selectedRegions(context, "image").map((target) => ({ kind: "region", target })),
+    ...selectedComponents(context, "image").map((target) => ({ kind: "component", target }))
+  ];
+  if (targets.length || !allowProminent) return targets;
   const definitions = page.editableRegionDefinitions || {};
   const entries = Object.entries(definitions).filter(([, definition]) => definition?.type === "image");
   const entry = entries.find(([regionId]) => /(?:hero|banner|cover|main)/i.test(regionId)) || entries[0];
-  return entry ? {
+  return entry ? [{
     kind: "region",
     target: {
       regionId: entry[0],
@@ -659,19 +688,49 @@ function selectedImageTarget(context, allowProminent = false) {
       label: entry[1]?.label || entry[0],
       value: page.editableRegionValues?.[entry[0]]
     }
-  } : null;
+  }] : [];
 }
 
-function imageOperation(addOperation, context, intent) {
+function selectedImageTarget(context, allowProminent = false) {
+  return selectedImageTargets(context, allowProminent)[0] || null;
+}
+
+function imageOperations(addOperation, context, intent) {
   const text = normalized(intent);
-  if (!includesAny(text, ["image", "photo", "picture", "media asset"])) return null;
+  if (!includesAny(text, ["image", "photo", "picture", "media asset"])) return [];
+  const prepared = context?.currentPage?.preparedImageAssignments;
+  if (Array.isArray(prepared) && prepared.length) {
+    const locale = context?.currentPage?.locale || "en";
+    return prepared.map((assignment) => addOperation(
+      assignment.kind === "component" ? "update_component" : "update_region",
+      assignment.kind === "component"
+        ? {
+          targetId: assignment.targetId,
+          summary: `Replace ${assignment.label || "selected image"}`,
+          reason: "Write the prepared image result to its selected component.",
+          patches: [
+            patch("props.src", assignment.url),
+            patch(`props.locales.${locale}.alt`, assignment.alt || "Website image")
+          ]
+        }
+        : {
+          targetId: assignment.targetId,
+          summary: `Replace ${assignment.label || "selected image"}`,
+          reason: "Write the prepared image result to its selected editable image area.",
+          patches: [
+            patch("value.src", assignment.url),
+            patch("value.alt", assignment.alt || "Website image")
+          ]
+        }
+    ));
+  }
   const asset = mediaAssetFromIntent(intent, context);
   const urlMatch = String(intent).match(/https:\/\/[^\s"'<>]+/i);
   const source = asset?.url || urlMatch?.[0] || "";
-  if (!source) return null;
+  if (!source) return [];
   const allowProminent = includesAny(text, ["prominent", "hero", "most appropriate"]);
-  const imageTarget = selectedImageTarget(context, allowProminent);
-  if (!imageTarget) return null;
+  const imageTargets = selectedImageTargets(context, allowProminent);
+  if (!imageTargets.length) return [];
   const alt = String(
     asset?.alt
     || asset?.name
@@ -679,8 +738,9 @@ function imageOperation(addOperation, context, intent) {
     || "Website image"
   ).trim();
 
-  if (imageTarget.kind === "region") {
-    return addOperation("update_region", {
+  const locale = context?.currentPage?.locale || "en";
+  return imageTargets.map((imageTarget) => imageTarget.kind === "region"
+    ? addOperation("update_region", {
       targetId: imageTarget.target.regionId,
       summary: `Replace ${imageTarget.target.label || "selected image"}`,
       reason: "Use the requested media asset in the selected editable image area.",
@@ -688,18 +748,16 @@ function imageOperation(addOperation, context, intent) {
         patch("value.src", source),
         patch("value.alt", alt)
       ]
-    });
-  }
-  const locale = context?.currentPage?.locale || "en";
-  return addOperation("update_component", {
-    targetId: imageTarget.target.id,
-    summary: `Replace ${imageTarget.target.label || "selected image"}`,
-    reason: "Use the requested media asset in the selected image component.",
-    patches: [
-      patch("props.src", source),
-      patch(`props.locales.${locale}.alt`, alt)
-    ]
-  });
+    })
+    : addOperation("update_component", {
+      targetId: imageTarget.target.id,
+      summary: `Replace ${imageTarget.target.label || "selected image"}`,
+      reason: "Use the requested media asset in the selected image component.",
+      patches: [
+        patch("props.src", source),
+        patch(`props.locales.${locale}.alt`, alt)
+      ]
+    }));
 }
 
 function conversationalReply(intent, context) {
@@ -752,15 +810,15 @@ function buildPlan({ intent, context, memory = {}, conversation = [], previousPl
   const capabilities = new Set(context?.capabilities || []);
   const color = colorFromIntent(combinedIntent);
 
-  const imageItem = imageOperation(addOperation, context, combinedIntent);
-  if (imageItem) {
-    operations.push(imageItem);
+  const imageItems = imageOperations(addOperation, context, combinedIntent);
+  if (imageItems.length) {
+    operations.push(...imageItems);
     affected.add("Selected image");
   }
 
-  const selectedCopyItem = selectedRegionCopyOperation(addOperation, context, combinedIntent);
-  if (selectedCopyItem) {
-    operations.push(selectedCopyItem);
+  const selectedCopyItems = selectedRegionCopyOperations(addOperation, context, combinedIntent);
+  if (selectedCopyItems.length) {
+    operations.push(...selectedCopyItems);
     affected.add("Selected content");
   }
 
@@ -772,12 +830,12 @@ function buildPlan({ intent, context, memory = {}, conversation = [], previousPl
     const pageItems = isPageBackground
       ? pageSectionOperations(addOperation, context, color)
       : [];
-    let item = null;
+    let items = [];
     if (pageItems.length) {
       operations.push(...pageItems);
       affected.add("All editable page sections");
     } else {
-      item = regionOperation(
+      items = regionOperations(
         addOperation,
         context,
         "background",
@@ -787,8 +845,8 @@ function buildPlan({ intent, context, memory = {}, conversation = [], previousPl
         "section"
       );
     }
-    if (!item && !isPageBackground) {
-      item = selectedComponentOperation(
+    if (!items.length && !isPageBackground) {
+      items = selectedComponentOperations(
         addOperation,
         context,
         "styles.base.background",
@@ -797,8 +855,8 @@ function buildPlan({ intent, context, memory = {}, conversation = [], previousPl
         "Apply the requested background without altering page content."
       );
     }
-    if (item) {
-      operations.push(item);
+    if (items.length) {
+      operations.push(...items);
       affected.add("Selected section");
     } else if (!pageItems.length && capabilities.has("update_theme")) {
       addThemeOperation(
@@ -813,8 +871,8 @@ function buildPlan({ intent, context, memory = {}, conversation = [], previousPl
   }
 
   if (color && includesAny(text, ["text color", "text colour", "font color", "font colour"])) {
-    const regionItem = selectedRegionTextColorOperation(addOperation, context, color);
-    const item = regionItem || selectedComponentOperation(
+    const regionItems = selectedRegionTextColorOperations(addOperation, context, color);
+    const items = regionItems.length ? regionItems : selectedComponentOperations(
       addOperation,
       context,
       "styles.base.color",
@@ -822,7 +880,7 @@ function buildPlan({ intent, context, memory = {}, conversation = [], previousPl
       `Change the selected text color to ${color}`,
       "Apply the requested foreground color to the selected component."
     );
-    if (item) operations.push(item);
+    if (items.length) operations.push(...items);
     else if (capabilities.has("update_theme")) {
       addThemeOperation(
         operations,

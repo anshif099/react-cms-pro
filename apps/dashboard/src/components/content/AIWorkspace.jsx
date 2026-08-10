@@ -9,6 +9,7 @@ import {
   Circle,
   Clock3,
   Code2,
+  Copy,
   Database,
   FileClock,
   Image as ImageIcon,
@@ -16,15 +17,19 @@ import {
   ListChecks,
   Loader2,
   LogOut,
+  Maximize2,
   MessageSquare,
+  Minimize2,
   MousePointer2,
   PanelRightClose,
+  ClipboardPaste,
   RefreshCw,
   Send,
   ShieldCheck,
   Sparkles,
   SquareTerminal,
   TriangleAlert,
+  Undo2,
   X
 } from "lucide-react";
 import BLOCK_SCHEMAS from "../blocks/blockSchemas";
@@ -120,6 +125,41 @@ function transformedImageFile(blob, pageTitle, extension = "png") {
     `${safeTitle}-logo-${Date.now()}.${extension}`,
     { type: blob.type || (extension === "svg" ? "image/svg+xml" : "image/png") }
   );
+}
+
+function imageSource(target) {
+  if (!target) return "";
+  if (typeof target.value === "string") return target.value;
+  return target.value?.src
+    || target.props?.src
+    || target.props?.locales?.en?.src
+    || "";
+}
+
+function imageTargetsFromContext(context) {
+  const page = context?.currentPage || {};
+  const regions = Array.isArray(page.selectedRegions) && page.selectedRegions.length
+    ? page.selectedRegions
+    : page.selectedRegion ? [page.selectedRegion] : [];
+  const components = Array.isArray(page.selectedComponents) && page.selectedComponents.length
+    ? page.selectedComponents
+    : page.selectedComponent ? [page.selectedComponent] : [];
+  return [
+    ...regions
+      .filter((target) => target?.type === "image" && target.regionId)
+      .map((target) => ({ kind: "region", targetId: target.regionId, target })),
+    ...components
+      .filter((target) => target?.type === "image" && target.id)
+      .map((target) => ({ kind: "component", targetId: target.id, target }))
+  ];
+}
+
+function clipboardText(target) {
+  if (!target) return "";
+  if (target.type === "image") return imageSource(target);
+  const value = target.value ?? target.props?.text ?? target.props?.locales?.en?.text;
+  if (typeof value === "string") return value;
+  return value?.text || value?.html || JSON.stringify(value || target.props || {});
 }
 
 function StatusIcon({ status }) {
@@ -250,6 +290,7 @@ export function AIWorkspace({
   renderInspector,
   inspectorSelectionKey,
   selectedTarget,
+  selectedTargets = [],
   onRequestAreaSelect,
   onClearAreaSelection,
   onClose
@@ -278,6 +319,8 @@ export function AIWorkspace({
   const [imageGenerating, setImageGenerating] = useState(false);
   const [imageProgress, setImageProgress] = useState(0);
   const [selectingArea, setSelectingArea] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
+  const [clipboardStatus, setClipboardStatus] = useState("");
   const [consoleEntries, setConsoleEntries] = useState([]);
   const [rocketUser, setRocketUser] = useState(() => rocketAIAuthService.currentUser());
   const [rocketAuthLoading, setRocketAuthLoading] = useState(true);
@@ -285,7 +328,7 @@ export function AIWorkspace({
   const [rocketAuthError, setRocketAuthError] = useState("");
   const chatEndRef = useRef(null);
   const getContextRef = useRef(getContext);
-  const areaSelectionClearedRef = useRef(false);
+  const areaSelectionStartKeyRef = useRef("");
 
   useEffect(() => {
     getContextRef.current = getContext;
@@ -293,11 +336,7 @@ export function AIWorkspace({
 
   useEffect(() => {
     if (!selectingArea) return;
-    if (!inspectorSelectionKey) {
-      areaSelectionClearedRef.current = true;
-      return;
-    }
-    if (!areaSelectionClearedRef.current) return;
+    if (!inspectorSelectionKey || inspectorSelectionKey === areaSelectionStartKeyRef.current) return;
     setSelectingArea(false);
     setActiveTab("chat");
   }, [inspectorSelectionKey, selectingArea]);
@@ -368,6 +407,14 @@ export function AIWorkspace({
 
   const suggestions = useMemo(() => context ? auditAIContext(context) : [], [context]);
   const assets = context?.contentSystem?.assets || [];
+  const targetList = useMemo(() => {
+    const values = selectedTargets.length
+      ? selectedTargets
+      : selectedTarget ? [selectedTarget] : [];
+    return Array.from(new Map(values
+      .filter(Boolean)
+      .map((target) => [target.regionId || target.id, target])).values());
+  }, [selectedTarget, selectedTargets]);
 
   const connectRocketAI = async () => {
     if (rocketSigningIn) return;
@@ -435,41 +482,48 @@ export function AIWorkspace({
     try {
       let freshContext = await refreshContext();
       let planningIntent = cleanIntent;
-      const imageTarget = freshContext?.currentPage?.selectedRegion?.type === "image"
-        ? freshContext.currentPage.selectedRegion
-        : freshContext?.currentPage?.selectedComponent?.type === "image"
-          ? freshContext.currentPage.selectedComponent
-          : null;
-      if (!previousPlan && isImageRecolorRequest(cleanIntent) && imageTarget) {
+      const imageTargets = imageTargetsFromContext(freshContext).slice(0, 24);
+      if (!previousPlan && isImageRecolorRequest(cleanIntent) && imageTargets.length) {
         setImageGenerating(true);
         setImageProgress(0);
-        const source = typeof imageTarget.value === "string"
-          ? imageTarget.value
-          : imageTarget.value?.src || imageTarget.props?.src;
         const targetColor = requestedImageColor(cleanIntent, freshContext?.designSystem?.theme);
-        log("image", `Recoloring ${imageTarget.label || imageTarget.regionId || imageTarget.id} to ${targetColor}.`);
-        const transformed = await recolorImageAsset({
-          source,
-          baseUrl: freshContext?.website?.record?.domain,
-          targetColor
-        });
-        const file = transformedImageFile(transformed.blob, pageTitle, transformed.extension);
-        const asset = await mediaService.upload(
-          websiteId,
-          file,
-          "ai-edited",
-          setImageProgress
-        );
+        log("image", `Reading and recoloring ${imageTargets.length} selected image${imageTargets.length === 1 ? "" : "s"} to ${targetColor}.`);
+        const assignments = [];
+        for (const [index, imageTarget] of imageTargets.entries()) {
+          const transformed = await recolorImageAsset({
+            source: imageSource(imageTarget.target),
+            baseUrl: freshContext?.website?.record?.domain,
+            targetColor
+          });
+          const file = transformedImageFile(transformed.blob, pageTitle, transformed.extension);
+          const asset = await mediaService.upload(
+            websiteId,
+            file,
+            "ai-edited",
+            (progress) => setImageProgress(
+              ((index + progress / 100) / imageTargets.length) * 100
+            )
+          );
+          assignments.push({
+            kind: imageTarget.kind,
+            targetId: imageTarget.targetId,
+            label: imageTarget.target.label || imageTarget.targetId,
+            url: asset.url,
+            alt: imageTarget.target.value?.alt || asset.alt || asset.name
+          });
+          log("success", `Prepared ${asset.name} for ${imageTarget.target.label || imageTarget.targetId}.`, {
+            targetColor,
+            assetId: asset.id,
+            replacements: transformed.replacements
+          });
+        }
         freshContext = await refreshContext();
-        planningIntent = `Use the existing media asset with ID "${asset.id}" and URL "${asset.url}" in the selected image, with accessible alt text. The logo was recolored to ${targetColor} without white. Original request: ${cleanIntent}`;
-        log("success", `Recolored ${transformed.replacements} logo pixels and attached ${asset.name} to the pending plan.`, {
-          targetColor,
-          assetId: asset.id
-        });
-      } else if (!previousPlan && requestsGeneratedImage(cleanIntent) && imageTarget) {
+        freshContext.currentPage.preparedImageAssignments = assignments;
+        planningIntent = `Write the prepared image edits to all selected images. They were recolored to ${targetColor}. Original request: ${cleanIntent}`;
+      } else if (!previousPlan && requestsGeneratedImage(cleanIntent) && imageTargets.length) {
         setImageGenerating(true);
         setImageProgress(0);
-        log("image", `Generating an image for ${imageTarget.label || imageTarget.regionId || imageTarget.id}.`);
+        log("image", `Generating an image for ${imageTargets.length} selected target${imageTargets.length === 1 ? "" : "s"}.`);
         const generated = await aiWebsiteAgentService.generateImage({
           prompt: cleanIntent,
           modelId: modelInfo.releaseId,
@@ -488,7 +542,14 @@ export function AIWorkspace({
           setImageProgress
         );
         freshContext = await refreshContext();
-        planningIntent = `Use the existing media asset with ID "${asset.id}" and URL "${asset.url}" in the selected image, with accessible alt text. Original request: ${cleanIntent}`;
+        freshContext.currentPage.preparedImageAssignments = imageTargets.map((imageTarget) => ({
+          kind: imageTarget.kind,
+          targetId: imageTarget.targetId,
+          label: imageTarget.target.label || imageTarget.targetId,
+          url: asset.url,
+          alt: asset.alt || asset.name
+        }));
+        planningIntent = `Write the prepared generated image to all selected images with accessible alt text. Original request: ${cleanIntent}`;
         log("success", `Generated ${asset.name} and attached it to the pending selected-image plan.`, {
           model: generated.model,
           assetId: asset.id
@@ -784,15 +845,108 @@ export function AIWorkspace({
     }
   };
 
+  const showClipboardStatus = (message) => {
+    setClipboardStatus(message);
+    window.setTimeout(() => setClipboardStatus(""), 3200);
+  };
+
+  const copySelectionToClipboard = async () => {
+    if (!targetList.length) return;
+    const imageTarget = targetList.find((target) => target.type === "image");
+    const fallbackText = targetList.map(clipboardText).filter(Boolean).join("\n");
+    try {
+      const source = imageSource(imageTarget);
+      if (source && navigator.clipboard?.write && typeof ClipboardItem !== "undefined") {
+        const response = await fetch(source);
+        if (!response.ok) throw new Error(`Image read failed (${response.status}).`);
+        const blob = await response.blob();
+        await navigator.clipboard.write([
+          new ClipboardItem({ [blob.type || "image/png"]: blob })
+        ]);
+        showClipboardStatus("Image copied to the system clipboard.");
+        log("clipboard", "Read the selected image and copied its pixels to the clipboard.");
+        return;
+      }
+      if (!navigator.clipboard?.writeText) throw new Error("Clipboard writing is unavailable.");
+      await navigator.clipboard.writeText(fallbackText);
+      showClipboardStatus(`${targetList.length} selected target${targetList.length === 1 ? "" : "s"} copied.`);
+      log("clipboard", `Copied ${targetList.length} selected target values.`);
+    } catch (error) {
+      if (fallbackText && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(fallbackText).catch(() => undefined);
+        showClipboardStatus("Copied the image URL because pixel access was blocked.");
+      } else {
+        showClipboardStatus(error.message || "The selection could not be copied.");
+      }
+      log("warning", error.message || "Clipboard copy failed.");
+    }
+  };
+
+  const pasteFromClipboard = async () => {
+    try {
+      let imageBlob = null;
+      if (navigator.clipboard?.read) {
+        const items = await navigator.clipboard.read();
+        const imageItem = items.find((item) => item.types.some((type) => type.startsWith("image/")));
+        const imageType = imageItem?.types.find((type) => type.startsWith("image/"));
+        if (imageItem && imageType) imageBlob = await imageItem.getType(imageType);
+      }
+
+      if (imageBlob) {
+        if (!targetList.some((target) => target.type === "image")) {
+          showClipboardStatus("Select one or more editable images before pasting image pixels.");
+          return;
+        }
+        setImageGenerating(true);
+        setImageProgress(0);
+        const extension = imageBlob.type.split("/")[1]?.replace("jpeg", "jpg") || "png";
+        const file = new File(
+          [imageBlob],
+          `${String(pageTitle || "website").replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-clipboard-${Date.now()}.${extension}`,
+          { type: imageBlob.type || "image/png" }
+        );
+        const asset = await mediaService.upload(
+          websiteId,
+          file,
+          "clipboard",
+          setImageProgress
+        );
+        setImageGenerating(false);
+        setImageProgress(0);
+        showClipboardStatus("Clipboard image uploaded; replacement plan prepared.");
+        await refreshContext();
+        requestPlan({
+          intent: `Use the existing media asset with ID "${asset.id}" in all selected images, with accessible alt text.`
+        });
+        return;
+      }
+
+      const text = await navigator.clipboard?.readText?.();
+      if (!text) throw new Error("The clipboard does not contain readable text or image data.");
+      if (targetList.some((target) => target.type === "image") && /^https?:\/\//i.test(text.trim())) {
+        requestPlan({ intent: `Use image URL ${text.trim()} in all selected images.` });
+      } else {
+        setPrompt((current) => current ? `${current}\n${text}` : text);
+        showClipboardStatus("Clipboard text added to the prompt.");
+      }
+      log("clipboard", "Read clipboard content into Rocket AI.");
+    } catch (error) {
+      setImageGenerating(false);
+      setImageProgress(0);
+      showClipboardStatus(error.message || "Clipboard access was denied.");
+      log("warning", error.message || "Clipboard paste failed.");
+    }
+  };
+
   const beginAreaSelection = () => {
-    areaSelectionClearedRef.current = false;
+    areaSelectionStartKeyRef.current = inspectorSelectionKey || "";
     setSelectingArea(true);
     setActiveTab("chat");
-    onRequestAreaSelect?.();
+    onRequestAreaSelect?.({ additive: targetList.length > 0 });
   };
 
   const clearAreaSelection = () => {
-    areaSelectionClearedRef.current = false;
+    areaSelectionStartKeyRef.current = "";
     setSelectingArea(false);
     onClearAreaSelection?.();
   };
@@ -820,25 +974,27 @@ export function AIWorkspace({
         <div className={`rounded-xl border p-3 ${
           selectingArea
             ? "border-amber-400/30 bg-amber-400/[0.06]"
-            : selectedTarget
+            : targetList.length
               ? "border-violet-500/30 bg-violet-500/[0.07]"
               : "border-slate-800 bg-slate-950/35"
         }`}>
           <div className="flex items-center gap-2">
-            <MousePointer2 className={`h-3.5 w-3.5 ${selectingArea ? "text-amber-300" : selectedTarget ? "text-violet-300" : "text-slate-600"}`} />
+            <MousePointer2 className={`h-3.5 w-3.5 ${selectingArea ? "text-amber-300" : targetList.length ? "text-violet-300" : "text-slate-600"}`} />
             <div className="min-w-0 flex-1">
               <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                {selectingArea ? "Click an area in the canvas" : selectedTarget ? "AI target attached" : "Area targeting"}
+                {selectingArea ? "Click areas in the canvas" : targetList.length ? `${targetList.length} AI target${targetList.length === 1 ? "" : "s"} attached` : "Area targeting"}
               </p>
               <p className="mt-0.5 truncate text-[9px] text-slate-600">
                 {selectingArea
                   ? "Choose an outlined section, text, button, or image."
-                  : selectedTarget
-                    ? `${selectedTarget.label || selectedTarget.regionId || selectedTarget.id} · ${selectedTarget.type || "area"}`
-                    : "Select one area so chat edits stay scoped to it."}
+                  : targetList.length
+                    ? targetList.length === 1
+                      ? `${selectedTarget?.label || selectedTarget?.regionId || selectedTarget?.id} · ${selectedTarget?.type || "area"}`
+                      : `${targetList.map((target) => target.label || target.regionId || target.id).slice(0, 3).join(", ")}${targetList.length > 3 ? ` +${targetList.length - 3}` : ""}`
+                    : "Select one or more areas so chat edits stay scoped to them."}
               </p>
             </div>
-            {selectedTarget && !selectingArea && (
+            {!!targetList.length && !selectingArea && (
               <button
                 type="button"
                 onClick={clearAreaSelection}
@@ -849,6 +1005,30 @@ export function AIWorkspace({
               </button>
             )}
           </div>
+          {!!targetList.length && !selectingArea && (
+            <div className="mt-2 grid grid-cols-2 gap-1.5">
+              <button
+                type="button"
+                onClick={copySelectionToClipboard}
+                className="flex h-8 items-center justify-center gap-1.5 rounded-lg border border-slate-800 text-[9px] font-bold text-slate-400 hover:border-violet-500/30 hover:text-white cursor-pointer"
+              >
+                <Copy className="h-3 w-3" />
+                Copy{targetList.some((target) => target.type === "image") ? " image" : " selection"}
+              </button>
+              <button
+                type="button"
+                onClick={pasteFromClipboard}
+                disabled={imageGenerating}
+                className="flex h-8 items-center justify-center gap-1.5 rounded-lg border border-slate-800 text-[9px] font-bold text-slate-400 hover:border-violet-500/30 hover:text-white disabled:opacity-40 cursor-pointer"
+              >
+                <ClipboardPaste className="h-3 w-3" />
+                Paste
+              </button>
+            </div>
+          )}
+          {clipboardStatus && (
+            <p className="mt-2 text-[8px] leading-4 text-emerald-300/80">{clipboardStatus}</p>
+          )}
           <button
             type="button"
             onClick={beginAreaSelection}
@@ -858,7 +1038,7 @@ export function AIWorkspace({
                 : "border-violet-500/25 bg-violet-500/10 text-violet-200 hover:bg-violet-500/15"
             }`}
           >
-            {selectingArea ? "Waiting for canvas selection…" : selectedTarget ? "Select another area" : "Select area"}
+            {selectingArea ? "Waiting for canvas selection…" : targetList.length ? "Add or change selection" : "Select area"}
           </button>
         </div>
 
@@ -954,7 +1134,11 @@ export function AIWorkspace({
             <Loader2 className="h-4 w-4 animate-spin text-violet-300" />
             <div>
               <p className="text-[10px] font-semibold text-violet-100">
-                {imageGenerating ? "Generating the selected image" : selectedTarget ? "Planning the selected-area update" : "Analyzing the entire page"}
+                {imageGenerating
+                  ? `Processing ${Math.max(1, targetList.filter((target) => target.type === "image").length)} selected image${targetList.filter((target) => target.type === "image").length === 1 ? "" : "s"}`
+                  : targetList.length
+                    ? `Planning updates for ${targetList.length} selected area${targetList.length === 1 ? "" : "s"}`
+                    : "Analyzing the entire page"}
               </p>
               <p className="mt-0.5 text-[9px] text-slate-600">
                 {imageGenerating
@@ -1047,15 +1231,19 @@ export function AIWorkspace({
             }}
             rows="3"
             placeholder={rocketUser
-              ? selectedTarget
-                ? `Tell Rocket how to update this ${selectedTarget.type || "area"}…`
+              ? targetList.length
+                ? targetList.length === 1
+                  ? `Tell Rocket how to update this ${selectedTarget?.type || "area"}…`
+                  : `Tell Rocket how to update these ${targetList.length} selected areas…`
                 : "Ask Rocket AI to build, redesign, review, or optimize this page…"
               : "Connect Google to start using Rocket AI…"}
             className="w-full resize-none bg-transparent px-1 text-[11px] leading-5 text-slate-200 outline-none placeholder:text-slate-700"
           />
           <div className="mt-1 flex items-center gap-2">
             <span className="truncate text-[8px] text-slate-700">
-              {selectedTarget ? `Target: ${selectedTarget.label || selectedTarget.regionId || selectedTarget.id}` : "Enter to plan · Shift+Enter for a line"}
+              {targetList.length
+                ? `Targets: ${targetList.length}${selectedTarget ? ` · active ${selectedTarget.label || selectedTarget.regionId || selectedTarget.id}` : ""}`
+                : "Enter to plan · Shift+Enter for a line"}
             </span>
             <button
               type="submit"
@@ -1328,9 +1516,17 @@ export function AIWorkspace({
     : TABS.filter((tab) => tab.id !== "inspector");
   const active = visibleTabs.find((tab) => tab.id === activeTab) || visibleTabs[0];
   const ActiveIcon = active.icon;
+  const latestUndoableRun = runs.find((run) => (
+    run.beforeSnapshotJson
+    && !["rolled_back", "no_change"].includes(run.status)
+  ));
 
   return (
-    <aside className="flex h-full w-[400px] flex-shrink-0 border-l border-slate-800 bg-[#0b1120] text-left 2xl:w-[440px]">
+    <aside className={`flex border-l border-slate-800 bg-[#0b1120] text-left ${
+      fullscreen
+        ? "fixed inset-0 z-[100] h-screen w-screen"
+        : "h-full w-[400px] flex-shrink-0 2xl:w-[440px]"
+    }`}>
       <nav className="flex w-12 flex-shrink-0 flex-col items-center gap-1 border-r border-slate-800 bg-[#080d18] py-2">
         {visibleTabs.map(({ id, label, icon: Icon }) => (
           <button
@@ -1365,11 +1561,30 @@ export function AIWorkspace({
                 : `${pageTitle} · ${surface.replaceAll("-", " ")}`}
             </p>
           </div>
-          {onClose && (
-            <button type="button" onClick={onClose} className="ml-auto grid h-7 w-7 place-items-center rounded-lg text-slate-600 hover:bg-slate-900 hover:text-white cursor-pointer" title="Close Rocket AI workspace">
-              <PanelRightClose className="h-3.5 w-3.5" />
+          <div className="ml-auto flex items-center gap-1">
+            <button
+              type="button"
+              disabled={!latestUndoableRun || applying}
+              onClick={() => latestUndoableRun && rollbackRun(latestUndoableRun)}
+              className="grid h-7 w-7 place-items-center rounded-lg text-slate-600 hover:bg-slate-900 hover:text-white disabled:opacity-25 cursor-pointer"
+              title="Undo the latest applied AI edit"
+            >
+              <Undo2 className="h-3.5 w-3.5" />
             </button>
-          )}
+            <button
+              type="button"
+              onClick={() => setFullscreen((value) => !value)}
+              className="grid h-7 w-7 place-items-center rounded-lg text-slate-600 hover:bg-slate-900 hover:text-white cursor-pointer"
+              title={fullscreen ? "Return Rocket AI to the right panel" : "Open Rocket AI full screen"}
+            >
+              {fullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+            </button>
+            {onClose && (
+              <button type="button" onClick={onClose} className="grid h-7 w-7 place-items-center rounded-lg text-slate-600 hover:bg-slate-900 hover:text-white cursor-pointer" title="Close Rocket AI workspace">
+                <PanelRightClose className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
         </header>
         <div className={`min-h-0 flex-1 overflow-y-auto ${activeTab === "chat" ? "flex flex-col overflow-hidden" : ""}`}>
           {panels[activeTab]()}
