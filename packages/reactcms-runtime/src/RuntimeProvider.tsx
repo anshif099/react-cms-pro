@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import {
+  CMSContext,
   CMSProvider,
   EditableRegistryContext,
   MessageBus,
@@ -31,6 +32,7 @@ export interface RuntimeProviderProps {
   routes: any[];
   theme?: ThemeTokens | null;
   pageTrees?: Record<string, PageComponentTree>;
+  preserveApplicationPage?: boolean;
   children: React.ReactNode;
 }
 
@@ -61,6 +63,58 @@ function dispatchRegionValue(
   });
 }
 
+export function runtimeRegionContentSource(editMode: boolean): 'draft' | 'published' {
+  return editMode ? 'draft' : 'published';
+}
+
+function RegionContentHydrator({
+  websiteId,
+  apiKey,
+}: {
+  websiteId: string;
+  apiKey: string;
+}) {
+  const cms = useContext(CMSContext);
+  const pageId = useMemo(resolveCurrentPageId, []);
+  const source = runtimeRegionContentSource(Boolean(cms?.editMode));
+
+  useEffect(() => {
+    let active = true;
+    const hydrate = source === 'draft'
+      ? editableSync.getDraftRegions(apiKey, websiteId, pageId)
+      : editableSync.getPublishedRegions(apiKey, websiteId, pageId);
+
+    void hydrate.then((regions) => {
+      if (!active) return;
+      Object.entries(regions).forEach(([regionId, value]) => {
+        dispatchRegionValue(websiteId, pageId, regionId, value);
+      });
+    });
+
+    const subscribe = source === 'draft'
+      ? editableSync.subscribeToDraftRegions
+      : editableSync.subscribeToPublishedRegions;
+    const unsubscribe = subscribe(
+      apiKey,
+      websiteId,
+      pageId,
+      (regions: Record<string, any>) => {
+        if (!active) return;
+        Object.entries(regions).forEach(([regionId, value]) => {
+          dispatchRegionValue(websiteId, pageId, regionId, value);
+        });
+      },
+    );
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [apiKey, pageId, source, websiteId]);
+
+  return null;
+}
+
 /**
  * Registers the connected application and renders a published ReactCMS page
  * through the native runtime renderer. The application children remain the
@@ -72,6 +126,7 @@ export function RuntimeProvider({
   routes,
   theme = null,
   pageTrees,
+  preserveApplicationPage = false,
   children,
 }: RuntimeProviderProps) {
   const [layouts, setLayouts] = useState<Record<string, RuntimeLayoutDefinition>>({});
@@ -169,41 +224,18 @@ export function RuntimeProvider({
   };
 
   useEffect(() => {
-    const pageId = resolveCurrentPageId();
-
     const start = async () => {
       await registerWebsite(websiteId, apiKey);
       await reportVersions(websiteId, apiKey);
       await registerRoutes(websiteId, apiKey, routes);
       if (theme) await registerTheme(websiteId, apiKey, theme);
       HeartbeatService.start(websiteId, apiKey);
-
-      try {
-        const published = await editableSync.getPublishedRegions(apiKey, websiteId, pageId);
-        Object.entries(published).forEach(([regionId, value]) => {
-          dispatchRegionValue(websiteId, pageId, regionId, value);
-        });
-      } catch (error) {
-        console.warn('[ReactCMS Runtime] Failed to hydrate published regions:', error);
-      }
     };
 
     void start();
 
-    const unsubscribe = editableSync.subscribeToPublishedRegions(
-      apiKey,
-      websiteId,
-      pageId,
-      (published: Record<string, any>) => {
-        Object.entries(published).forEach(([regionId, value]) => {
-          dispatchRegionValue(websiteId, pageId, regionId, value);
-        });
-      },
-    );
-
     return () => {
       HeartbeatService.stop();
-      unsubscribe();
     };
   }, [websiteId, apiKey, routes, theme]);
 
@@ -235,11 +267,13 @@ export function RuntimeProvider({
     <RuntimeContext.Provider value={runtimeContextValue}>
       <EditableRegistryContext.Provider value={{ registerRegion, unregisterRegion }}>
         <CMSProvider websiteId={websiteId} apiKey={apiKey} environment="production">
+          <RegionContentHydrator websiteId={websiteId} apiKey={apiKey} />
           <BuilderSections
             websiteId={websiteId}
             apiKey={apiKey}
             fallback={children}
             layout={defaultLayout?.component}
+            preserveApplicationPage={preserveApplicationPage}
           />
         </CMSProvider>
       </EditableRegistryContext.Provider>

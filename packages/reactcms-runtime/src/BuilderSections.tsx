@@ -465,6 +465,7 @@ export interface BuilderSectionsProps {
   pageId?: string;
   fallback?: React.ReactNode;
   layout?: React.ComponentType<any> | null;
+  preserveApplicationPage?: boolean;
 }
 
 export function BuilderSections({
@@ -473,6 +474,7 @@ export function BuilderSections({
   pageId: pageIdOverride,
   fallback = null,
   layout: Layout = null,
+  preserveApplicationPage = false,
 }: BuilderSectionsProps) {
   const pageId = useMemo(
     () => pageIdOverride?.replace(/^\/+|\/+$/g, '') || resolvePageId(),
@@ -586,6 +588,7 @@ export function BuilderSections({
       onTreeChange={setRuntimeAdditions}
     />
   )) : null;
+  if (preserveApplicationPage) return <>{fallback}{additions}</>;
   if (!resolved || !tree) return <>{fallback}{additions}</>;
   const page = (
     <>
