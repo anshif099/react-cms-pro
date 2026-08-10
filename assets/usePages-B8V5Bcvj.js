@@ -1,0 +1,1 @@
+import{T as e}from"./index-Cd3IPt0b.js";function t(){return e()}export{t};
