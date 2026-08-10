@@ -93,6 +93,14 @@ function decodeRuntimeAdditions(raw: unknown): PageComponentTree | null {
     : null;
 }
 
+export function decodeRuntimeAdditionsForMode(
+  publishedRaw: unknown,
+  draftRaw: unknown,
+  editMode: boolean,
+): PageComponentTree | null {
+  return decodeRuntimeAdditions(editMode ? draftRaw : publishedRaw);
+}
+
 function findNode(nodes: ComponentNode[], nodeId: string): ComponentNode | null {
   for (const node of nodes) {
     if (node.id === nodeId) return node;
@@ -472,6 +480,7 @@ export function BuilderSections({
   );
   const locale = useMemo(resolveLocale, []);
   const cms = useContext(CMSContext);
+  const editMode = Boolean(cms?.editMode);
   const [tree, setTree] = useState<PageComponentTree | null>(null);
   const [runtimeAdditions, setRuntimeAdditions] = useState<PageComponentTree | null>(null);
   const [theme, setTheme] = useState<Record<string, any> | null>(null);
@@ -480,13 +489,18 @@ export function BuilderSections({
   useEffect(() => {
     const database = getFirebaseDatabase(apiKey);
     const publishedRef = ref(database, paths.contentPublished(websiteId, pageId));
+    const draftRef = editMode
+      ? ref(database, paths.contentDraft(websiteId, pageId))
+      : null;
     const themeRef = ref(database, paths.contentTheme(websiteId));
     const unsubscribePage = onValue(
       publishedRef,
       (snapshot) => {
         const value = snapshot.exists() ? snapshot.val() : null;
         setTree(value ? decodePublishedTree(value, pageId, locale) : null);
-        setRuntimeAdditions(value ? decodeRuntimeAdditions(value) : null);
+        if (!editMode) {
+          setRuntimeAdditions(decodeRuntimeAdditionsForMode(value, null, false));
+        }
         setResolved(true);
       },
       (error) => {
@@ -494,6 +508,18 @@ export function BuilderSections({
         setResolved(true);
       },
     );
+    const unsubscribeDraft = draftRef
+      ? onValue(
+        draftRef,
+        (snapshot) => {
+          const value = snapshot.exists() ? snapshot.val() : null;
+          setRuntimeAdditions(decodeRuntimeAdditionsForMode(null, value, true));
+        },
+        (error) => {
+          console.error('[ReactCMS Runtime] Draft additions subscription failed:', error);
+        },
+      )
+      : () => {};
     const unsubscribeTheme = onValue(themeRef, (snapshot) => {
       setTheme(snapshot.exists()
         ? decodeFirebaseObject(snapshot.val())
@@ -501,9 +527,10 @@ export function BuilderSections({
     });
     return () => {
       unsubscribePage();
+      unsubscribeDraft();
       unsubscribeTheme();
     };
-  }, [apiKey, locale, pageId, websiteId]);
+  }, [apiKey, editMode, locale, pageId, websiteId]);
 
   useEffect(() => MessageBus.subscribe((message) => {
     if (message.type !== 'rcms/v1/field-update') return;
