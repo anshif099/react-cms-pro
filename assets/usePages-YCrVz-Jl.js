@@ -1,1 +1,0 @@
-import{T as e}from"./index-DcRdS195.js";function t(){return e()}export{t};

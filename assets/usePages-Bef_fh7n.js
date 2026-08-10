@@ -1,0 +1,1 @@
+import{T as e}from"./index-CpkD-wF9.js";function t(){return e()}export{t};
