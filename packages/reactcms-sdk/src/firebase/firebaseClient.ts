@@ -10,7 +10,6 @@ const DEFAULT_FIREBASE_CONFIG = {
   apiKey: "AIzaSyDX2mOPJqAUguPJNPGj9sxEVVr1dA1_8CQ",
   authDomain: "react-cms-pro.firebaseapp.com",
   projectId: "react-cms-pro",
-  storageBucket: "react-cms-pro.firebasestorage.app",
   databaseURL: "https://react-cms-pro-default-rtdb.firebaseio.com"
 };
 

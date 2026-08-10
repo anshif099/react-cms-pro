@@ -1,86 +1,109 @@
-import { database, storage } from "../lib/firebase";
+import { database } from "../lib/firebase";
 import { ref as dbRef, get, set, remove, push } from "firebase/database";
-import { ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
 import activityLogService from "./activityLogService";
 import searchService from "./searchService";
 
+// Vercel functions cap response bodies at roughly 4.5 MB. Keep stored files
+// below that ceiling so /api/media can reliably deliver every accepted file.
+export const MAX_REALTIME_MEDIA_BYTES = 4 * 1024 * 1024;
+const DEFAULT_MEDIA_ORIGIN = "https://react-cms-pro.vercel.app";
+
+export function mediaDeliveryUrl(websiteId, fileId) {
+  const configuredOrigin = String(
+    import.meta.env?.VITE_REACTCMS_PUBLIC_ORIGIN || DEFAULT_MEDIA_ORIGIN
+  ).replace(/\/$/, "");
+  const parameters = new URLSearchParams({ websiteId, fileId });
+  return `${configuredOrigin}/api/media?${parameters.toString()}`;
+}
+
+function bytesToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+  }
+  return btoa(binary);
+}
+
 export const mediaService = {
-  upload(websiteId, file, folder = "root", onProgress = null) {
-    return new Promise((resolve, reject) => {
-      try {
-        const mediaMetaRef = push(dbRef(database, `media/${websiteId}`));
-        const fileId = mediaMetaRef.key;
-        
-        // Clean name to prevent path issues
-        const cleanName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
-        const storagePath = `media/${websiteId}/${folder}/${fileId}_${cleanName}`;
-        const fileStorageRef = storageRef(storage, storagePath);
+  async upload(websiteId, file, folder = "root", onProgress = null) {
+    if (!file || typeof file.arrayBuffer !== "function") {
+      throw new Error("Choose a valid media file.");
+    }
+    if (file.size > MAX_REALTIME_MEDIA_BYTES) {
+      throw new Error("Realtime Database media files must be 4 MB or smaller.");
+    }
 
-        const uploadTask = uploadBytesResumable(fileStorageRef, file);
+    const mediaMetaRef = push(dbRef(database, `media/${websiteId}`));
+    const fileId = mediaMetaRef.key;
+    const databasePath = `mediaBlobs/${websiteId}/${fileId}`;
+    const blobRef = dbRef(database, databasePath);
+    const contentType = file.type || "application/octet-stream";
+    const createdAt = Date.now();
 
-        uploadTask.on(
-          "state_changed",
-          (snapshot) => {
-            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-            if (onProgress) {
-              onProgress(progress);
-            }
-          },
-          (error) => {
-            console.error("Storage upload error:", error);
-            reject(error);
-          },
-          async () => {
-            try {
-              const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-              
-              const fileData = {
-                id: fileId,
-                name: file.name,
-                url: downloadURL,
-                storagePath,
-                type: file.type || "application/octet-stream",
-                size: file.size,
-                folder: folder || "root",
-                alt: file.name.split(".")[0], // Default alt to filename
-                createdAt: Date.now()
-              };
+    try {
+      onProgress?.(5);
+      const buffer = await file.arrayBuffer();
+      const data = bytesToBase64(buffer);
+      onProgress?.(45);
 
-              await set(mediaMetaRef, fileData);
+      await set(blobRef, {
+        data,
+        contentType,
+        size: file.size,
+        name: file.name,
+        createdAt
+      });
+      onProgress?.(85);
 
-              // Index in search
-              await searchService.index(websiteId, fileId, {
-                type: "media",
-                title: fileData.name,
-                slug: fileData.folder,
-                excerpt: fileData.type,
-                locales: {
-                  en: {
-                    title: fileData.name,
-                    description: fileData.alt || ""
-                  }
-                }
-              });
+      const fileData = {
+        id: fileId,
+        name: file.name,
+        url: mediaDeliveryUrl(websiteId, fileId),
+        databasePath,
+        storage: "realtime-database",
+        type: contentType,
+        size: file.size,
+        folder: folder || "root",
+        alt: file.name.split(".")[0],
+        createdAt
+      };
 
-              await activityLogService.logActivity(
-                "media_uploaded",
-                "Media uploaded",
-                `Uploaded file "${file.name}"`,
-                websiteId
-              );
+      await set(mediaMetaRef, fileData);
+      onProgress?.(100);
 
-              resolve(fileData);
-            } catch (err) {
-              console.error("Error finalizing media DB write:", err);
-              reject(err);
-            }
+      await searchService.index(websiteId, fileId, {
+        type: "media",
+        title: fileData.name,
+        slug: fileData.folder,
+        excerpt: fileData.type,
+        locales: {
+          en: {
+            title: fileData.name,
+            description: fileData.alt || ""
           }
-        );
-      } catch (err) {
-        console.error("Upload preparation error:", err);
-        reject(err);
+        }
+      });
+
+      await activityLogService.logActivity(
+        "media_uploaded",
+        "Media uploaded",
+        `Uploaded file "${file.name}"`,
+        websiteId
+      );
+
+      return fileData;
+    } catch (error) {
+      // A failed upload must not leave a blob or dangling metadata record.
+      try {
+        await Promise.all([remove(blobRef), remove(mediaMetaRef)]);
+      } catch (cleanupError) {
+        console.warn("Could not clean up failed Realtime Database media upload:", cleanupError);
       }
-    });
+      console.error("Realtime Database media upload error:", error);
+      throw error;
+    }
   },
 
   async getAll(websiteId) {
@@ -121,16 +144,8 @@ export const mediaService = {
 
       const fileData = snapshot.val();
 
-      // Delete from Firebase Storage if path exists
-      if (fileData.storagePath) {
-        const fileStorageRef = storageRef(storage, fileData.storagePath);
-        try {
-          await deleteObject(fileStorageRef);
-        } catch (storageErr) {
-          // If storage object is already deleted, log and proceed to clear DB
-          console.warn("File object not found in storage, clearing from DB:", storageErr);
-        }
-      }
+      const databasePath = fileData.databasePath || `mediaBlobs/${websiteId}/${fileId}`;
+      await remove(dbRef(database, databasePath));
 
       // Delete from Database
       await remove(docRef);

@@ -55,7 +55,7 @@ export function MediaLibraryPage() {
   };
 
   const handleDelete = async (fileId) => {
-    if (window.confirm("Are you sure you want to permanently delete this media file from cloud storage?")) {
+    if (window.confirm("Are you sure you want to permanently delete this media file from Realtime Database?")) {
       try {
         await deleteFile(websiteId, fileId);
         if (selectedFile?.id === fileId) {

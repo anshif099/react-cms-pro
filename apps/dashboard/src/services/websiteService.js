@@ -1,9 +1,5 @@
-import { database, storage } from "../lib/firebase";
+import { database } from "../lib/firebase";
 import { ref, get, set, push, update, serverTimestamp } from "firebase/database";
-import {
-  deleteObject,
-  ref as storageRef
-} from "firebase/storage";
 import { 
   generateWebsiteId, 
   generateApiKey, 
@@ -19,34 +15,6 @@ async function hashSecretKey(key) {
   const hashBuffer = await window.crypto.subtle.digest("SHA-256", data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
-}
-
-function collectArtifactPaths(value, paths = new Set()) {
-  if (!value || typeof value !== "object") return paths;
-  if (typeof value.storagePath === "string") paths.add(value.storagePath);
-  if (typeof value.artifactPath === "string") paths.add(value.artifactPath);
-  Object.values(value).forEach((child) => collectArtifactPaths(child, paths));
-  return paths;
-}
-
-async function deleteWebsiteArtifacts(id) {
-  const [mediaSnapshot, codebaseSnapshot, importsSnapshot] = await Promise.all([
-    get(ref(database, `media/${id}`)),
-    get(ref(database, `codebases/${id}`)),
-    get(ref(database, `imports/${id}`))
-  ]);
-  const paths = new Set();
-  [mediaSnapshot, codebaseSnapshot, importsSnapshot].forEach((snapshot) => {
-    if (snapshot.exists()) collectArtifactPaths(snapshot.val(), paths);
-  });
-
-  await Promise.all(Array.from(paths).map(async (path) => {
-    try {
-      await deleteObject(storageRef(storage, path));
-    } catch (error) {
-      if (error?.code !== "storage/object-not-found") throw error;
-    }
-  }));
 }
 
 export const websiteService = {
@@ -191,10 +159,6 @@ export const websiteService = {
       const website = await this.getById(id);
       if (!website) return true;
 
-      // Remove binary artifacts before deleting metadata. If Storage rejects
-      // cleanup, keep the website record so the user can retry safely.
-      await deleteWebsiteArtifacts(id);
-
       // Firebase multi-path updates are atomic. This prevents deleted websites
       // from leaving pages, drafts, registries, revisions, or source manifests.
       await update(ref(database), {
@@ -204,6 +168,7 @@ export const websiteService = {
         [`registry/${id}`]: null,
         [`revisions/${id}`]: null,
         [`media/${id}`]: null,
+        [`mediaBlobs/${id}`]: null,
         [`searchIndex/${id}`]: null,
         [`contentTypes/${id}`]: null,
         [`global/${id}`]: null,

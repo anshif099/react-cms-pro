@@ -10,6 +10,9 @@
     },
     "api/live-preview.js": {
       "maxDuration": 30
+    },
+    "api/media.js": {
+      "maxDuration": 30
     }
   },
   "rewrites": [
