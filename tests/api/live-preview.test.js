@@ -203,6 +203,20 @@ describe("live preview HTML rewriting", () => {
     expect(result).toContain('setBridgedStyle(element, "background", value.background, hasBackground)');
   });
 
+  it("bridges one-shot AI area selection from an opaque sandbox", () => {
+    const result = rewritePreviewHtml(
+      "<html><head></head><body><div id=\"root\"></div></body></html>",
+      "https://example.com/",
+      "/ad?rcms_edit=1"
+    );
+
+    expect(result).toContain('message.type === "rcms/v1/enter-area-select"');
+    expect(result).toContain('event.target.closest("[data-rcms-region]")');
+    expect(result).toContain('type: "rcms/v1/region-selected"');
+    expect(result).toContain("selectedRegionValue(target, regionId, type)");
+    expect(result).toContain("event.stopImmediatePropagation()");
+  });
+
   it("blocks javascript iframe navigation without granting preview same-origin access", () => {
     const result = rewritePreviewHtml(
       "<html><head></head><body></body></html>",

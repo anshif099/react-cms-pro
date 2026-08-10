@@ -1,8 +1,9 @@
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
-import { getDatabase, Database } from 'firebase/database';
+import { forceWebSockets, getDatabase, Database } from 'firebase/database';
 
 let firebaseApp: FirebaseApp | null = null;
 let firebaseDatabase: Database | null = null;
+let firebaseTransportConfigured = false;
 
 // Default config matching the dashboard's project structure
 const DEFAULT_FIREBASE_CONFIG = {
@@ -34,6 +35,13 @@ export function getFirebaseApp(apiKey?: string): FirebaseApp {
 export function getFirebaseDatabase(apiKey?: string): Database {
   if (firebaseDatabase) return firebaseDatabase;
 
+  if (!firebaseTransportConfigured) {
+    // Firebase's long-poll fallback creates and reads a nested iframe. That is
+    // forbidden in ReactCMS's intentionally opaque live-preview sandbox.
+    // WebSockets avoid cross-frame DOM access and are the primary RTDB transport.
+    forceWebSockets();
+    firebaseTransportConfigured = true;
+  }
   const app = getFirebaseApp(apiKey);
   firebaseDatabase = getDatabase(app);
   return firebaseDatabase;

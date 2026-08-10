@@ -227,6 +227,8 @@ function runtimeBootstrap(baseUrl, route, proxyOrigin) {
   var assetProxyPath = ${JSON.stringify(`${proxyOrigin}${ASSET_PROXY_PATH}`)};
   var previewRoute = ${JSON.stringify(route)};
   var embeddedEditorToolbarHidden = false;
+  var areaSelectionArmed = false;
+  var bridgeWebsiteId = "";
   var liveRegionValues = Object.create(null);
   var bridgedElementStyles = typeof WeakMap === "function" ? new WeakMap() : null;
   try { history.replaceState(null, "", previewRoute); } catch (_) {}
@@ -296,6 +298,72 @@ function runtimeBootstrap(baseUrl, route, proxyOrigin) {
     });
   }
 
+  function selectedRegionValue(element, regionId, type) {
+    if (Object.prototype.hasOwnProperty.call(liveRegionValues, regionId)) {
+      return liveRegionValues[regionId];
+    }
+    if (type === "image") {
+      return {
+        src: element.currentSrc || element.getAttribute("src") || "",
+        alt: element.getAttribute("alt") || ""
+      };
+    }
+    if (type === "video") {
+      return { src: element.currentSrc || element.getAttribute("src") || "" };
+    }
+    if (type === "button") {
+      return {
+        text: (element.textContent || "").trim(),
+        url: element.getAttribute("href") || ""
+      };
+    }
+    if (type === "section") {
+      var style = window.getComputedStyle(element);
+      return {
+        background: style.backgroundColor || "",
+        paddingY: parseFloat(style.paddingTop || "0") || 0
+      };
+    }
+    return (element.textContent || "").trim();
+  }
+
+  function bridgeAreaSelection(event) {
+    if (!areaSelectionArmed) return;
+    var target = event.target && event.target.closest
+      ? event.target.closest("[data-rcms-region]")
+      : null;
+    if (!target) return;
+    var regionId = target.getAttribute("data-rcms-region");
+    if (!regionId) return;
+    var type = target.getAttribute("data-rcms-type") || "text";
+    var label = target.getAttribute("data-rcms-label") || regionId;
+    areaSelectionArmed = false;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    var base = {
+      rcms: true,
+      version: "v1",
+      websiteId: bridgeWebsiteId,
+      timestamp: Date.now()
+    };
+    window.parent.postMessage(Object.assign({}, base, {
+      type: "rcms/v1/region-selected",
+      payload: {
+        regionId: regionId,
+        type: type,
+        label: label,
+        value: selectedRegionValue(target, regionId, type),
+        additive: !!(event.metaKey || event.ctrlKey || event.shiftKey)
+      }
+    }), "*");
+    window.parent.postMessage(Object.assign({}, base, {
+      type: "rcms/v1/open-inspector",
+      payload: { regionId: regionId, type: type, label: label }
+    }), "*");
+  }
+
+  document.addEventListener("click", bridgeAreaSelection, true);
+
   window.addEventListener("message", function (event) {
     var message = event.data;
     if (
@@ -304,8 +372,17 @@ function runtimeBootstrap(baseUrl, route, proxyOrigin) {
       || typeof message !== "object"
       || message.rcms !== true
       || message.version !== "v1"
-      || message.type !== "rcms/v1/field-update"
     ) return;
+    if (typeof message.websiteId === "string") bridgeWebsiteId = message.websiteId;
+    if (message.type === "rcms/v1/enter-area-select") {
+      areaSelectionArmed = true;
+      return;
+    }
+    if (message.type === "rcms/v1/exit-area-select") {
+      areaSelectionArmed = false;
+      return;
+    }
+    if (message.type !== "rcms/v1/field-update") return;
     var payload = message.payload;
     if (!payload || typeof payload.regionId !== "string") return;
     liveRegionValues[payload.regionId] = payload.value;

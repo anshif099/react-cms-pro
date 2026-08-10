@@ -582,6 +582,7 @@ function ConnectedSourceWorkspace({
       }
 
       if (!isPreview && message.type === "rcms/v1/region-selected") {
+        sendRuntimeMessage("rcms/v1/exit-area-select");
         const payload = message.payload || {};
         const metadataOnly = !payload.type
           && !Object.prototype.hasOwnProperty.call(payload, "value");
@@ -1453,10 +1454,17 @@ function ConnectedSourceWorkspace({
                   additiveSelectionRequestRef.current = Boolean(options?.additive);
                   if (!options?.additive) clearConnectedSelection();
                   sendRuntimeMessage("rcms/v1/enter-edit-mode");
+                  sendRuntimeMessage("rcms/v1/enter-area-select");
                   window.setTimeout(() => iframeRef.current?.focus(), 0);
                 }}
-                onClearAreaSelection={clearConnectedSelection}
-                onClose={() => setAIOpen(false)}
+                onClearAreaSelection={() => {
+                  sendRuntimeMessage("rcms/v1/exit-area-select");
+                  clearConnectedSelection();
+                }}
+                onClose={() => {
+                  sendRuntimeMessage("rcms/v1/exit-area-select");
+                  setAIOpen(false);
+                }}
               />
             </Suspense>
           )}
@@ -1504,10 +1512,17 @@ function ConnectedSourceWorkspace({
                   additiveSelectionRequestRef.current = Boolean(options?.additive);
                   if (!options?.additive) clearConnectedSelection();
                   sendRuntimeMessage("rcms/v1/enter-edit-mode");
+                  sendRuntimeMessage("rcms/v1/enter-area-select");
                   window.setTimeout(() => iframeRef.current?.focus(), 0);
                 }}
-                onClearAreaSelection={clearConnectedSelection}
-                onClose={() => setAIOpen(false)}
+                onClearAreaSelection={() => {
+                  sendRuntimeMessage("rcms/v1/exit-area-select");
+                  clearConnectedSelection();
+                }}
+                onClose={() => {
+                  sendRuntimeMessage("rcms/v1/exit-area-select");
+                  setAIOpen(false);
+                }}
               />
             </Suspense>
           )}
