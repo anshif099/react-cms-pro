@@ -1196,7 +1196,7 @@ function ConnectedSourceWorkspace({
             className="h-8 flex-1 rounded-lg border border-slate-800 bg-[#080d18] px-3 text-[11px] text-slate-200 outline-none focus:border-blue-500"
           />
           <span className="hidden lg:inline text-[9px] text-slate-600">
-            Stored only in this browser, never in Firebase
+            Saved automatically in this browser, never in Firebase
           </span>
         </div>
       )}
@@ -2622,6 +2622,17 @@ export function VisualBuilderPage() {
     return true;
   }, [pageKey, performSave, persistConnectedRegion, saveConnectedDraft, sourceWebsite?.websiteId, stageAIExecution, websiteId]);
 
+  const handleSourceWriteTokenChange = useCallback((token) => {
+    setSourceWriteToken(token);
+    if (!websiteId) return;
+
+    if (String(token || "").trim()) {
+      sourceCredentialService.rememberGitHub(websiteId, token);
+    } else {
+      sourceCredentialService.forgetGitHub(websiteId);
+    }
+  }, [websiteId]);
+
   if (isConnectedSourcePage) {
     return (
       <ConnectedSourceWorkspace
@@ -2641,7 +2652,7 @@ export function VisualBuilderPage() {
         saving={sourceSaving}
         publishing={sourcePublishing}
         writeToken={sourceWriteToken}
-        onWriteTokenChange={setSourceWriteToken}
+        onWriteTokenChange={handleSourceWriteTokenChange}
         onBack={() => navigate(`/content/${websiteId}/pages`)}
         onChange={(content) => {
           sourceFilesRef.current = {
@@ -2699,7 +2710,7 @@ export function VisualBuilderPage() {
         saving={connectedSaving}
         publishing={connectedPublishing}
         writeToken={sourceWriteToken}
-        onWriteTokenChange={setSourceWriteToken}
+        onWriteTokenChange={handleSourceWriteTokenChange}
         onBack={() => navigate(`/content/${websiteId}/pages`)}
         onChange={() => {}}
         onVisualChange={persistConnectedRegion}

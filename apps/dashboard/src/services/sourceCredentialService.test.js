@@ -30,6 +30,27 @@ describe("source credentials", () => {
     });
   });
 
+  it("prefers the durable GitHub token over a stale session credential", () => {
+    sourceCredentialService.rememberGitHub("site-1", "github-token");
+    sessionStorage.setItem(
+      "reactcms_source_credentials:site-1",
+      JSON.stringify({ provider: "github", token: "stale-token" })
+    );
+
+    expect(sourceCredentialService.get("site-1").token).toBe("github-token");
+  });
+
+  it("migrates a GitHub token created by a session-only build", () => {
+    sessionStorage.setItem(
+      "reactcms_source_credentials:site-legacy",
+      JSON.stringify({ provider: "github", token: "legacy-token" })
+    );
+
+    expect(sourceCredentialService.get("site-legacy").token).toBe("legacy-token");
+    sessionStorage.removeItem("reactcms_source_credentials:site-legacy");
+    expect(sourceCredentialService.get("site-legacy").token).toBe("legacy-token");
+  });
+
   it("does not persist hosting passwords beyond the current session", () => {
     sourceCredentialService.rememberSftp("site-2", {
       host: "ftp.example.com",
@@ -46,5 +67,12 @@ describe("source credentials", () => {
     sourceCredentialService.clear("site-3");
 
     expect(sourceCredentialService.get("site-3")).toEqual({});
+  });
+
+  it("forgets only the GitHub credential", () => {
+    sourceCredentialService.rememberGitHub("site-4", "github-token");
+    sourceCredentialService.forgetGitHub("site-4");
+
+    expect(sourceCredentialService.get("site-4")).toEqual({});
   });
 });

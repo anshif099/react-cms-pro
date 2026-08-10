@@ -17,34 +17,90 @@ function parseStoredValue(value) {
   }
 }
 
+function getStorage(name) {
+  try {
+    return globalThis[name] || null;
+  } catch {
+    return null;
+  }
+}
+
+function readStoredValue(storageName, key) {
+  try {
+    return parseStoredValue(getStorage(storageName)?.getItem(key));
+  } catch {
+    return {};
+  }
+}
+
+function writeStoredValue(storageName, key, value) {
+  try {
+    getStorage(storageName)?.setItem(key, JSON.stringify(value));
+  } catch {
+    // Storage can be unavailable in privacy-restricted browser contexts.
+  }
+}
+
+function removeStoredValue(storageName, key) {
+  try {
+    getStorage(storageName)?.removeItem(key);
+  } catch {
+    // Treat an unavailable storage area as already cleared.
+  }
+}
+
 function read(websiteId) {
   if (!websiteId) return {};
-  if (typeof sessionStorage !== "undefined") {
-    const sessionValue = parseStoredValue(
-      sessionStorage.getItem(sessionKey(websiteId))
-    );
-    if (Object.keys(sessionValue).length) return sessionValue;
+
+  const persistentGitHubValue = readStoredValue(
+    "localStorage",
+    githubStorageKey(websiteId)
+  );
+  if (
+    persistentGitHubValue.provider === "github"
+    && persistentGitHubValue.token
+  ) {
+    return persistentGitHubValue;
   }
-  if (typeof localStorage !== "undefined") {
-    return parseStoredValue(localStorage.getItem(githubStorageKey(websiteId)));
+
+  const sessionValue = readStoredValue("sessionStorage", sessionKey(websiteId));
+  if (Object.keys(sessionValue).length) {
+    // Migrate tokens saved by older builds from session-only to durable storage.
+    if (sessionValue.provider === "github" && sessionValue.token) {
+      writeStoredValue(
+        "localStorage",
+        githubStorageKey(websiteId),
+        sessionValue
+      );
+    }
+    return sessionValue;
   }
-  return {};
+
+  return persistentGitHubValue;
 }
 
 function write(websiteId, value) {
-  if (!websiteId || typeof sessionStorage === "undefined") return;
-  sessionStorage.setItem(sessionKey(websiteId), JSON.stringify(value));
+  if (!websiteId) return;
+  writeStoredValue("sessionStorage", sessionKey(websiteId), value);
 }
 
 function writeGitHub(websiteId, value) {
   write(websiteId, value);
-  if (!websiteId || typeof localStorage === "undefined") return;
-  localStorage.setItem(githubStorageKey(websiteId), JSON.stringify(value));
+  if (!websiteId) return;
+  writeStoredValue("localStorage", githubStorageKey(websiteId), value);
 }
 
 function clearStoredGitHub(websiteId) {
-  if (!websiteId || typeof localStorage === "undefined") return;
-  localStorage.removeItem(githubStorageKey(websiteId));
+  if (!websiteId) return;
+  removeStoredValue("localStorage", githubStorageKey(websiteId));
+}
+
+function clearSessionGitHub(websiteId) {
+  if (!websiteId) return;
+  const value = readStoredValue("sessionStorage", sessionKey(websiteId));
+  if (value.provider === "github") {
+    removeStoredValue("sessionStorage", sessionKey(websiteId));
+  }
 }
 
 export const sourceCredentialService = {
@@ -55,6 +111,11 @@ export const sourceCredentialService = {
       provider: "github",
       token: normalized
     });
+  },
+
+  forgetGitHub(websiteId) {
+    clearSessionGitHub(websiteId);
+    clearStoredGitHub(websiteId);
   },
 
   rememberCPanel(websiteId, credentials) {
@@ -89,9 +150,7 @@ export const sourceCredentialService = {
 
   clear(websiteId) {
     if (!websiteId) return;
-    if (typeof sessionStorage !== "undefined") {
-      sessionStorage.removeItem(sessionKey(websiteId));
-    }
+    removeStoredValue("sessionStorage", sessionKey(websiteId));
     clearStoredGitHub(websiteId);
   }
 };
