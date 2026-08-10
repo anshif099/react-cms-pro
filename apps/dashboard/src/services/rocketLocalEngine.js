@@ -2,22 +2,10 @@ import { auditAIContext, flattenContextTree } from "./aiWebsiteContextService";
 
 const MODEL_RELEASES = Object.freeze([
   Object.freeze({
-    releaseId: "rocket-ai-instant",
-    name: "Rocket AI Instant",
-    version: "1.01",
-    description: "Fast exact edits and short page conversations"
-  }),
-  Object.freeze({
-    releaseId: "rocket-ai-pro",
-    name: "Rocket AI Pro",
-    version: "1.2",
-    description: "Balanced planning, design, and content changes"
-  }),
-  Object.freeze({
     releaseId: "rocket-ai-ultra",
     name: "Rocket AI Ultra",
     version: "1.5",
-    description: "Complex full-page planning and coordinated redesigns"
+    description: "Adaptive full-context planning, visual generation, and coordinated page editing"
   })
 ]);
 const DEFAULT_MODEL_RELEASE = "rocket-ai-ultra";
@@ -182,17 +170,34 @@ function currentModelInfo(preferredModelId = "") {
   const release = modelRelease(preferredModelId || storedPreference);
   const curriculumRevision = Math.max(0, Number(state.curriculumRevision) || 0);
   const trainedExamples = Math.max(0, Number(state.trainedExamples) || 0);
+  const interactionCount = Math.max(0, Number(state.interactionCount) || 0);
+  const version = curriculumRevision
+    ? `${release.version}.${curriculumRevision}`
+    : release.version;
+  const contextCoverage = Math.min(100, Math.max(0, Number(state.contextCoverage) || 0));
+  const learningProgress = Math.min(100, Math.round(
+    18
+    + Math.min(42, interactionCount * 4)
+    + Math.min(25, trainedExamples * 3)
+    + contextCoverage * 0.15
+  ));
   return {
-    id: `${release.releaseId}-${release.version}`,
+    id: `${release.releaseId}-${version}`,
     releaseId: release.releaseId,
     name: release.name,
-    version: release.version,
+    version,
+    baseVersion: release.version,
+    nextVersion: `${release.version}.${curriculumRevision + 1}`,
     description: release.description,
     curriculumRevision,
     trainedExamples,
+    interactionCount,
+    contextCoverage,
+    learningProgress,
+    lastIntent: String(state.lastIntent || ""),
     updatedAt: Number(state.updatedAt) || null,
     runtime: "browser",
-    trainingMode: "approved-feedback curriculum"
+    trainingMode: "full-context adaptive curriculum"
   };
 }
 
@@ -457,6 +462,11 @@ function requestedSections(text) {
   if (includesAny(text, ["landing page", "homepage", "home page", "saas website", "agency website"])) {
     return ["hero", "features", "testimonials", "pricing", "faq", "cta"];
   }
+  const requestsImageCollection = /\b(?:images|photos|pictures|illustrations|artworks|visuals)\b/.test(text)
+    || /\b(?:\d+|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(?:\w+\s+){0,3}(?:image|photo|picture|illustration|artwork|visual)s?\b/.test(text);
+  if (requestsImageCollection && /\b(?:contents?|captions?|gallery|collection|grid|field|section|block)\b/.test(text)) {
+    return ["gallery"];
+  }
   const beforeFooter = /\b(?:above|before)\s+(?:the\s+)?footer\b/.test(text);
   const requested = SECTION_TERMS
     .filter(([type, terms]) => (
@@ -481,8 +491,35 @@ function requestedSections(text) {
   return [];
 }
 
-function componentIntentPatches(type, intent, locale) {
+function generatedGalleryItems(context) {
+  const prepared = context?.currentPage?.preparedGeneratedAssets;
+  if (!Array.isArray(prepared)) return [];
+  return prepared.slice(0, 12).map((asset, index) => ({
+    id: asset.id || `generated-image-${index + 1}`,
+    src: asset.url,
+    alt: asset.alt || `Advertisement visual ${index + 1}`,
+    caption: asset.caption || asset.description || `Campaign visual ${index + 1}`,
+    title: asset.title || `Campaign visual ${index + 1}`,
+    description: asset.description || asset.caption || "Generated for this advertising campaign."
+  })).filter((asset) => asset.src);
+}
+
+function componentIntentPatches(type, intent, locale, context) {
   const text = normalized(intent);
+  if (type === "gallery") {
+    const images = generatedGalleryItems(context);
+    if (!images.length) return [];
+    return [
+      patch(`props.locales.${locale}.title`, "Advertising Campaign Gallery"),
+      patch(
+        `props.locales.${locale}.subtitle`,
+        `${images.length} coordinated campaign visual${images.length === 1 ? "" : "s"} with matching page content.`
+      ),
+      patch("props.images", images),
+      patch("props.columns", images.length >= 3 ? "3" : String(Math.max(1, images.length))),
+      patch("props.gap", 18)
+    ];
+  }
   if (
     type === "features"
     && /\b(?:api|apis|advertising|advertisement|ad campaign|ad campaigns|ads)\b/.test(text)
@@ -523,6 +560,31 @@ function componentIntentPatches(type, intent, locale) {
   return [];
 }
 
+function selectedRelativePlacement(intent) {
+  const text = normalized(intent);
+  if (/\b(?:above|before)\s+(?:the\s+)?(?:selected|current|this|active)\s*(?:area|section|component|field|block)?\b/.test(text)) {
+    return "before";
+  }
+  if (/\b(?:below|after)\s+(?:the\s+)?(?:selected|current|this|active)\s*(?:area|section|component|field|block)?\b/.test(text)) {
+    return "after";
+  }
+  if (/\b(?:inside|within|in)\s+(?:the\s+)?(?:selected|current|this|active)\s+(?:area|section|component|field|block)\b/.test(text)) {
+    return "inside";
+  }
+  return "";
+}
+
+function runtimePlacementPatches(context, intent) {
+  const position = selectedRelativePlacement(intent);
+  if (!position) return [];
+  const selectedRegion = selectedRegions(context).at(-1);
+  if (!selectedRegion?.regionId) return [];
+  return [patch("metadata.runtimePlacement", {
+    anchorRegionId: selectedRegion.regionId,
+    position
+  })];
+}
+
 function addSections(operations, addOperation, context, types, intent = "") {
   const capabilities = new Set(context?.capabilities || []);
   if (!capabilities.has("insert_component") || !types.length) return false;
@@ -530,10 +592,20 @@ function addSections(operations, addOperation, context, types, intent = "") {
   const roots = context?.currentPage?.componentTree?.children || [];
   const beforeFooter = /\b(?:above|before)\s+(?:the\s+)?footer\b/.test(normalized(intent));
   const footer = beforeFooter ? roots.find((node) => node.type === "footer") : null;
-  let targetId = footer?.id || roots.at(-1)?.id || null;
-  let position = footer ? "before" : "after";
+  const relativePosition = selectedRelativePlacement(intent);
+  const selectedTreeNode = selectedComponents(context)
+    .map((selected) => flattenContextTree(context?.currentPage?.componentTree)
+      .find((node) => node.id === selected.id))
+    .find(Boolean);
+  let targetId = selectedTreeNode?.id || footer?.id || roots.at(-1)?.id || null;
+  let position = selectedTreeNode && relativePosition
+    ? relativePosition
+    : footer ? "before" : "after";
   let inserted = 0;
   const locale = context?.currentPage?.locale || "en";
+  const placementPatches = selectedTreeNode?.metadata?.runtimePlacement
+    ? [patch("metadata.runtimePlacement", selectedTreeNode.metadata.runtimePlacement)]
+    : runtimePlacementPatches(context, intent);
 
   types.forEach((type) => {
     if (allowed.size && !allowed.has(type)) return;
@@ -547,7 +619,8 @@ function addSections(operations, addOperation, context, types, intent = "") {
         patch("label", type.split("-").map((part) => (
           part.charAt(0).toUpperCase() + part.slice(1)
         )).join(" ")),
-        ...componentIntentPatches(type, intent, locale)
+        ...placementPatches,
+        ...componentIntentPatches(type, intent, locale, context)
       ]
     });
     operations.push(item);
@@ -1080,6 +1153,42 @@ function storage() {
   }
 }
 
+function promptContextCoverage(context) {
+  const page = context?.currentPage || {};
+  const checks = [
+    Boolean(page.record || page.settings),
+    Boolean(page.componentTree),
+    Boolean(page.editableRegionDefinitions || page.editableRegionValues),
+    Boolean(page.selectedRegion || page.selectedRegions?.length || page.selectedComponent || page.selectedComponents?.length),
+    Boolean(context?.designSystem?.theme),
+    Array.isArray(context?.contentSystem?.assets),
+    Array.isArray(context?.capabilities) && context.capabilities.length > 0,
+    Boolean(context?.constraints)
+  ];
+  return Math.round((checks.filter(Boolean).length / checks.length) * 100);
+}
+
+function capturePromptLearning(value) {
+  const target = storage();
+  if (!target) return false;
+  const previousState = readStoredJson(MODEL_STATE_KEY, {});
+  const priorInteractions = Math.max(0, Number(previousState.interactionCount) || 0);
+  const coverage = promptContextCoverage(value.context);
+  const previousCoverage = Math.max(0, Number(previousState.contextCoverage) || 0);
+  target.setItem(MODEL_STATE_KEY, JSON.stringify({
+    ...previousState,
+    activeModel: DEFAULT_MODEL_RELEASE,
+    modelPreferenceVersion: MODEL_PREFERENCE_VERSION,
+    curriculumRevision: Math.max(0, Number(previousState.curriculumRevision) || 0) + 1,
+    interactionCount: priorInteractions + 1,
+    contextCoverage: Math.round(((previousCoverage * priorInteractions) + coverage) / (priorInteractions + 1)),
+    lastIntent: String(value.intent || "").slice(0, 240),
+    lastPlannedOperations: value.plan?.operations?.length || 0,
+    updatedAt: Date.now()
+  }));
+  return true;
+}
+
 function captureFeedback(value) {
   const target = storage();
   if (!target) return false;
@@ -1105,7 +1214,6 @@ function captureFeedback(value) {
   const previousState = readStoredJson(MODEL_STATE_KEY, {});
   target.setItem(MODEL_STATE_KEY, JSON.stringify({
     ...previousState,
-    curriculumRevision: Math.max(0, Number(previousState.curriculumRevision) || 0) + 1,
     trainedExamples: Math.max(0, Number(previousState.trainedExamples) || 0) + 1,
     updatedAt: record.capturedAt
   }));
@@ -1181,6 +1289,7 @@ export const rocketLocalEngine = {
 
   async createPlan(input) {
     const plan = buildPlan(input);
+    capturePromptLearning({ ...input, plan });
     const modelInfo = currentModelInfo(input.modelId);
     return {
       plan,

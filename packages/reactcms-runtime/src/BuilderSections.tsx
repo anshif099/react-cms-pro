@@ -179,7 +179,34 @@ function refreshNodeIds(node: ComponentNode, suffix: string): ComponentNode {
   };
 }
 
-function makeRuntimeNode(type: string, locale: string): ComponentNode {
+type RuntimePlacement = {
+  anchorRegionId?: string;
+  position: DropPosition | 'footer';
+};
+
+function normalizedRuntimePlacement(value: unknown): RuntimePlacement {
+  if (!value || typeof value !== 'object') return { position: 'footer' };
+  const candidate = value as Record<string, unknown>;
+  const anchorRegionId = String(candidate.anchorRegionId || '').trim();
+  const position = ['before', 'inside', 'after'].includes(String(candidate.position))
+    ? candidate.position as DropPosition
+    : 'footer';
+  return anchorRegionId && position !== 'footer'
+    ? { anchorRegionId, position }
+    : { position: 'footer' };
+}
+
+function placementKey(placement: RuntimePlacement): string {
+  return placement.anchorRegionId
+    ? `${placement.position}:${placement.anchorRegionId}`
+    : 'footer';
+}
+
+function makeRuntimeNode(
+  type: string,
+  locale: string,
+  placement: RuntimePlacement = { position: 'footer' },
+): ComponentNode {
   const safeType = type || 'section';
   const id = `${safeType.replace(/[^a-zA-Z0-9_-]/g, '_')}_${Date.now().toString(36)}`;
   const field = ['input', 'textarea-field', 'select-field', 'checkbox'].includes(safeType);
@@ -196,6 +223,7 @@ function makeRuntimeNode(type: string, locale: string): ComponentNode {
       design: {},
     },
     children: [],
+    ...(placement.anchorRegionId ? { metadata: { runtimePlacement: placement } } : {}),
   };
 }
 
@@ -204,6 +232,9 @@ function RuntimeAdditionsPortal({
   pageId,
   locale,
   tree,
+  nodes,
+  placement,
+  hostKey,
   theme,
   editMode,
   onTreeChange,
@@ -212,6 +243,9 @@ function RuntimeAdditionsPortal({
   pageId: string;
   locale: string;
   tree: PageComponentTree;
+  nodes: ComponentNode[];
+  placement: RuntimePlacement;
+  hostKey: string;
   theme: Record<string, any> | null;
   editMode: boolean;
   onTreeChange: (tree: PageComponentTree) => void;
@@ -223,13 +257,40 @@ function RuntimeAdditionsPortal({
 
   useEffect(() => {
     if (typeof document === 'undefined') return undefined;
-    let portalHost = document.querySelector<HTMLElement>('[data-rcms-runtime-additions-host]');
+    let portalHost = Array.from(document.querySelectorAll<HTMLElement>('[data-rcms-runtime-additions-host]'))
+      .find((candidate) => candidate.dataset.rcmsRuntimeAdditionsHost === hostKey) || null;
     let created = false;
     const attach = () => {
       if (!portalHost) {
         portalHost = document.createElement('div');
-        portalHost.dataset.rcmsRuntimeAdditionsHost = 'true';
+        portalHost.dataset.rcmsRuntimeAdditionsHost = hostKey;
         created = true;
+      }
+      const anchor = placement.anchorRegionId
+        ? Array.from(document.querySelectorAll<HTMLElement>('[data-rcms-region]'))
+          .find((candidate) => candidate.dataset.rcmsRegion === placement.anchorRegionId)
+        : null;
+      if (anchor) {
+        if (placement.position === 'inside') {
+          if (portalHost.parentElement !== anchor) anchor.appendChild(portalHost);
+          setHost(portalHost);
+          return;
+        }
+        const parent = anchor.parentElement;
+        if (parent && placement.position === 'before') {
+          if (portalHost.parentElement !== parent || portalHost.nextSibling !== anchor) {
+            parent.insertBefore(portalHost, anchor);
+          }
+          setHost(portalHost);
+          return;
+        }
+        if (parent && placement.position === 'after') {
+          if (portalHost.parentElement !== parent || anchor.nextSibling !== portalHost) {
+            parent.insertBefore(portalHost, anchor.nextSibling);
+          }
+          setHost(portalHost);
+          return;
+        }
       }
       const footer = document.querySelector<HTMLElement>(
         'footer, [data-rcms-type="footer"], .footer-section',
@@ -251,7 +312,7 @@ function RuntimeAdditionsPortal({
       observer.disconnect();
       if (created) portalHost?.remove();
     };
-  }, []);
+  }, [hostKey, placement.anchorRegionId, placement.position]);
 
   const commit = useCallback((next: PageComponentTree) => {
     onTreeChange(next);
@@ -263,13 +324,13 @@ function RuntimeAdditionsPortal({
   }, [onTreeChange, pageId, websiteId]);
 
   const addNode = useCallback((componentType = 'section', targetId = '', position: DropPosition = 'after') => {
-    const addition = makeRuntimeNode(componentType, locale);
+    const addition = makeRuntimeNode(componentType, locale, placement);
     const children = targetId
       ? insertNode(tree.children, targetId, position, addition)
       : [...tree.children, addition];
     commit({ ...tree, children });
     setSelectedIds([addition.id]);
-  }, [commit, locale, tree]);
+  }, [commit, locale, placement, tree]);
 
   const handleMutation = useCallback((mutation: RendererMutation) => {
     commit({
@@ -345,9 +406,9 @@ function RuntimeAdditionsPortal({
 
   if (!host) return null;
   return createPortal(
-    tree.children.length ? (
+    nodes.length ? (
       <RuntimeRenderer
-        tree={tree}
+        tree={{ ...tree, children: nodes }}
         locale={locale}
         responsiveMode="desktop"
         mode={editMode ? 'edit' : 'runtime'}
@@ -461,17 +522,43 @@ export function BuilderSections({
   }), [pageId]);
 
   const additionsTree = runtimeAdditions || createRuntimeAdditionsTree(pageId, locale);
-  const additions = (runtimeAdditions?.children.length || cms?.editMode) ? (
+  const additionGroups = useMemo(() => {
+    const groups = new Map<string, {
+      key: string;
+      placement: RuntimePlacement;
+      nodes: ComponentNode[];
+    }>();
+    additionsTree.children.forEach((node) => {
+      const placement = normalizedRuntimePlacement(node.metadata?.runtimePlacement);
+      const key = placementKey(placement);
+      const group = groups.get(key) || { key, placement, nodes: [] };
+      group.nodes.push(node);
+      groups.set(key, group);
+    });
+    if (!groups.size && cms?.editMode) {
+      groups.set('footer', {
+        key: 'footer',
+        placement: { position: 'footer' },
+        nodes: [],
+      });
+    }
+    return Array.from(groups.values());
+  }, [additionsTree, cms?.editMode]);
+  const additions = additionGroups.length ? additionGroups.map((group) => (
     <RuntimeAdditionsPortal
+      key={group.key}
       websiteId={websiteId}
       pageId={pageId}
       locale={locale}
       tree={additionsTree}
+      nodes={group.nodes}
+      placement={group.placement}
+      hostKey={group.key}
       theme={theme}
       editMode={Boolean(cms?.editMode)}
       onTreeChange={setRuntimeAdditions}
     />
-  ) : null;
+  )) : null;
   if (!resolved || !tree) return <>{fallback}{additions}</>;
   const page = (
     <>

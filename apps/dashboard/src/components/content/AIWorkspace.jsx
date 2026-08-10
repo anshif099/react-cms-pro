@@ -105,9 +105,52 @@ function conversationSignature(messages, modelId) {
 
 function requestsGeneratedImage(value) {
   const text = String(value || "").trim().toLowerCase();
-  return /\b(generate|create|make|design)\b/.test(text)
-    && /\b(image|photo|picture|illustration|artwork|visual)\b/.test(text)
+  return /\b(generate|create|make|design|add|insert|build)\b/.test(text)
+    && /\b(image|photo|picture|illustration|artwork|visual)s?\b/.test(text)
     && !/\b(existing|uploaded|media library)\b/.test(text);
+}
+
+const IMAGE_NUMBER_WORDS = Object.freeze({
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+  eleven: 11,
+  twelve: 12
+});
+
+function requestedGeneratedImageCount(value) {
+  if (!requestsGeneratedImage(value)) return 0;
+  const text = String(value || "").trim().toLowerCase();
+  const before = text.match(/\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(?:\w+\s+){0,3}(?:image|photo|picture|illustration|artwork|visual)s?\b/);
+  const after = text.match(/\b(?:image|photo|picture|illustration|artwork|visual)s?\s*(?:x|:)?\s*(\d+)\b/);
+  const raw = before?.[1] || after?.[1] || "1";
+  const count = IMAGE_NUMBER_WORDS[raw] || Number(raw) || 1;
+  return Math.min(12, Math.max(1, count));
+}
+
+const CAMPAIGN_IMAGE_CONTENT = Object.freeze([
+  ["Campaign Strategy", "A focused advertising strategy built around measurable business goals."],
+  ["Audience Intelligence", "Customer insight and precise targeting connect every message to the right audience."],
+  ["Creative Direction", "Distinctive campaign creative turns the brand story into attention and action."],
+  ["Channel Automation", "Coordinated workflows keep campaigns consistent across platforms and placements."],
+  ["Performance Analytics", "Live performance signals reveal what works and where the campaign can improve."],
+  ["Scalable Growth", "Continuous optimization converts campaign learning into sustainable business growth."]
+]);
+
+function generatedAssetContent(index) {
+  const fallbackNumber = index + 1;
+  const [title, description] = CAMPAIGN_IMAGE_CONTENT[index] || [
+    `Campaign Visual ${fallbackNumber}`,
+    `A unique advertising campaign visual created for this page (${fallbackNumber}).`
+  ];
+  return { title, description, caption: `${title} — ${description}` };
 }
 
 function dateLabel(value) {
@@ -120,7 +163,7 @@ function dateLabel(value) {
   }).format(new Date(value));
 }
 
-function generatedImageFile(base64, pageTitle, mimeType = "image/png") {
+function generatedImageFile(base64, pageTitle, mimeType = "image/png", sequence = 0) {
   const binary = window.atob(base64);
   const bytes = new Uint8Array(binary.length);
   for (let index = 0; index < binary.length; index += 1) {
@@ -134,7 +177,7 @@ function generatedImageFile(base64, pageTitle, mimeType = "image/png") {
   const extension = mimeType === "image/svg+xml" ? "svg" : "png";
   return new File(
     [bytes],
-    `${safeTitle}-ai-${Date.now()}.${extension}`,
+    `${safeTitle}-ai-${Date.now()}${sequence ? `-${sequence}` : ""}.${extension}`,
     { type: mimeType }
   );
 }
@@ -322,7 +365,6 @@ export function AIWorkspace({
 }) {
   const [activeTab, setActiveTab] = useState("chat");
   const [modelInfo, setModelInfo] = useState(() => aiWebsiteAgentService.getModelInfo());
-  const modelCatalog = useMemo(() => aiWebsiteAgentService.getModelCatalog(), []);
   const [prompt, setPrompt] = useState("");
   const [messages, setMessages] = useState(freshConversationMessages);
   const [conversations, setConversations] = useState([]);
@@ -861,12 +903,6 @@ export function AIWorkspace({
     }
   };
 
-  const changeRocketModel = (modelId) => {
-    const nextModel = aiWebsiteAgentService.setActiveModel(modelId);
-    setModelInfo(nextModel);
-    log("model", `Switched to ${nextModel.name} ${nextModel.version}.`);
-  };
-
   const requestPlan = useCallback(async ({
     intent,
     previousPlan = null,
@@ -898,6 +934,7 @@ export function AIWorkspace({
       let freshContext = await refreshContext();
       let planningIntent = cleanIntent;
       const imageTargets = imageTargetsFromContext(freshContext).slice(0, 24);
+      const generatedImageCount = requestedGeneratedImageCount(cleanIntent);
       if (!previousPlan && isImageRecolorRequest(cleanIntent) && imageTargets.length) {
         setImageGenerating(true);
         setImageProgress(0);
@@ -935,7 +972,52 @@ export function AIWorkspace({
         freshContext = await refreshContext();
         freshContext.currentPage.preparedImageAssignments = assignments;
         planningIntent = `Write the prepared image edits to all selected images. They were recolored to ${targetColor}. Original request: ${cleanIntent}`;
-      } else if (!previousPlan && requestsGeneratedImage(cleanIntent) && imageTargets.length) {
+      } else if (!previousPlan && generatedImageCount && (generatedImageCount > 1 || !imageTargets.length)) {
+        setImageGenerating(true);
+        setImageProgress(0);
+        log("image", `Generating ${generatedImageCount} unique image${generatedImageCount === 1 ? "" : "s"} with page content for a new gallery.`);
+        const preparedGeneratedAssets = [];
+        for (let index = 0; index < generatedImageCount; index += 1) {
+          const content = generatedAssetContent(index);
+          const generated = await aiWebsiteAgentService.generateImage({
+            prompt: `${cleanIntent}. Unique visual ${index + 1} of ${generatedImageCount}: ${content.title}. ${content.description}`,
+            modelId: modelInfo.releaseId,
+            brandContext: {
+              pageTitle,
+              theme: freshContext?.designSystem?.theme,
+              memory
+            }
+          });
+          if (generated.modelInfo) setModelInfo(generated.modelInfo);
+          const file = generatedImageFile(
+            generated.imageBase64,
+            pageTitle,
+            generated.mimeType,
+            index + 1
+          );
+          const asset = await mediaService.upload(
+            websiteId,
+            file,
+            "ai-generated",
+            (progress) => setImageProgress(
+              ((index + progress / 100) / generatedImageCount) * 100
+            )
+          );
+          preparedGeneratedAssets.push({
+            id: asset.id,
+            url: asset.url,
+            alt: `${content.title} advertising campaign visual`,
+            ...content
+          });
+          log("success", `Generated image ${index + 1} of ${generatedImageCount}: ${content.title}.`, {
+            model: generated.model,
+            assetId: asset.id
+          });
+        }
+        freshContext = await refreshContext();
+        freshContext.currentPage.preparedGeneratedAssets = preparedGeneratedAssets;
+        planningIntent = `Create one editable gallery field with ${generatedImageCount} generated images and matching content, placed exactly as requested. Original request: ${cleanIntent}`;
+      } else if (!previousPlan && generatedImageCount && imageTargets.length) {
         setImageGenerating(true);
         setImageProgress(0);
         log("image", `Generating an image for ${imageTargets.length} selected target${imageTargets.length === 1 ? "" : "s"}.`);
@@ -1664,7 +1746,7 @@ export function AIWorkspace({
                   <p className="text-[9px] font-bold uppercase tracking-wider text-emerald-400">Rocket AI ready · local runtime</p>
                   <p className="truncate text-[10px] text-slate-300">{rocketUser.email || rocketUser.displayName}</p>
                   <p className="mt-0.5 truncate text-[8px] text-slate-500">
-                    {modelInfo.trainedExamples} approved lesson{modelInfo.trainedExamples === 1 ? "" : "s"} · curriculum r{modelInfo.curriculumRevision}
+                    Ultra only · {modelInfo.interactionCount || 0} learned prompt{modelInfo.interactionCount === 1 ? "" : "s"} · {modelInfo.trainedExamples} approved
                   </p>
                 </div>
                 <button
@@ -1676,21 +1758,28 @@ export function AIWorkspace({
                   <LogOut className="h-3.5 w-3.5" />
                 </button>
               </div>
-              <label className="mt-2 flex items-center gap-2 rounded-lg border border-slate-800/80 bg-slate-950/35 px-2.5 py-2">
-                <span className="text-[8px] font-bold uppercase tracking-wider text-slate-600">Model</span>
-                <select
-                  value={modelInfo.releaseId}
-                  onChange={(event) => changeRocketModel(event.target.value)}
-                  className="min-w-0 flex-1 bg-transparent text-[9px] font-semibold text-emerald-200 outline-none cursor-pointer"
-                  title={modelInfo.description}
-                >
-                  {modelCatalog.map((model) => (
-                    <option key={model.releaseId} value={model.releaseId} className="bg-slate-950 text-slate-200">
-                      {model.name} {model.version}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <div className="mt-2 rounded-lg border border-emerald-500/15 bg-slate-950/35 px-2.5 py-2.5" title={modelInfo.description}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-1.5 text-[8px] font-extrabold uppercase tracking-[0.13em] text-emerald-300">
+                    <BrainCircuit className="h-3 w-3" /> Learning intelligence
+                  </span>
+                  <span className="text-[8px] font-bold text-emerald-200">{modelInfo.learningProgress || 0}%</span>
+                </div>
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-800">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-violet-500 via-blue-400 to-emerald-400 transition-[width] duration-500"
+                    style={{ width: `${modelInfo.learningProgress || 0}%` }}
+                  />
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-2 text-[8px] text-slate-500">
+                  <span>{modelInfo.name} {modelInfo.version}</span>
+                  <span>Next {modelInfo.nextVersion}</span>
+                </div>
+                <div className="mt-1 flex items-center justify-between gap-2 text-[8px] text-slate-600">
+                  <span>{modelInfo.contextCoverage || 0}% full-context coverage</span>
+                  <span>r{modelInfo.curriculumRevision || 0}</span>
+                </div>
+              </div>
             </div>
           ) : (
             <div>

@@ -60,6 +60,7 @@ function connectedRuntimeAdditionsContext() {
   context.constraints.registeredComponentTypes = [
     ...context.constraints.registeredComponentTypes,
     "section",
+    "gallery",
     "input",
     "textarea-field",
     "select-field",
@@ -188,6 +189,54 @@ describe("embedded Rocket AI engine", () => {
           valueJson: '"Enter email"'
         })
       ])
+    });
+  });
+
+  it("creates a six-image content gallery above the selected connected section", async () => {
+    const context = connectedRuntimeAdditionsContext();
+    context.currentPage.selectedRegion = {
+      regionId: "ad.body_section",
+      type: "section",
+      label: "Advertisement content",
+      value: { background: "#0d0d0d" }
+    };
+    context.currentPage.editableRegionDefinitions["ad.body_section"] = {
+      type: "section",
+      label: "Advertisement content"
+    };
+    context.currentPage.editableRegionValues["ad.body_section"] = { background: "#0d0d0d" };
+    context.currentPage.preparedGeneratedAssets = Array.from({ length: 6 }, (_, index) => ({
+      id: `asset-${index + 1}`,
+      url: `https://cdn.example.com/ad-${index + 1}.svg`,
+      alt: `Advertisement visual ${index + 1}`,
+      title: `Campaign ${index + 1}`,
+      description: `Campaign content ${index + 1}`
+    }));
+
+    const response = await rocketLocalEngine.createPlan({
+      intent: "add new field above selected area advertisement images 6 images contents",
+      context,
+      memory: {}
+    });
+
+    expect(response.plan.operations).toHaveLength(1);
+    expect(response.plan.operations[0]).toMatchObject({
+      type: "insert_component",
+      componentType: "gallery"
+    });
+    expect(response.plan.operations[0].patches).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        path: "metadata.runtimePlacement",
+        valueJson: JSON.stringify({ anchorRegionId: "ad.body_section", position: "before" })
+      }),
+      expect.objectContaining({ path: "props.images" })
+    ]));
+    const imagesPatch = response.plan.operations[0].patches.find(({ path }) => path === "props.images");
+    expect(JSON.parse(imagesPatch.valueJson)).toHaveLength(6);
+    expect(JSON.parse(imagesPatch.valueJson)[0]).toMatchObject({
+      src: "https://cdn.example.com/ad-1.svg",
+      title: "Campaign 1",
+      description: "Campaign content 1"
     });
   });
 
@@ -653,7 +702,7 @@ describe("embedded Rocket AI engine", () => {
     expect(result.imageBase64.length).toBeGreaterThan(100);
   });
 
-  it("keeps release versions separate from training and supports all model tracks", async () => {
+  it("runs only Ultra and advances its adaptive version after each full-context prompt", async () => {
     const values = new Map();
     vi.stubGlobal("localStorage", {
       getItem: (key) => values.get(key) || null,
@@ -666,6 +715,17 @@ describe("embedded Rocket AI engine", () => {
         version: "1.5",
         trainedExamples: 0
       });
+      const plan = await rocketLocalEngine.createPlan({
+        intent: "add an email field above the footer",
+        context: connectedRuntimeAdditionsContext(),
+        memory: {}
+      });
+      expect(plan.modelInfo).toMatchObject({
+        id: "rocket-ai-ultra-1.5.1",
+        version: "1.5.1",
+        curriculumRevision: 1,
+        interactionCount: 1
+      });
       const feedback = await rocketLocalEngine.recordFeedback({
         intent: "change selected heading color",
         context: connectedContext(),
@@ -675,20 +735,18 @@ describe("embedded Rocket AI engine", () => {
       });
       expect(feedback.captured).toBe(true);
       expect(feedback.modelInfo).toMatchObject({
-        id: "rocket-ai-ultra-1.5",
-        version: "1.5",
+        id: "rocket-ai-ultra-1.5.1",
+        version: "1.5.1",
         curriculumRevision: 1,
         trainedExamples: 1
       });
       expect(rocketLocalEngine.getModelCatalog().map(({ name, version }) => ({ name, version }))).toEqual([
-        { name: "Rocket AI Instant", version: "1.01" },
-        { name: "Rocket AI Pro", version: "1.2" },
         { name: "Rocket AI Ultra", version: "1.5" }
       ]);
-      expect(rocketLocalEngine.setActiveModel("rocket-ai-ultra")).toMatchObject({
-        id: "rocket-ai-ultra-1.5",
+      expect(rocketLocalEngine.setActiveModel("rocket-ai-pro")).toMatchObject({
+        id: "rocket-ai-ultra-1.5.1",
         name: "Rocket AI Ultra",
-        version: "1.5",
+        version: "1.5.1",
         trainedExamples: 1
       });
     } finally {

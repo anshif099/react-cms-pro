@@ -348,15 +348,50 @@ function BuiltinComponent({
       );
     case 'gallery':
       return (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: `repeat(${props.columns || 3},minmax(0,1fr))`,
-          gap: `${props.gap || 16}px`,
-        }}>
-          {(props.images || []).map((image: any, index: number) => (
-            <img key={image.id || index} src={image.src} alt={image.alt || ''} style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', borderRadius: '12px' }} />
-          ))}
-        </div>
+        <>
+          {text('title') ? inline('title', '', 'h2', {
+            margin: '0 0 10px',
+            color: '#0f172a',
+            fontSize: '38px',
+            textAlign: 'center',
+          }) : null}
+          {text('subtitle') ? inline('subtitle', '', 'p', {
+            maxWidth: '760px',
+            margin: '0 auto 28px',
+            color: '#64748b',
+            fontSize: '17px',
+            lineHeight: 1.7,
+            textAlign: 'center',
+          }) : null}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: `repeat(auto-fit,minmax(min(100%,${props.columns === '4' ? '210px' : '250px'}),1fr))`,
+            gap: `${props.gap || 16}px`,
+          }}>
+            {(props.images || []).map((image: any, index: number) => (
+              <figure key={image.id || index} style={{
+                margin: 0,
+                overflow: 'hidden',
+                border: '1px solid #e2e8f0',
+                borderRadius: '14px',
+                background: '#ffffff',
+                boxShadow: '0 12px 28px rgba(15,23,42,.08)',
+              }}>
+                <img
+                  src={image.src}
+                  alt={image.alt || ''}
+                  style={{ width: '100%', aspectRatio: '4 / 3', objectFit: 'cover', display: 'block' }}
+                />
+                {(image.title || image.caption || image.description) ? (
+                  <figcaption style={{ padding: '14px 16px 16px', color: '#475569', lineHeight: 1.55 }}>
+                    {image.title ? <strong style={{ display: 'block', marginBottom: '5px', color: '#0f172a', fontSize: '15px' }}>{image.title}</strong> : null}
+                    <span style={{ fontSize: '13px' }}>{image.description || image.caption}</span>
+                  </figcaption>
+                ) : null}
+              </figure>
+            ))}
+          </div>
+        </>
       );
     case 'video':
       return props.url ? (
