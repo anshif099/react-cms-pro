@@ -23,12 +23,14 @@ import {
   MousePointer2,
   PanelRightClose,
   ClipboardPaste,
+  Pencil,
   Plus,
   RefreshCw,
   Send,
   ShieldCheck,
   Sparkles,
   SquareTerminal,
+  Trash2,
   TriangleAlert,
   Undo2,
   X
@@ -330,6 +332,11 @@ export function AIWorkspace({
   const [conversationWorkspaceKey, setConversationWorkspaceKey] = useState("");
   const [conversationSaving, setConversationSaving] = useState(false);
   const [conversationSwitching, setConversationSwitching] = useState(false);
+  const [conversationEditingId, setConversationEditingId] = useState("");
+  const [conversationTitleDraft, setConversationTitleDraft] = useState("");
+  const [conversationRenamingId, setConversationRenamingId] = useState("");
+  const [conversationDeleteConfirmId, setConversationDeleteConfirmId] = useState("");
+  const [conversationDeletingId, setConversationDeletingId] = useState("");
   const [planning, setPlanning] = useState(false);
   const [applying, setApplying] = useState(false);
   const [pending, setPending] = useState(null);
@@ -424,6 +431,11 @@ export function AIWorkspace({
     setConversationSaving(false);
     setConversationSwitching(true);
     setConversationListOpen(false);
+    setConversationEditingId("");
+    setConversationTitleDraft("");
+    setConversationRenamingId("");
+    setConversationDeleteConfirmId("");
+    setConversationDeletingId("");
     setConversations([]);
     setActiveConversationId("");
     setMessages(freshConversationMessages());
@@ -514,6 +526,7 @@ export function AIWorkspace({
     const currentConversation = conversations.find((item) => item.id === activeConversationId);
     const payload = {
       title: currentConversation?.title || "New chat",
+      customTitle: Boolean(currentConversation?.customTitle),
       messages,
       modelId: modelInfo.releaseId,
       surface: surfaceRef.current,
@@ -622,6 +635,9 @@ export function AIWorkspace({
       setPending(null);
       setTasks([]);
       setModifyOpen(false);
+      setConversationEditingId("");
+      setConversationTitleDraft("");
+      setConversationDeleteConfirmId("");
       setConversationListOpen(false);
       setActiveTab("chat");
       setConversationHydrated(true);
@@ -675,6 +691,9 @@ export function AIWorkspace({
       setPending(null);
       setTasks([]);
       setModifyOpen(false);
+      setConversationEditingId("");
+      setConversationTitleDraft("");
+      setConversationDeleteConfirmId("");
       setConversationListOpen(false);
       setActiveTab("chat");
       setConversationHydrated(true);
@@ -684,6 +703,131 @@ export function AIWorkspace({
       setConversationHydrated(true);
     } finally {
       setConversationSwitching(false);
+    }
+  };
+
+  const beginConversationRename = (conversation) => {
+    if (!conversation?.id || conversationSwitching || conversationDeletingId) return;
+    setConversationEditingId(conversation.id);
+    setConversationTitleDraft(conversation.title || "New chat");
+    setConversationDeleteConfirmId("");
+  };
+
+  const cancelConversationRename = () => {
+    if (conversationRenamingId) return;
+    setConversationEditingId("");
+    setConversationTitleDraft("");
+  };
+
+  const saveConversationRename = async (conversation) => {
+    const title = conversationTitleDraft.replace(/\s+/g, " ").trim();
+    if (!conversation?.id || !title || conversationRenamingId) return;
+    setConversationRenamingId(conversation.id);
+    try {
+      await conversationSaveQueueRef.current.catch(() => undefined);
+      const saved = await aiBuilderPersistenceService.renameConversation(
+        websiteId,
+        pageId,
+        conversation.id,
+        title
+      );
+      setConversations((current) => current
+        .map((item) => item.id === saved.id ? { ...item, ...saved } : item)
+        .sort((first, second) => (second.updatedAt || 0) - (first.updatedAt || 0)));
+      setConversationEditingId("");
+      setConversationTitleDraft("");
+      log("memory", `Renamed Rocket chat to: ${saved.title}.`, {
+        conversationId: conversation.id
+      });
+    } catch (error) {
+      log("error", error.message || "The Rocket chat could not be renamed.");
+    } finally {
+      setConversationRenamingId("");
+    }
+  };
+
+  const deleteConversation = async (conversation) => {
+    if (!conversation?.id || conversationDeletingId) return;
+    if (planning || applying || imageGenerating) {
+      log("warning", "Finish the current Rocket operation before deleting a chat.");
+      return;
+    }
+    const deletingActiveConversation = conversation.id === activeConversationId;
+    const remaining = conversations.filter((item) => item.id !== conversation.id);
+    setConversationDeletingId(conversation.id);
+    setConversationEditingId("");
+    setConversationTitleDraft("");
+    if (deletingActiveConversation) {
+      setConversationSwitching(true);
+      setConversationHydrated(false);
+    }
+    try {
+      await conversationSaveQueueRef.current.catch(() => undefined);
+      await aiBuilderPersistenceService.deleteConversation(
+        websiteId,
+        pageId,
+        conversation.id
+      );
+      savedConversationSignaturesRef.current.delete(
+        `${websiteId}:${pageId}:${conversation.id}`
+      );
+
+      if (!deletingActiveConversation) {
+        setConversations(remaining);
+      } else {
+        let nextConversation = remaining[0] || null;
+        if (nextConversation) {
+          await aiBuilderPersistenceService.setActiveConversationId(
+            websiteId,
+            pageId,
+            nextConversation.id
+          );
+        } else {
+          const nextMessages = freshConversationMessages();
+          nextConversation = await aiBuilderPersistenceService.createConversation(
+            websiteId,
+            pageId,
+            {
+              title: "New chat",
+              messages: nextMessages,
+              modelId: modelInfo.releaseId,
+              surface: surfaceRef.current,
+              pageTitle: pageTitleRef.current
+            }
+          );
+          remaining.push(nextConversation);
+        }
+
+        const restoredMessages = nextConversation.messages?.length
+          ? nextConversation.messages
+          : freshConversationMessages();
+        const restoredModel = aiWebsiteAgentService.setActiveModel(
+          nextConversation.modelId || modelInfo.releaseId
+        );
+        savedConversationSignaturesRef.current.set(
+          `${websiteId}:${pageId}:${nextConversation.id}`,
+          conversationSignature(restoredMessages, restoredModel.releaseId)
+        );
+        setConversations(remaining);
+        setActiveConversationId(nextConversation.id);
+        setMessages(restoredMessages);
+        setModelInfo(restoredModel);
+        setPrompt("");
+        setPending(null);
+        setTasks([]);
+        setModifyOpen(false);
+        setConversationHydrated(true);
+      }
+      setConversationDeleteConfirmId("");
+      log("memory", `Deleted Rocket chat: ${conversation.title || "New chat"}.`, {
+        conversationId: conversation.id
+      });
+    } catch (error) {
+      if (deletingActiveConversation) setConversationHydrated(true);
+      log("error", error.message || "The Rocket chat could not be deleted.");
+    } finally {
+      if (deletingActiveConversation) setConversationSwitching(false);
+      setConversationDeletingId("");
     }
   };
 
@@ -1272,25 +1416,138 @@ export function AIWorkspace({
               {conversations.map((conversation) => {
                 const runCount = runs.filter((run) => run.conversationId === conversation.id).length;
                 const isActive = conversation.id === activeConversationId;
+                const isEditing = conversation.id === conversationEditingId;
+                const isRenaming = conversation.id === conversationRenamingId;
+                const isDeleting = conversation.id === conversationDeletingId;
+                const confirmDelete = conversation.id === conversationDeleteConfirmId;
+                const conversationBusy = conversationSwitching
+                  || planning
+                  || applying
+                  || imageGenerating
+                  || Boolean(conversationRenamingId)
+                  || Boolean(conversationDeletingId);
                 return (
-                  <button
+                  <div
                     key={conversation.id}
-                    type="button"
-                    onClick={() => openConversation(conversation)}
-                    disabled={conversationSwitching || planning || applying || imageGenerating}
-                    className={`w-full rounded-lg border px-2.5 py-2 text-left disabled:opacity-40 cursor-pointer ${
+                    className={`group flex w-full items-center gap-1 rounded-lg border px-1.5 py-1.5 ${
                       isActive
                         ? "border-violet-500/30 bg-violet-500/10"
                         : "border-transparent hover:border-slate-800 hover:bg-slate-900/60"
                     }`}
                   >
+                    {isEditing ? (
+                      <form
+                        className="flex min-w-0 flex-1 items-center gap-1"
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          saveConversationRename(conversation);
+                        }}
+                      >
+                        <input
+                          autoFocus
+                          value={conversationTitleDraft}
+                          maxLength={64}
+                          onChange={(event) => setConversationTitleDraft(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Escape") cancelConversationRename();
+                          }}
+                          disabled={isRenaming}
+                          aria-label="Edit chat name"
+                          className="h-8 min-w-0 flex-1 rounded-md border border-violet-500/40 bg-slate-950 px-2 text-[9px] font-semibold text-slate-200 outline-none focus:border-violet-400 disabled:opacity-50"
+                        />
+                        <button
+                          type="submit"
+                          disabled={isRenaming || !conversationTitleDraft.trim()}
+                          className="grid h-7 w-7 place-items-center rounded-md text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-30 cursor-pointer"
+                          title="Save chat name"
+                        >
+                          {isRenaming
+                            ? <Loader2 className="h-3 w-3 animate-spin" />
+                            : <Check className="h-3 w-3" />}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={cancelConversationRename}
+                          disabled={isRenaming}
+                          className="grid h-7 w-7 place-items-center rounded-md text-slate-600 hover:bg-slate-800 hover:text-white disabled:opacity-30 cursor-pointer"
+                          title="Cancel rename"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </form>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => openConversation(conversation)}
+                          disabled={conversationBusy}
+                          className="min-w-0 flex-1 rounded-md px-1 py-0.5 text-left disabled:opacity-40 cursor-pointer"
+                          title={`Open ${conversation.title || "New chat"}`}
+                        >
                     <p className={`truncate text-[9px] font-semibold ${isActive ? "text-violet-100" : "text-slate-400"}`}>
                       {conversation.title || "New chat"}
                     </p>
                     <p className="mt-1 text-[8px] text-slate-700">
                       {dateLabel(conversation.updatedAt || conversation.createdAt)} · {conversation.messages?.length || 0} messages{runCount ? ` · ${runCount} edits` : ""}
                     </p>
-                  </button>
+                        </button>
+                        <div className="flex flex-shrink-0 items-center gap-0.5">
+                          {!confirmDelete && (
+                            <button
+                              type="button"
+                              onClick={() => beginConversationRename(conversation)}
+                              disabled={conversationBusy}
+                              className="grid h-7 w-7 place-items-center rounded-md text-slate-700 opacity-60 hover:bg-slate-800 hover:text-violet-300 group-hover:opacity-100 disabled:opacity-25 cursor-pointer"
+                              title="Rename chat"
+                              aria-label={`Rename ${conversation.title || "New chat"}`}
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </button>
+                          )}
+                          {confirmDelete ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => setConversationDeleteConfirmId("")}
+                                disabled={isDeleting}
+                                className="grid h-7 w-7 place-items-center rounded-md text-slate-600 hover:bg-slate-800 hover:text-white disabled:opacity-30 cursor-pointer"
+                                title="Cancel delete"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => deleteConversation(conversation)}
+                                disabled={isDeleting}
+                                className="flex h-7 items-center gap-1 rounded-md bg-red-500/10 px-2 text-[8px] font-bold text-red-300 hover:bg-red-500/20 disabled:opacity-40 cursor-pointer"
+                                title="Confirm delete chat"
+                              >
+                                {isDeleting
+                                  ? <Loader2 className="h-3 w-3 animate-spin" />
+                                  : <Trash2 className="h-3 w-3" />}
+                                Delete
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setConversationEditingId("");
+                                setConversationTitleDraft("");
+                                setConversationDeleteConfirmId(conversation.id);
+                              }}
+                              disabled={conversationBusy}
+                              className="grid h-7 w-7 place-items-center rounded-md text-slate-700 opacity-60 hover:bg-red-500/10 hover:text-red-300 group-hover:opacity-100 disabled:opacity-25 cursor-pointer"
+                              title="Delete chat"
+                              aria-label={`Delete ${conversation.title || "New chat"}`}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
                 );
               })}
             </div>

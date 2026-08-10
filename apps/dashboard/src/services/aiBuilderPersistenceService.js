@@ -1,4 +1,4 @@
-import { get, push, ref, set, update } from "firebase/database";
+import { get, push, ref, remove, set, update } from "firebase/database";
 import { database } from "../lib/firebase";
 
 const MAX_SNAPSHOT_LENGTH = 1800000;
@@ -68,7 +68,11 @@ export function inferAIConversationTitle(messages = [], fallback = "New chat") {
   const firstUserMessage = (Array.isArray(messages) ? messages : []).find((message) => (
     message?.role === "user" && String(message.content || "").trim()
   ));
-  const title = String(firstUserMessage?.content || fallback || "New chat")
+  return normalizeAIConversationTitle(firstUserMessage?.content || fallback);
+}
+
+export function normalizeAIConversationTitle(value, fallback = "New chat") {
+  const title = String(value || fallback || "New chat")
     .replace(/\s+/g, " ")
     .trim();
   return title.length > 64 ? `${title.slice(0, 61).trimEnd()}...` : title || "New chat";
@@ -80,9 +84,13 @@ export const aiBuilderPersistenceService = {
     const nextRef = push(conversationsRef);
     const now = Date.now();
     const messages = compactAIConversationMessages(data.messages);
+    const customTitle = Boolean(data.customTitle);
     const conversation = {
       id: nextRef.key,
-      title: inferAIConversationTitle(messages, data.title),
+      title: customTitle
+        ? normalizeAIConversationTitle(data.title)
+        : inferAIConversationTitle(messages, data.title),
+      customTitle,
       messages,
       modelId: String(data.modelId || ""),
       surface: String(data.surface || ""),
@@ -98,8 +106,12 @@ export const aiBuilderPersistenceService = {
   async saveConversation(websiteId, pageId, conversationId, data = {}) {
     if (!conversationId) throw new Error("A Rocket AI conversation ID is required.");
     const messages = compactAIConversationMessages(data.messages);
+    const customTitle = Boolean(data.customTitle);
     const changes = {
-      title: inferAIConversationTitle(messages, data.title),
+      title: customTitle
+        ? normalizeAIConversationTitle(data.title)
+        : inferAIConversationTitle(messages, data.title),
+      customTitle,
       messages,
       modelId: String(data.modelId || ""),
       surface: String(data.surface || ""),
@@ -111,6 +123,29 @@ export const aiBuilderPersistenceService = {
       changes
     );
     return { id: conversationId, ...changes };
+  },
+
+  async renameConversation(websiteId, pageId, conversationId, title) {
+    if (!conversationId) throw new Error("A Rocket AI conversation ID is required.");
+    const changes = {
+      title: normalizeAIConversationTitle(title),
+      customTitle: true,
+      updatedAt: Date.now()
+    };
+    await update(
+      ref(database, `${conversationsPath(websiteId, pageId)}/${conversationId}`),
+      changes
+    );
+    return { id: conversationId, ...changes };
+  },
+
+  async deleteConversation(websiteId, pageId, conversationId) {
+    if (!conversationId) throw new Error("A Rocket AI conversation ID is required.");
+    await remove(ref(
+      database,
+      `${conversationsPath(websiteId, pageId)}/${conversationId}`
+    ));
+    return conversationId;
   },
 
   async getConversations(websiteId, pageId) {
