@@ -23,14 +23,11 @@ import {
   Paperclip,
   PanelRightClose,
   ClipboardPaste,
-  Pencil,
-  Plus,
   RefreshCw,
   Send,
   ShieldCheck,
   Sparkles,
   SquareTerminal,
-  Trash2,
   TriangleAlert,
   Undo2,
   X
@@ -108,27 +105,6 @@ function compactSelectionTarget(target) {
     label: target.label || target.regionId || target.id || "Selected area",
     text: typeof value === "string" ? value.slice(0, 500) : ""
   };
-}
-
-function conversationSignature(messages, modelId) {
-  return JSON.stringify({
-    modelId: modelId || "",
-    messages: (messages || []).map((message) => ({
-      id: message.id,
-      role: message.role,
-      content: message.content,
-      attachments: (message.attachments || []).map((attachment) => ({
-        id: attachment.id,
-        name: attachment.name,
-        url: attachment.url,
-        type: attachment.type,
-        size: attachment.size,
-        alt: attachment.alt,
-        selectionSnapshot: attachment.selectionSnapshot
-      })),
-      error: Boolean(message.error)
-    }))
-  });
 }
 
 function requestsGeneratedImage(value) {
@@ -398,18 +374,6 @@ export function AIWorkspace({
   const [modelInfo, setModelInfo] = useState(() => aiWebsiteAgentService.getModelInfo());
   const [prompt, setPrompt] = useState("");
   const [messages, setMessages] = useState(freshConversationMessages);
-  const [conversations, setConversations] = useState([]);
-  const [activeConversationId, setActiveConversationId] = useState("");
-  const [conversationListOpen, setConversationListOpen] = useState(false);
-  const [conversationHydrated, setConversationHydrated] = useState(false);
-  const [conversationWorkspaceKey, setConversationWorkspaceKey] = useState("");
-  const [conversationSaving, setConversationSaving] = useState(false);
-  const [conversationSwitching, setConversationSwitching] = useState(false);
-  const [conversationEditingId, setConversationEditingId] = useState("");
-  const [conversationTitleDraft, setConversationTitleDraft] = useState("");
-  const [conversationRenamingId, setConversationRenamingId] = useState("");
-  const [conversationDeleteConfirmId, setConversationDeleteConfirmId] = useState("");
-  const [conversationDeletingId, setConversationDeletingId] = useState("");
   const [planning, setPlanning] = useState(false);
   const [applying, setApplying] = useState(false);
   const [pending, setPending] = useState(null);
@@ -438,18 +402,8 @@ export function AIWorkspace({
   const attachmentPreviewUrlsRef = useRef(new Set());
   const getContextRef = useRef(getContext);
   const areaSelectionStartKeyRef = useRef("");
-  const conversationSaveQueueRef = useRef(Promise.resolve());
-  const pendingConversationSavesRef = useRef(0);
-  const savedConversationSignaturesRef = useRef(new Map());
   const requestPlanInFlightRef = useRef(false);
   const requestPlanGenerationRef = useRef(0);
-  const workspaceKey = `${websiteId}:${pageId}`;
-  const workspaceKeyRef = useRef(workspaceKey);
-  const pageTitleRef = useRef(pageTitle);
-  const surfaceRef = useRef(surface);
-  workspaceKeyRef.current = workspaceKey;
-  pageTitleRef.current = pageTitle;
-  surfaceRef.current = surface;
 
   const clearChatAttachments = useCallback(() => {
     attachmentPreviewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
@@ -510,158 +464,28 @@ export function AIWorkspace({
 
   useEffect(() => {
     let cancelled = false;
-    const loadingWorkspaceKey = `${websiteId}:${pageId}`;
-    setConversationHydrated(false);
-    setConversationWorkspaceKey("");
-    setConversationSaving(false);
-    setConversationSwitching(true);
-    setConversationListOpen(false);
-    setConversationEditingId("");
-    setConversationTitleDraft("");
-    setConversationRenamingId("");
-    setConversationDeleteConfirmId("");
-    setConversationDeletingId("");
-    setConversations([]);
-    setActiveConversationId("");
+    requestPlanGenerationRef.current += 1;
+    requestPlanInFlightRef.current = false;
     setMessages(freshConversationMessages());
     setRuns([]);
+    setContext(null);
+    setMemory({});
     setPending(null);
     setTasks([]);
     setPrompt("");
     clearChatAttachments();
 
-    (async () => {
-      try {
-        const [savedMemory, savedConversations, savedActiveConversationId] = await Promise.all([
-          aiBuilderPersistenceService.getMemory(websiteId),
-          aiBuilderPersistenceService.getConversations(websiteId, pageId),
-          aiBuilderPersistenceService.getActiveConversationId(websiteId, pageId)
-        ]);
-        if (cancelled || workspaceKeyRef.current !== loadingWorkspaceKey) return;
-
-        let conversationList = savedConversations;
-        let activeConversation = conversationList.find((item) => item.id === savedActiveConversationId)
-          || conversationList[0];
-        if (!activeConversation) {
-          activeConversation = await aiBuilderPersistenceService.createConversation(websiteId, pageId, {
-            title: "New chat",
-            messages: freshConversationMessages(),
-            modelId: aiWebsiteAgentService.getModelInfo().releaseId,
-            surface: surfaceRef.current,
-            pageTitle: pageTitleRef.current
-          });
-          conversationList = [activeConversation];
-        } else if (activeConversation.id !== savedActiveConversationId) {
-          await aiBuilderPersistenceService.setActiveConversationId(
-            websiteId,
-            pageId,
-            activeConversation.id
-          );
-        }
-        if (cancelled || workspaceKeyRef.current !== loadingWorkspaceKey) return;
-
-        const restoredMessages = activeConversation.messages?.length
-          ? activeConversation.messages
-          : freshConversationMessages();
-        const restoredModel = aiWebsiteAgentService.setActiveModel(
-          activeConversation.modelId || aiWebsiteAgentService.getModelInfo().releaseId
-        );
-        savedConversationSignaturesRef.current.set(
-          `${loadingWorkspaceKey}:${activeConversation.id}`,
-          conversationSignature(restoredMessages, restoredModel.releaseId)
-        );
-        setMemory(savedMemory);
-        setConversations(conversationList);
-        setActiveConversationId(activeConversation.id);
-        setMessages(restoredMessages);
-        setModelInfo(restoredModel);
-        setConversationWorkspaceKey(loadingWorkspaceKey);
-        setConversationHydrated(true);
-        log(
-          "memory",
-          `Continued Rocket chat: ${activeConversation.title || "New chat"}.`,
-          { conversationId: activeConversation.id, messages: restoredMessages.length }
-        );
-      } catch (error) {
-        if (!cancelled) log("error", error.message || "Rocket workspace state could not be loaded.");
-      } finally {
-        if (!cancelled && workspaceKeyRef.current === loadingWorkspaceKey) {
-          setConversationSwitching(false);
-        }
-      }
-    })();
+    aiBuilderPersistenceService.getMemory(websiteId)
+      .then((savedMemory) => {
+        if (!cancelled) setMemory(savedMemory);
+      })
+      .catch((error) => {
+        if (!cancelled) log("error", error.message || "Rocket memory could not be loaded.");
+      });
     return () => {
       cancelled = true;
     };
   }, [pageId, websiteId, log, clearChatAttachments]);
-
-  useEffect(() => {
-    const capturedWorkspaceKey = `${websiteId}:${pageId}`;
-    if (
-      !conversationHydrated
-      || !activeConversationId
-      || conversationWorkspaceKey !== capturedWorkspaceKey
-    ) return;
-    const signatureKey = `${capturedWorkspaceKey}:${activeConversationId}`;
-    const signature = conversationSignature(messages, modelInfo.releaseId);
-    if (savedConversationSignaturesRef.current.get(signatureKey) === signature) return;
-    savedConversationSignaturesRef.current.set(signatureKey, signature);
-
-    const currentConversation = conversations.find((item) => item.id === activeConversationId);
-    const payload = {
-      title: currentConversation?.title || "New chat",
-      customTitle: Boolean(currentConversation?.customTitle),
-      messages,
-      modelId: modelInfo.releaseId,
-      surface: surfaceRef.current,
-      pageTitle: pageTitleRef.current
-    };
-    pendingConversationSavesRef.current += 1;
-    setConversationSaving(true);
-
-    const save = conversationSaveQueueRef.current
-      .catch(() => undefined)
-      .then(() => aiBuilderPersistenceService.saveConversation(
-        websiteId,
-        pageId,
-        activeConversationId,
-        payload
-      ));
-    conversationSaveQueueRef.current = save;
-    save.then((savedConversation) => {
-      if (workspaceKeyRef.current !== capturedWorkspaceKey) return;
-      setConversations((current) => current
-        .map((item) => item.id === savedConversation.id
-          ? { ...item, ...savedConversation }
-          : item)
-        .sort((first, second) => (second.updatedAt || 0) - (first.updatedAt || 0)));
-    }).catch((error) => {
-      if (savedConversationSignaturesRef.current.get(signatureKey) === signature) {
-        savedConversationSignaturesRef.current.delete(signatureKey);
-      }
-      if (workspaceKeyRef.current === capturedWorkspaceKey) {
-        log("error", error.message || "Rocket chat memory could not be saved.");
-      }
-    }).finally(() => {
-      pendingConversationSavesRef.current = Math.max(0, pendingConversationSavesRef.current - 1);
-      if (
-        workspaceKeyRef.current === capturedWorkspaceKey
-        && pendingConversationSavesRef.current === 0
-      ) {
-        setConversationSaving(false);
-      }
-    });
-  }, [
-    activeConversationId,
-    conversationHydrated,
-    conversationWorkspaceKey,
-    conversations,
-    messages,
-    modelInfo.releaseId,
-    pageId,
-    websiteId,
-    log
-  ]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "auto", block: "nearest" });
@@ -677,8 +501,6 @@ export function AIWorkspace({
       .filter(Boolean)
       .map((target) => [target.regionId || target.id, target])).values());
   }, [selectedTarget, selectedTargets]);
-  const activeConversation = conversations.find((item) => item.id === activeConversationId)
-    || null;
   const hiddenMessageCount = Math.max(0, messages.length - 30);
   const visibleMessages = hiddenMessageCount ? messages.slice(-30) : messages;
   const canUndoChatTurn = Boolean(
@@ -704,60 +526,6 @@ export function AIWorkspace({
     setActiveTab("chat");
     log("memory", "Removed the latest Rocket chat exchange. Page edits were not changed.");
     window.requestAnimationFrame(() => promptInputRef.current?.focus());
-  };
-
-  const openConversation = async (conversation) => {
-    if (!conversation?.id || conversation.id === activeConversationId || conversationSwitching) {
-      setConversationListOpen(false);
-      return;
-    }
-    if (planning || applying || imageGenerating || attachmentUploading) {
-      log("warning", "Finish the current Rocket operation before switching chats.");
-      return;
-    }
-    setConversationSwitching(true);
-    setConversationHydrated(false);
-    try {
-      await conversationSaveQueueRef.current.catch(() => undefined);
-      await aiBuilderPersistenceService.setActiveConversationId(
-        websiteId,
-        pageId,
-        conversation.id
-      );
-      const restoredMessages = conversation.messages?.length
-        ? conversation.messages
-        : freshConversationMessages();
-      const restoredModel = aiWebsiteAgentService.setActiveModel(
-        conversation.modelId || modelInfo.releaseId
-      );
-      savedConversationSignaturesRef.current.set(
-        `${websiteId}:${pageId}:${conversation.id}`,
-        conversationSignature(restoredMessages, restoredModel.releaseId)
-      );
-      setActiveConversationId(conversation.id);
-      setMessages(restoredMessages);
-      setModelInfo(restoredModel);
-      setPrompt("");
-      clearChatAttachments();
-      setPending(null);
-      setTasks([]);
-      setModifyOpen(false);
-      setConversationEditingId("");
-      setConversationTitleDraft("");
-      setConversationDeleteConfirmId("");
-      setConversationListOpen(false);
-      setActiveTab("chat");
-      setConversationHydrated(true);
-      log("memory", `Continued Rocket chat: ${conversation.title || "New chat"}.`, {
-        conversationId: conversation.id,
-        messages: restoredMessages.length
-      });
-    } catch (error) {
-      log("error", error.message || "The selected Rocket chat could not be opened.");
-      setConversationHydrated(true);
-    } finally {
-      setConversationSwitching(false);
-    }
   };
 
   const createNewConversation = async () => {
