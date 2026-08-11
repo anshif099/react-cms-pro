@@ -678,6 +678,94 @@ describe("embedded Rocket AI engine", () => {
     });
   });
 
+  it("changes a named editable text instead of the unrelated active selection", async () => {
+    const context = connectedContext();
+    context.currentPage.selectedRegion = {
+      regionId: "ad.heading",
+      type: "text",
+      label: "About heading",
+      value: "colour green"
+    };
+    context.currentPage.editableRegionDefinitions["ad.heading"] = {
+      type: "text",
+      label: "About heading"
+    };
+    context.currentPage.editableRegionValues["ad.heading"] = "colour green";
+    context.currentPage.editableRegionDefinitions["ad.growth"] = {
+      type: "text",
+      label: "Growth heading"
+    };
+    context.currentPage.editableRegionValues["ad.growth"] = "Scalable Growth";
+
+    const response = await rocketLocalEngine.createPlan({
+      intent: "scalable growth text change to colour green",
+      context,
+      memory: {}
+    });
+
+    expect(response.plan.operations).toHaveLength(1);
+    expect(response.plan.operations[0]).toMatchObject({
+      type: "update_region",
+      targetId: "ad.growth",
+      patches: [{
+        path: "value",
+        valueJson: JSON.stringify({ text: "Scalable Growth", color: "#22c55e" })
+      }]
+    });
+  });
+
+  it("changes named static JSX text color without rewriting selected copy", async () => {
+    const context = connectedContext();
+    const sourcePath = "src/pages/DynamicCMSPage.jsx";
+    const source = [
+      "export default function DynamicCMSPage() {",
+      "  return <main>",
+      "    <h2 style={{ color: '#111111' }}>About our company</h2>",
+      "    <div style={{ fontSize: '1.5rem', color: '#ff4d4d' }}>🚀 Scalable Growth</div>",
+      "  </main>;",
+      "}"
+    ].join("\n");
+    context.capabilities.push("replace_source_file");
+    context.sourceProject = { files: { [sourcePath]: source } };
+    context.currentPage.selectedRegion = {
+      regionId: "ad.heading",
+      type: "text",
+      label: "About heading",
+      value: "colour green"
+    };
+    context.currentPage.editableRegionDefinitions["ad.heading"] = {
+      type: "text",
+      label: "About heading"
+    };
+    context.currentPage.editableRegionValues["ad.heading"] = "colour green";
+
+    const response = await rocketLocalEngine.createPlan({
+      intent: "scalable growth text change to colour green",
+      context,
+      memory: {}
+    });
+
+    expect(response.plan.operations).toHaveLength(1);
+    expect(response.plan.operations[0]).toMatchObject({
+      type: "replace_source_file",
+      targetId: sourcePath,
+      patches: [{ path: "content" }]
+    });
+    const execution = applyAIPlan({
+      plan: response.plan,
+      regions: context.currentPage.editableRegionValues,
+      sourceFiles: { [sourcePath]: source }
+    });
+    expect(execution.summary).toEqual({ requested: 1, applied: 1, failed: 0 });
+    expect(execution.sourceFiles[sourcePath]).toContain(
+      "color: '#22c55e' }}>🚀 Scalable Growth"
+    );
+    expect(execution.sourceFiles[sourcePath]).toContain(
+      "color: '#111111' }}>About our company"
+    );
+    expect(execution.regions["ad.heading"]).toBe("colour green");
+  });
+
   it("changes every selected text region in one coordinated plan", async () => {
     const context = connectedContext();
     context.currentPage.selectedRegion = null;

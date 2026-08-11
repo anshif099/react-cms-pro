@@ -275,6 +275,38 @@ function colorFromIntent(intent) {
   return namedMatch?.value || "";
 }
 
+function requestsTextColorChange(intent) {
+  const text = normalized(intent);
+  return Boolean(colorFromIntent(intent))
+    && /\bcolou?r\b/.test(text)
+    && !includesAny(text, ["background", " bg ", "bg colour", "bg color"]);
+}
+
+function comparableText(value) {
+  return normalized(value)
+    .normalize("NFKD")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+}
+
+function requestedTextColorSubject(intent) {
+  const text = normalized(intent);
+  const descriptor = "(?:text|font|copy|heading|headline|title|label|words?)";
+  const action = "(?:change|set|make|turn|update)";
+  const beforeAction = text.match(new RegExp(
+    `^(.+?)\\s+(?:${descriptor}\\s+)?${action}\\b`
+  ));
+  const afterAction = text.match(new RegExp(
+    `^${action}\\s+(?:the\\s+)?(.+?)\\s+(?:${descriptor}\\s+)?colou?r\\b`
+  ));
+  const subject = comparableText(beforeAction?.[1] || afterAction?.[1] || "")
+    .replace(/^(?:the|this|that)\s+/, "")
+    .trim();
+  return ["", "selected", "selection", "current", "active"].includes(subject)
+    ? ""
+    : subject;
+}
+
 function requestsFullPageScope(intent) {
   const text = normalized(intent);
   return includesAny(text, [
@@ -717,6 +749,7 @@ function selectedRegionCopyOperations(addOperation, context, intent) {
   ) return [];
 
   const text = normalized(intent);
+  if (requestsTextColorChange(intent)) return [];
   if (includesAny(text, [
     "background", "text color", "text colour", "font color", "font colour",
     "font size", "image", "photo", "picture", "media asset", "link url", "href"
@@ -771,10 +804,55 @@ function selectedRegionCopyOperations(addOperation, context, intent) {
   });
 }
 
-function selectedRegionTextColorOperations(addOperation, context, color) {
-  const targets = selectedRegions(context).filter((selected) => (
-    ["text", "button"].includes(selected.type)
-  ));
+function editableTextRegionEntries(context) {
+  const page = context?.currentPage || {};
+  const definitions = page.editableRegionDefinitions || {};
+  const values = page.editableRegionValues || {};
+  return Object.entries(definitions)
+    .filter(([, definition]) => (
+      ["text", "richtext", "button"].includes(definition?.type)
+    ))
+    .map(([regionId, definition]) => ({
+      regionId,
+      type: definition.type,
+      label: definition.label || regionId,
+      value: values[regionId] ?? definition.value ?? definition.defaultValue ?? ""
+    }));
+}
+
+function namedEditableTextTargets(context, intent) {
+  const subject = requestedTextColorSubject(intent);
+  if (!subject) return [];
+  return editableTextRegionEntries(context)
+    .map((region) => {
+      const value = region.value && typeof region.value === "object"
+        ? region.value.text
+        : region.value;
+      const candidate = comparableText(value);
+      const matches = candidate.length >= 3
+        && (candidate.includes(subject) || subject.includes(candidate));
+      return { ...region, candidate, matches };
+    })
+    .filter((region) => region.matches)
+    .sort((left, right) => right.candidate.length - left.candidate.length)
+    .slice(0, 1);
+}
+
+function selectedRegionTextColorOperations(
+  addOperation,
+  context,
+  intent,
+  color,
+  namedOnly = false
+) {
+  const namedTargets = namedEditableTextTargets(context, intent);
+  const targets = namedTargets.length
+    ? namedTargets
+    : namedOnly
+      ? []
+      : selectedRegions(context).filter((selected) => (
+        ["text", "richtext", "button"].includes(selected.type)
+      ));
   const capabilities = new Set(context?.capabilities || []);
   if (
     !color
@@ -794,6 +872,62 @@ function selectedRegionTextColorOperations(addOperation, context, color) {
       patches: [patch("value", nextValue)]
     });
   });
+}
+
+function sourceTextColorOperations(addOperation, context, intent, color) {
+  const capabilities = new Set(context?.capabilities || []);
+  const files = context?.sourceProject?.files || {};
+  const subject = requestedTextColorSubject(intent);
+  if (!capabilities.has("replace_source_file") || !subject) return [];
+
+  const elementPattern = /<([a-z][\w.-]*)\b([^>]*\bstyle\s*=\s*\{\{[^>]*?\}\}[^>]*)>([^<>{}\r\n]{2,180})<\/\1>/gi;
+  const candidates = [];
+  Object.entries(files).forEach(([path, contentValue]) => {
+    const content = String(contentValue ?? "");
+    if (!content || content.includes("/* ReactCMS context truncated */")) return;
+    let match;
+    while ((match = elementPattern.exec(content))) {
+      const visibleText = comparableText(match[3]);
+      if (
+        visibleText.length >= 3
+        && (visibleText.includes(subject) || subject.includes(visibleText))
+      ) {
+        candidates.push({
+          path,
+          content,
+          index: match.index,
+          source: match[0],
+          visibleText
+        });
+      }
+    }
+  });
+  const target = candidates
+    .sort((left, right) => right.visibleText.length - left.visibleText.length)[0];
+  if (!target) return [];
+
+  const colorProperty = /(\bcolor\s*:\s*)(["'`])(?:\\.|(?!\2)[\s\S])*?\2/;
+  let nextElement = colorProperty.test(target.source)
+    ? target.source.replace(colorProperty, (_match, prefix, quote) => (
+      `${prefix}${quote}${color}${quote}`
+    ))
+    : target.source.replace(
+      /(style\s*=\s*\{\{)([\s\S]*?)(\}\})/,
+      (_match, opening, styles, closing) => (
+        `${opening}${styles.trimEnd()}${styles.trim() ? ", " : ""}color: '${color}'${closing}`
+      )
+    );
+  if (nextElement === target.source) return [];
+
+  const nextContent = `${target.content.slice(0, target.index)}${nextElement}${target.content.slice(
+    target.index + target.source.length
+  )}`;
+  return [addOperation("replace_source_file", {
+    targetId: target.path,
+    summary: `Change ${subject} text color to ${color}`,
+    reason: "Update the explicitly named static website text without changing unrelated editable copy.",
+    patches: [patch("content", nextContent)]
+  })];
 }
 
 function requestsSingleLineText(intent) {
@@ -1083,9 +1217,31 @@ function buildPlan({ intent, context, memory = {}, conversation = [], previousPl
     }
   }
 
-  if (color && includesAny(text, ["text color", "text colour", "font color", "font colour"])) {
-    const regionItems = selectedRegionTextColorOperations(addOperation, context, color);
-    const items = regionItems.length ? regionItems : selectedComponentOperations(
+  if (requestsTextColorChange(combinedIntent)) {
+    const namedRegionItems = selectedRegionTextColorOperations(
+      addOperation,
+      context,
+      combinedIntent,
+      color,
+      true
+    );
+    const sourceItems = namedRegionItems.length
+      ? []
+      : sourceTextColorOperations(addOperation, context, combinedIntent, color);
+    const selectedRegionItems = namedRegionItems.length || sourceItems.length
+      ? []
+      : selectedRegionTextColorOperations(
+        addOperation,
+        context,
+        combinedIntent,
+        color
+      );
+    const directItems = namedRegionItems.length
+      ? namedRegionItems
+      : sourceItems.length
+        ? sourceItems
+        : selectedRegionItems;
+    const items = directItems.length ? directItems : selectedComponentOperations(
       addOperation,
       context,
       "styles.base.color",
