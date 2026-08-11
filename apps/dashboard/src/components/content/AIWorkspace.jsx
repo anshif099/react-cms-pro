@@ -42,6 +42,7 @@ import aiBuilderPersistenceService, {
 import aiWebsiteAgentService from "../../services/aiWebsiteAgentService";
 import { auditAIContext } from "../../services/aiWebsiteContextService";
 import {
+  imageTargetsForRequest,
   isImageRecolorRequest,
   recolorImageAsset,
   requestedImageColor
@@ -202,24 +203,6 @@ function imageSource(target) {
     || target.props?.src
     || target.props?.locales?.en?.src
     || "";
-}
-
-function imageTargetsFromContext(context) {
-  const page = context?.currentPage || {};
-  const regions = Array.isArray(page.selectedRegions) && page.selectedRegions.length
-    ? page.selectedRegions
-    : page.selectedRegion ? [page.selectedRegion] : [];
-  const components = Array.isArray(page.selectedComponents) && page.selectedComponents.length
-    ? page.selectedComponents
-    : page.selectedComponent ? [page.selectedComponent] : [];
-  return [
-    ...regions
-      .filter((target) => target?.type === "image" && target.regionId)
-      .map((target) => ({ kind: "region", targetId: target.regionId, target })),
-    ...components
-      .filter((target) => target?.type === "image" && target.id)
-      .map((target) => ({ kind: "component", targetId: target.id, target }))
-  ];
 }
 
 function clipboardText(target) {
@@ -933,7 +916,7 @@ export function AIWorkspace({
     try {
       let freshContext = await refreshContext();
       let planningIntent = cleanIntent;
-      const imageTargets = imageTargetsFromContext(freshContext).slice(0, 24);
+      const imageTargets = imageTargetsForRequest(freshContext, cleanIntent).slice(0, 24);
       const generatedImageCount = requestedGeneratedImageCount(cleanIntent);
       if (!previousPlan && isImageRecolorRequest(cleanIntent) && imageTargets.length) {
         setImageGenerating(true);
