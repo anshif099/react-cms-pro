@@ -1,0 +1,1 @@
+import{E as e}from"./index-aS12syIf.js";function t(){return e()}export{t};
