@@ -1,1 +1,0 @@
-import{E as e}from"./index-Dmk6Nb7f.js";function t(){return e()}export{t};
