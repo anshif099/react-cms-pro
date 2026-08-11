@@ -1,0 +1,1 @@
+import{E as e}from"./index-D45jTrah.js";function t(){return e()}export{t};
