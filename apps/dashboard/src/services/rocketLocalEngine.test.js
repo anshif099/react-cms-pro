@@ -224,6 +224,94 @@ describe("embedded Rocket AI engine", () => {
     ]);
   });
 
+  it("removes the exact runtime component captured with a screenshot", async () => {
+    const context = connectedRuntimeAdditionsContext();
+    context.currentPage.componentTree.children = [{
+      id: "api-features-selected",
+      type: "features",
+      label: "Features",
+      props: {
+        locales: {
+          en: { title: "API-Powered Advertising", items: [] }
+        }
+      },
+      children: []
+    }, {
+      id: "gallery-other",
+      type: "gallery",
+      label: "Gallery",
+      props: { locales: { en: { title: "Advertising Gallery" } }, images: [] },
+      children: []
+    }];
+    context.currentPage.visualReferences = [{
+      id: "selected-screenshot",
+      url: "https://cdn.example.com/selected.png",
+      selectionSnapshot: {
+        active: {
+          componentId: "api-features-selected",
+          componentType: "features",
+          regionId: "__rcms_runtime_additions__",
+          type: "runtime-component",
+          label: "Features"
+        },
+        targets: []
+      }
+    }];
+
+    const response = await rocketLocalEngine.createPlan({
+      intent: "remove this area",
+      context,
+      memory: {}
+    });
+
+    expect(response.plan.operations).toHaveLength(1);
+    expect(response.plan.operations[0]).toMatchObject({
+      type: "remove_component",
+      targetId: "api-features-selected",
+      summary: "Remove selected API-Powered Advertising"
+    });
+  });
+
+  it("resolves an older screenshot by its unique runtime component label", async () => {
+    const context = connectedRuntimeAdditionsContext();
+    context.currentPage.componentTree.children = [{
+      id: "legacy-features",
+      type: "features",
+      label: "Features",
+      props: { locales: { en: { title: "API-Powered Advertising" } } },
+      children: []
+    }, {
+      id: "legacy-gallery",
+      type: "gallery",
+      label: "Gallery",
+      props: { locales: { en: { title: "Advertising Gallery" } }, images: [] },
+      children: []
+    }];
+    context.currentPage.visualReferences = [{
+      id: "legacy-screenshot",
+      url: "https://cdn.example.com/legacy.png",
+      selectionSnapshot: {
+        active: {
+          regionId: "__rcms_runtime_additions__",
+          type: "runtime-component",
+          label: "Features"
+        },
+        targets: []
+      }
+    }];
+
+    const response = await rocketLocalEngine.createPlan({
+      intent: "remove this area",
+      context,
+      memory: {}
+    });
+
+    expect(response.plan.operations[0]).toMatchObject({
+      type: "remove_component",
+      targetId: "legacy-features"
+    });
+  });
+
   it("continues a prior screenshot removal when the user says remove this too", async () => {
     const context = connectedRuntimeAdditionsContext();
     context.currentPage.componentTree.children = [{

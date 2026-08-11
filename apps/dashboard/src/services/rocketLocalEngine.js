@@ -572,7 +572,7 @@ function previousRemovedComponentTitle(conversation) {
   for (const message of [...conversation].reverse()) {
     if (message?.role !== "assistant" || typeof message.content !== "string") continue;
     const match = message.content.match(
-      /\bRemove\s+(?:duplicate\s+|remaining\s+)?(.+?)(?=;|\.\s+A draft|\.\s+Approved|$)/i
+      /\bRemove\s+(?:selected\s+|duplicate\s+|remaining\s+)?(.+?)(?=;|\.\s+A draft|\.\s+Approved|$)/i
     );
     if (match?.[1]) return match[1].trim();
   }
@@ -594,6 +594,46 @@ function continuationRemovalTarget(context, intent, conversation) {
     }) || null;
 }
 
+function visualReferenceComponentTarget(context) {
+  const page = context?.currentPage || {};
+  const locale = page.locale || "en";
+  const nodes = flattenContextTree(page.componentTree)
+    .filter((node) => node?.id && !node.locked);
+  if (!nodes.length) return null;
+
+  const references = visualReferenceSelection(page);
+  for (const reference of references) {
+    const exactId = String(reference?.componentId || reference?.id || "").trim();
+    if (exactId) {
+      const exact = nodes.find((node) => node.id === exactId);
+      if (exact) return exact;
+    }
+
+    const componentType = String(reference?.componentType || (
+      reference?.type !== "runtime-component" && reference?.type !== "area"
+        ? reference?.type
+        : ""
+    )).trim().toLowerCase();
+    const label = comparableText(reference?.label || reference?.text || "");
+    const matches = nodes.filter((node) => {
+      if (componentType && String(node.type || "").toLowerCase() !== componentType) {
+        return false;
+      }
+      if (!label) return Boolean(componentType);
+      const identities = [
+        node.label,
+        node.type,
+        componentDisplayTitle(node, locale)
+      ].map(comparableText).filter(Boolean);
+      return identities.some((identity) => (
+        identity === label || identity.includes(label) || label.includes(identity)
+      ));
+    });
+    if (matches.length === 1) return matches[0];
+  }
+  return null;
+}
+
 function visualReferenceRemovalOperations(addOperation, context, intent, conversation = []) {
   const capabilities = new Set(context?.capabilities || []);
   if (
@@ -601,19 +641,28 @@ function visualReferenceRemovalOperations(addOperation, context, intent, convers
     || !capabilities.has("remove_component")
   ) return [];
 
+  const referencedTarget = visualReferenceComponentTarget(context);
+  const selectedTargets = selectedComponents(context)
+    .filter((node) => node?.id && !node.locked);
+  const selectedTarget = selectedTargets.length === 1 ? selectedTargets[0] : null;
   const duplicateTarget = duplicateComponentCandidates(
     context?.currentPage?.componentTree
   )[0]?.node;
-  const target = duplicateTarget
+  const target = referencedTarget
+    || selectedTarget
+    || duplicateTarget
     || continuationRemovalTarget(context, intent, conversation);
   if (!target) return [];
   const locale = context?.currentPage?.locale || "en";
   const title = componentDisplayTitle(target, locale);
-  const continued = !duplicateTarget;
+  const selected = target === referencedTarget || target === selectedTarget;
+  const continued = !selected && !duplicateTarget;
   return [addOperation("remove_component", {
     targetId: target.id,
-    summary: `Remove ${continued ? "remaining" : "duplicate"} ${title}`,
-    reason: continued
+    summary: `Remove ${selected ? "selected" : continued ? "remaining" : "duplicate"} ${title}`,
+    reason: selected
+      ? "Use the component identity captured with the screenshot to remove exactly the selected editable area."
+      : continued
       ? "Continue the prior approved removal and apply it to the remaining component with the same page identity."
       : "Match the structural screenshot request to the repeated editable component and remove only its later duplicate.",
     patches: []

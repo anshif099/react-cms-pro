@@ -98,8 +98,13 @@ function compactSelectionTarget(target) {
   const value = target.value && typeof target.value === "object"
     ? target.value.text || target.value.title || target.value.alt || ""
     : target.value;
+  const componentId = target.componentId || target.id || null;
   return {
-    id: target.id || null,
+    id: componentId,
+    componentId,
+    componentType: target.componentType || (
+      target.type === "runtime-component" ? null : target.type
+    ),
     regionId: target.regionId || null,
     type: target.type || "area",
     label: target.label || target.regionId || target.id || "Selected area",
@@ -946,7 +951,7 @@ export function AIWorkspace({
     appendUser = true
   }) => {
     const cleanIntent = String(intent || "").trim();
-    const requestAttachments = (Array.isArray(attachments) ? attachments : [])
+    const suppliedAttachments = (Array.isArray(attachments) ? attachments : [])
       .filter((attachment) => attachment?.url && String(attachment.type || "").startsWith("image/"))
       .slice(0, 4);
     if (!cleanIntent || planning || applying || imageGenerating) return;
@@ -958,11 +963,22 @@ export function AIWorkspace({
       id: `user_${Date.now()}`,
       role: "user",
       content: feedback || cleanIntent,
-      ...(requestAttachments.length ? { attachments: requestAttachments } : {})
+      ...(suppliedAttachments.length ? { attachments: suppliedAttachments } : {})
     } : null;
     const requestConversation = userMessage
       ? [...messages, userMessage]
       : messages;
+    const rememberedAttachments = !suppliedAttachments.length
+      && requestsStructuralScreenshotEdit(cleanIntent)
+      ? [...requestConversation].reverse().flatMap((message) => (
+        Array.isArray(message?.attachments) ? message.attachments : []
+      )).filter((attachment) => (
+        attachment?.url && String(attachment.type || "").startsWith("image/")
+      )).slice(0, 4)
+      : [];
+    const requestAttachments = suppliedAttachments.length
+      ? suppliedAttachments
+      : rememberedAttachments;
     if (appendUser) {
       setMessages((current) => [...current, userMessage]);
     }
