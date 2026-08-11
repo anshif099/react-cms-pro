@@ -526,8 +526,7 @@ export function connectedDraftTargets({
   pageKey,
   runtimeWebsiteId = "",
   runtimeWebsiteIds = [],
-  runtimePageId = "",
-  regionId = ""
+  runtimePageId = ""
 }) {
   const primaryWebsite = String(websiteId || "").trim();
   const primaryPage = normalizedDraftPageKey(pageKey) || "home";
@@ -542,8 +541,6 @@ export function connectedDraftTargets({
     runtimePages.push(normalized);
   };
   addRuntimePage(runtimePageId);
-  const regionPagePrefix = String(regionId || "").match(/^([^.]+)\./)?.[1] || "";
-  addRuntimePage(regionPagePrefix);
   const targets = [];
   const add = (targetWebsiteId, targetPageKey) => {
     if (!targetWebsiteId || !targetPageKey) return;

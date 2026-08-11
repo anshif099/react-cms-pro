@@ -183,11 +183,19 @@ describe("connected visual routes", () => {
       regionId: "hero.title"
     })).toEqual([
       { key: "cms-site:ad", websiteId: "cms-site", pageKey: "ad" },
-      { key: "cms-site:hero", websiteId: "cms-site", pageKey: "hero" },
-      { key: "embedded-site:hero", websiteId: "embedded-site", pageKey: "hero" },
       { key: "embedded-site:ad", websiteId: "embedded-site", pageKey: "ad" },
-      { key: "website-record-site:hero", websiteId: "website-record-site", pageKey: "hero" },
       { key: "website-record-site:ad", websiteId: "website-record-site", pageKey: "ad" }
+    ]);
+  });
+
+  it("does not mistake a component region prefix for a page route", () => {
+    expect(connectedDraftTargets({
+      websiteId: "cms-site",
+      pageKey: "ad",
+      runtimePageId: "api/live-preview",
+      regionId: "features.title"
+    })).toEqual([
+      { key: "cms-site:ad", websiteId: "cms-site", pageKey: "ad" }
     ]);
   });
 

@@ -84,6 +84,7 @@ import ImagePicker from "../../components/ui/ImagePicker";
 const NativeInspector = lazy(() => import("../../components/content/NativeInspector"));
 const AIWorkspace = lazy(() => import("../../components/content/AIWorkspace"));
 const VisualPageSettingsModal = lazy(() => import("../../components/content/VisualPageSettingsModal"));
+const LIVE_FRAME_LOAD_TIMEOUT_MS = 15000;
 
 function sourceDraftKey(websiteId, pageId) {
   return `reactcms_source_draft:${websiteId}:${pageId}`;
@@ -530,6 +531,8 @@ function ConnectedSourceWorkspace({
 
       if (message.type === "rcms/v1/runtime-ready") {
         connectedDraftHydratedRef.current = false;
+        setFrameLoading(false);
+        setLiveRouteError("");
         setRuntimeConnected(true);
         const readyRuntimeWebsiteId = message.websiteId || runtimeWebsiteIdFallback;
         if (readyRuntimeWebsiteId) setRuntimeWebsiteId(readyRuntimeWebsiteId);
@@ -646,6 +649,10 @@ function ConnectedSourceWorkspace({
     livePageUrl,
     canvasRuntimePageId,
     onVisualChange,
+    page?.route,
+    page?.routeId,
+    page?.slug,
+    pageId,
     pageKey,
     runtimeWebsiteIdFallback,
     sendRuntimeMessage,
@@ -657,11 +664,32 @@ function ConnectedSourceWorkspace({
   const handleFrameLoad = () => {
     connectedDraftHydratedRef.current = false;
     setFrameLoading(false);
+    setLiveRouteError("");
     setRuntimeConnected(false);
     sendRuntimeMessage(
       isPreview ? "rcms/v1/exit-edit-mode" : "rcms/v1/enter-edit-mode"
     );
   };
+
+  const handleFrameError = () => {
+    setFrameLoading(false);
+    setRuntimeConnected(false);
+    setLiveRouteError(
+      "The connected page failed to load. Reload the route and check that the deployed site is available."
+    );
+  };
+
+  useEffect(() => {
+    if (!frameLoading || routeResolving || !livePageUrl) return undefined;
+    const timeout = window.setTimeout(() => {
+      setFrameLoading(false);
+      setRuntimeConnected(false);
+      setLiveRouteError((current) => current || (
+        "The connected page did not become ready in time. Reload the route to try again."
+      ));
+    }, LIVE_FRAME_LOAD_TIMEOUT_MS);
+    return () => window.clearTimeout(timeout);
+  }, [frameLoading, frameVersion, livePageUrl, routeResolving]);
 
   const publishConnectedSource = async () => {
     const result = await onPublish();
@@ -1426,6 +1454,7 @@ function ConnectedSourceWorkspace({
                   src={renderedLivePageUrl}
                   title={`${page?.title || "Untitled Page"} live visual canvas`}
                   onLoad={handleFrameLoad}
+                  onError={handleFrameError}
                   className="block h-full w-full border-0 bg-white"
                   sandbox={livePageIsCrossOrigin
                     ? "allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
@@ -2777,29 +2806,15 @@ export function VisualBuilderPage() {
     return true;
   }, [performSave, saveSourceDraft, stageAIExecution]);
 
-  const saveConnectedAIChanges = useCallback(async (snapshot) => {
-    stageAIExecution(snapshot);
-    if (snapshot?.regions) {
-      const fallbackWebsiteId = String(sourceWebsite?.websiteId || websiteId || "").trim();
-      Object.entries(snapshot.regions).forEach(([regionId, value]) => {
-        persistConnectedRegion({
-          regionId,
-          value,
-          pageId: snapshot?.pageId || pageKey,
-          runtimeWebsiteId: fallbackWebsiteId,
-          runtimeWebsiteIds: [fallbackWebsiteId].filter(Boolean)
-        });
-      });
-    }
+  const saveConnectedAIChanges = useCallback(async () => {
+    // applyConnectedAIPlan and rollbackConnectedAIPlan already persist only the
+    // regions they changed. Re-saving the full snapshot here duplicated every
+    // Firebase write and incorrectly stored the supplemental runtime tree as the
+    // connected page's native tree, which could force the iframe into a bad reload.
     const regionsSaved = await saveConnectedDraft(false);
-    const pageSaved = regionsSaved
-      ? await performSave({ manual: true, settingsOverride: snapshot?.pageSettings })
-      : false;
-    if (!regionsSaved || !pageSaved) {
-      throw new Error("The Rocket AI page draft could not be committed completely.");
-    }
+    if (!regionsSaved) throw new Error("The Rocket AI page draft could not be committed completely.");
     return true;
-  }, [pageKey, performSave, persistConnectedRegion, saveConnectedDraft, sourceWebsite?.websiteId, stageAIExecution, websiteId]);
+  }, [saveConnectedDraft]);
 
   const handleSourceWriteTokenChange = useCallback((token) => {
     setSourceWriteToken(token);

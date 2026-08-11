@@ -380,6 +380,8 @@ function BuiltinComponent({
                 <img
                   src={image.src}
                   alt={image.alt || ''}
+                  loading="lazy"
+                  decoding="async"
                   style={{ width: '100%', aspectRatio: '4 / 3', objectFit: 'cover', display: 'block' }}
                 />
                 {(image.title || image.caption || image.description) ? (
