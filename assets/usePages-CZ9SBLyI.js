@@ -1,0 +1,1 @@
+import{E as e}from"./index-Ka3RpFU8.js";function t(){return e()}export{t};
