@@ -127,12 +127,39 @@ const ACRONYM_EXPANSIONS = Object.freeze({
   ux: "User Experience"
 });
 
+const QUANTITY_WORDS = Object.freeze({
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+  eleven: 11,
+  twelve: 12
+});
+
 function normalized(value) {
   return String(value || "").trim().toLowerCase();
 }
 
 function includesAny(text, terms) {
   return terms.some((term) => text.includes(term));
+}
+
+function requestedImageCount(value) {
+  const text = normalized(value);
+  const before = text.match(
+    /\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(?:\w+\s+){0,3}(?:image|photo|picture|illustration|artwork|visual)s?\b/
+  );
+  const after = text.match(
+    /\b(?:image|photo|picture|illustration|artwork|visual)s?\s*(?:x|:)?\s*(\d+)\b/
+  );
+  const raw = before?.[1] || after?.[1] || "";
+  return Math.min(12, Math.max(0, QUANTITY_WORDS[raw] || Number(raw) || 0));
 }
 
 function json(value) {
@@ -372,13 +399,26 @@ function companyFromContext(context, memory) {
     || "your business";
 }
 
+function visualReferenceSelection(page = {}) {
+  return (Array.isArray(page.visualReferences) ? page.visualReferences : [])
+    .flatMap((reference) => {
+      const snapshot = reference?.selectionSnapshot;
+      if (!snapshot) return [];
+      return [snapshot.active, ...(Array.isArray(snapshot.targets) ? snapshot.targets : [])];
+    })
+    .filter(Boolean);
+}
+
 function selectedRegions(context, type = "") {
   const page = context?.currentPage || {};
-  const regions = Array.isArray(page.selectedRegions) && page.selectedRegions.length
+  const liveRegions = Array.isArray(page.selectedRegions) && page.selectedRegions.length
     ? page.selectedRegions
     : page.selectedRegion
       ? [page.selectedRegion]
       : [];
+  const regions = liveRegions.length
+    ? liveRegions
+    : visualReferenceSelection(page).filter((target) => target.regionId);
   return Array.from(new Map(regions
     .filter((region) => region?.regionId && (!type || region.type === type))
     .map((region) => [region.regionId, region])).values());
@@ -386,11 +426,14 @@ function selectedRegions(context, type = "") {
 
 function selectedComponents(context, type = "") {
   const page = context?.currentPage || {};
-  const components = Array.isArray(page.selectedComponents) && page.selectedComponents.length
+  const liveComponents = Array.isArray(page.selectedComponents) && page.selectedComponents.length
     ? page.selectedComponents
     : page.selectedComponent
       ? [page.selectedComponent]
       : [];
+  const components = liveComponents.length
+    ? liveComponents
+    : visualReferenceSelection(page).filter((target) => target.id && !target.regionId);
   return Array.from(new Map(components
     .filter((component) => component?.id && (!type || component.type === type))
     .map((component) => [component.id, component])).values());
@@ -601,7 +644,13 @@ function requestedSections(text) {
   }
   const requestsImageCollection = /\b(?:images|photos|pictures|illustrations|artworks|visuals)\b/.test(text)
     || /\b(?:\d+|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(?:\w+\s+){0,3}(?:image|photo|picture|illustration|artwork|visual)s?\b/.test(text);
-  if (requestsImageCollection && /\b(?:contents?|captions?|gallery|collection|grid|field|section|block)\b/.test(text)) {
+  if (
+    requestsImageCollection
+    && (
+      requestedImageCount(text) > 1
+      || /\b(?:contents?|captions?|gallery|collection|grid|field|section|block)\b/.test(text)
+    )
+  ) {
     return ["gallery"];
   }
   const beforeFooter = /\b(?:above|before)\s+(?:the\s+)?footer\b/.test(text);
@@ -628,29 +677,50 @@ function requestedSections(text) {
   return [];
 }
 
-function generatedGalleryItems(context) {
+function galleryProfile(intent) {
+  const text = normalized(intent);
+  const profiles = [
+    [/\b(?:advertising|advertisement|ad campaigns?|ads?)\b/, "Advertising Gallery", "campaign"],
+    [/\b(?:product|products|catalog|shop|store)\b/, "Product Gallery", "product"],
+    [/\b(?:property|properties|real estate|listing|listings)\b/, "Property Gallery", "property"],
+    [/\b(?:food|restaurant|menu|dish|dishes)\b/, "Food Gallery", "food"],
+    [/\b(?:travel|tour|destination|destinations|hotel)\b/, "Travel Gallery", "travel"],
+    [/\b(?:team|staff|people|employee|employees)\b/, "Team Gallery", "team"],
+    [/\b(?:portfolio|project|projects|work)\b/, "Project Gallery", "project"],
+    [/\b(?:event|events|conference|wedding)\b/, "Event Gallery", "event"],
+    [/\b(?:service|services)\b/, "Services Gallery", "service"]
+  ];
+  const match = profiles.find(([pattern]) => pattern.test(text));
+  return match
+    ? { title: match[1], subject: match[2] }
+    : { title: "Image Gallery", subject: "page" };
+}
+
+function generatedGalleryItems(context, intent) {
   const prepared = context?.currentPage?.preparedGeneratedAssets;
   if (!Array.isArray(prepared)) return [];
+  const profile = galleryProfile(intent);
   return prepared.slice(0, 12).map((asset, index) => ({
     id: asset.id || `generated-image-${index + 1}`,
     src: asset.url,
-    alt: asset.alt || `Advertisement visual ${index + 1}`,
-    caption: asset.caption || asset.description || `Campaign visual ${index + 1}`,
-    title: asset.title || `Campaign visual ${index + 1}`,
-    description: asset.description || asset.caption || "Generated for this advertising campaign."
+    alt: asset.alt || `${profile.subject} visual ${index + 1}`,
+    caption: asset.caption || asset.description || `${profile.subject} visual ${index + 1}`,
+    title: asset.title || `${profile.title} ${index + 1}`,
+    description: asset.description || asset.caption || `Generated for this ${profile.subject} gallery.`
   })).filter((asset) => asset.src);
 }
 
 function componentIntentPatches(type, intent, locale, context) {
   const text = normalized(intent);
   if (type === "gallery") {
-    const images = generatedGalleryItems(context);
+    const images = generatedGalleryItems(context, intent);
     if (!images.length) return [];
+    const profile = galleryProfile(intent);
     return [
-      patch(`props.locales.${locale}.title`, "Advertising Campaign Gallery"),
+      patch(`props.locales.${locale}.title`, profile.title),
       patch(
         `props.locales.${locale}.subtitle`,
-        `${images.length} coordinated campaign visual${images.length === 1 ? "" : "s"} with matching page content.`
+        `${images.length} related ${profile.subject} visual${images.length === 1 ? "" : "s"} with matching page content.`
       ),
       patch("props.images", images),
       patch("props.columns", images.length >= 3 ? "3" : String(Math.max(1, images.length))),
@@ -1586,11 +1656,136 @@ function base64Utf8(value) {
   throw new Error("This browser cannot encode the locally generated artwork.");
 }
 
+const PROCEDURAL_VISUAL_ROLES = Object.freeze({
+  campaign: [
+    "Campaign Strategy",
+    "Audience Targeting",
+    "Creative Direction",
+    "Multichannel Reach",
+    "Performance Analytics",
+    "Scalable Growth"
+  ],
+  product: [
+    "Product Overview",
+    "Key Feature",
+    "Craft Detail",
+    "Everyday Use",
+    "Customer Benefit",
+    "Product Outcome"
+  ],
+  property: [
+    "Exterior View",
+    "Living Space",
+    "Design Detail",
+    "Lifestyle View",
+    "Location Value",
+    "Property Highlight"
+  ],
+  food: [
+    "Signature Dish",
+    "Fresh Ingredients",
+    "Chef Craft",
+    "Dining Experience",
+    "Seasonal Flavor",
+    "Guest Favorite"
+  ],
+  travel: [
+    "Destination View",
+    "Local Detail",
+    "Guest Experience",
+    "Cultural Moment",
+    "Scenic Journey",
+    "Travel Memory"
+  ],
+  page: [
+    "Visual Overview",
+    "Key Detail",
+    "Human Experience",
+    "Connected Story",
+    "Visible Momentum",
+    "Desired Outcome"
+  ]
+});
+
+function proceduralVisualProfile(prompt) {
+  const gallery = galleryProfile(prompt);
+  const sequence = Math.max(
+    1,
+    Number(String(prompt || "").match(/\b(?:image|visual)\s+(\d+)\s+of\s+\d+\b/i)?.[1]) || 1
+  );
+  const roles = PROCEDURAL_VISUAL_ROLES[gallery.subject] || PROCEDURAL_VISUAL_ROLES.page;
+  const role = roles[(sequence - 1) % roles.length];
+  return {
+    sequence,
+    role,
+    subject: gallery.subject,
+    description: `${role}: an original ${gallery.subject} illustration generated locally for this page.`
+  };
+}
+
+function proceduralMotif(sequence, primary, accent) {
+  const variant = (sequence - 1) % 6;
+  if (variant === 0) {
+    return `<g transform="translate(690 188)">
+      <rect width="370" height="330" rx="30" fill="#ffffff" opacity=".09"/>
+      <rect x="42" y="55" width="286" height="18" rx="9" fill="${primary}" opacity=".9"/>
+      <rect x="42" y="102" width="190" height="14" rx="7" fill="#ffffff" opacity=".45"/>
+      <rect x="42" y="145" width="48" height="120" rx="12" fill="${accent}" opacity=".72"/>
+      <rect x="108" y="190" width="48" height="75" rx="12" fill="${primary}" opacity=".82"/>
+      <rect x="174" y="118" width="48" height="147" rx="12" fill="${accent}" opacity=".88"/>
+      <rect x="240" y="166" width="48" height="99" rx="12" fill="${primary}" opacity=".65"/>
+    </g>`;
+  }
+  if (variant === 1) {
+    const nodes = [[785,245,55],[940,205,34],[1015,350,48],[870,425,42],[700,380,31]];
+    return `<g>${nodes.map(([x, y, radius], index) => (
+      `<circle cx="${x}" cy="${y}" r="${radius}" fill="${index % 2 ? accent : primary}" opacity=".72"/>`
+    )).join("")}
+      <path d="M785 245 L940 205 L1015 350 L870 425 L700 380 Z M785 245 L870 425 M940 205 L700 380" fill="none" stroke="#fff" stroke-width="4" opacity=".3"/>
+    </g>`;
+  }
+  if (variant === 2) {
+    return `<g transform="translate(670 155) rotate(-4 210 190)">
+      <rect x="0" y="42" width="330" height="300" rx="32" fill="${primary}" opacity=".28"/>
+      <rect x="80" y="0" width="330" height="300" rx="32" fill="#ffffff" opacity=".12"/>
+      <circle cx="245" cy="115" r="62" fill="${accent}" opacity=".78"/>
+      <path d="M140 230 C205 150 278 310 350 190" fill="none" stroke="#fff" stroke-width="14" stroke-linecap="round" opacity=".7"/>
+    </g>`;
+  }
+  if (variant === 3) {
+    return `<g transform="translate(675 165)">
+      <rect x="0" y="70" width="250" height="220" rx="24" fill="#ffffff" opacity=".13"/>
+      <rect x="285" y="0" width="125" height="290" rx="28" fill="#ffffff" opacity=".16"/>
+      <rect x="30" y="105" width="190" height="105" rx="16" fill="${primary}" opacity=".52"/>
+      <circle cx="347" cy="90" r="38" fill="${accent}" opacity=".78"/>
+      <rect x="315" y="155" width="64" height="12" rx="6" fill="#fff" opacity=".62"/>
+      <rect x="315" y="184" width="48" height="12" rx="6" fill="#fff" opacity=".42"/>
+    </g>`;
+  }
+  if (variant === 4) {
+    return `<g transform="translate(660 155)">
+      <rect width="430" height="330" rx="34" fill="#ffffff" opacity=".1"/>
+      <path d="M48 256 L118 205 L185 224 L258 126 L325 158 L382 70" fill="none" stroke="${accent}" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M48 285 H382 M48 226 H382 M48 167 H382 M48 108 H382" stroke="#fff" stroke-width="2" opacity=".12"/>
+      <circle cx="382" cy="70" r="18" fill="${primary}"/>
+    </g>`;
+  }
+  return `<g transform="translate(675 165)">
+    <rect x="0" y="220" width="82" height="90" rx="20" fill="${primary}" opacity=".42"/>
+    <rect x="105" y="165" width="82" height="145" rx="20" fill="${accent}" opacity=".52"/>
+    <rect x="210" y="100" width="82" height="210" rx="20" fill="${primary}" opacity=".68"/>
+    <rect x="315" y="25" width="82" height="285" rx="20" fill="${accent}" opacity=".8"/>
+    <path d="M40 205 L145 145 L250 80 L365 0" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round" opacity=".65"/>
+    <path d="M330 0 H365 V35" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" opacity=".65"/>
+  </g>`;
+}
+
 function proceduralImage(prompt, brandContext = {}, modelId = "") {
   const colors = brandContext?.theme?.colors || {};
   const primary = colors.primary || "#7c3aed";
   const accent = colors.accent || "#22d3ee";
   const background = colors.background || "#080b14";
+  const profile = proceduralVisualProfile(prompt);
   const seed = Array.from(String(prompt)).reduce((sum, char) => (
     (sum * 31 + char.charCodeAt(0)) >>> 0
   ), 2166136261);
@@ -1600,6 +1795,7 @@ function proceduralImage(prompt, brandContext = {}, modelId = "") {
     const radius = 28 + ((seed + index * 41) % 150);
     return `<circle cx="${x}" cy="${y}" r="${radius}" fill="url(#glow)" opacity="${0.08 + (index % 4) * 0.05}"/>`;
   }).join("");
+  const motif = proceduralMotif(profile.sequence, xml(primary), xml(accent));
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800">
     <defs>
       <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${xml(background)}"/><stop offset="1" stop-color="#050816"/></linearGradient>
@@ -1608,13 +1804,18 @@ function proceduralImage(prompt, brandContext = {}, modelId = "") {
     </defs>
     <rect width="1200" height="800" fill="url(#bg)"/>
     <g filter="url(#blur)">${circles}</g>
+    <text x="72" y="105" fill="${xml(accent)}" font-family="Inter,Arial,sans-serif" font-size="20" font-weight="700" letter-spacing="4">${xml(profile.subject.toUpperCase())}</text>
+    <text x="72" y="180" fill="#ffffff" font-family="Inter,Arial,sans-serif" font-size="54" font-weight="800">${xml(profile.role)}</text>
+    <text x="72" y="230" fill="#ffffff" opacity=".58" font-family="Inter,Arial,sans-serif" font-size="22">Original Rocket visual ${profile.sequence}</text>
+    ${motif}
     <path d="M-80 620 C260 390 470 760 760 500 S1180 300 1320 470" fill="none" stroke="${xml(primary)}" stroke-width="3" opacity=".65"/>
     <path d="M-120 690 C220 460 520 790 820 560 S1160 420 1300 520" fill="none" stroke="${xml(accent)}" stroke-width="1.5" opacity=".55"/>
-    <text x="72" y="710" fill="#ffffff" opacity=".72" font-family="Inter,Arial,sans-serif" font-size="22">${xml(String(prompt).slice(0, 72))}</text>
+    <text x="72" y="710" fill="#ffffff" opacity=".72" font-family="Inter,Arial,sans-serif" font-size="22">${xml(profile.description)}</text>
   </svg>`;
   return {
     imageBase64: base64Utf8(svg),
     mimeType: "image/svg+xml",
+    revisedPrompt: profile.description,
     model: `${currentModelInfo(modelId).id}-procedural-image`,
     modelInfo: currentModelInfo(modelId)
   };

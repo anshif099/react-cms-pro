@@ -93,6 +93,20 @@ function freshConversationMessages() {
   return [{ ...WELCOME_MESSAGE }];
 }
 
+function compactSelectionTarget(target) {
+  if (!target) return null;
+  const value = target.value && typeof target.value === "object"
+    ? target.value.text || target.value.title || target.value.alt || ""
+    : target.value;
+  return {
+    id: target.id || null,
+    regionId: target.regionId || null,
+    type: target.type || "area",
+    label: target.label || target.regionId || target.id || "Selected area",
+    text: typeof value === "string" ? value.slice(0, 500) : ""
+  };
+}
+
 function conversationSignature(messages, modelId) {
   return JSON.stringify({
     modelId: modelId || "",
@@ -106,7 +120,8 @@ function conversationSignature(messages, modelId) {
         url: attachment.url,
         type: attachment.type,
         size: attachment.size,
-        alt: attachment.alt
+        alt: attachment.alt,
+        selectionSnapshot: attachment.selectionSnapshot
       })),
       error: Boolean(message.error)
     }))
@@ -124,7 +139,11 @@ function requestsStructuralScreenshotEdit(value) {
   const text = String(value || "").trim().toLowerCase();
   const removesArea = /\b(remove|delete|hide)\b/.test(text)
     && /\b(this|shown|pictured|highlighted|duplicate|extra|second|area|section|component|block)\b/.test(text);
-  return removesArea || /\b(?:use|read|check)\b[\s\S]{0,40}\b(?:screenshot|attached image|visual reference)\b/.test(text);
+  const placesFromReference = /\b(?:add|insert|create|build|put|place|move)\b/.test(text)
+    && /\b(?:above|before|below|after|inside|within|replace)\s+(?:the\s+)?(?:this|shown|pictured|highlighted|here|area|section|component|block)\b/.test(text);
+  return removesArea
+    || placesFromReference
+    || /\b(?:use|read|check)\b[\s\S]{0,40}\b(?:screenshot|attached image|visual reference)\b/.test(text);
 }
 
 const IMAGE_NUMBER_WORDS = Object.freeze({
@@ -152,22 +171,15 @@ function requestedGeneratedImageCount(value) {
   return Math.min(12, Math.max(1, count));
 }
 
-const CAMPAIGN_IMAGE_CONTENT = Object.freeze([
-  ["Campaign Strategy", "A focused advertising strategy built around measurable business goals."],
-  ["Audience Intelligence", "Customer insight and precise targeting connect every message to the right audience."],
-  ["Creative Direction", "Distinctive campaign creative turns the brand story into attention and action."],
-  ["Channel Automation", "Coordinated workflows keep campaigns consistent across platforms and placements."],
-  ["Performance Analytics", "Live performance signals reveal what works and where the campaign can improve."],
-  ["Scalable Growth", "Continuous optimization converts campaign learning into sustainable business growth."]
-]);
-
-function generatedAssetContent(index) {
-  const fallbackNumber = index + 1;
-  const [title, description] = CAMPAIGN_IMAGE_CONTENT[index] || [
-    `Campaign Visual ${fallbackNumber}`,
-    `A unique advertising campaign visual created for this page (${fallbackNumber}).`
-  ];
-  return { title, description, caption: `${title} — ${description}` };
+function generatedAssetContent(index, intent) {
+  const sequence = index + 1;
+  const goal = String(intent || "the requested page content")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 240);
+  const title = `Generated Visual ${sequence}`;
+  const description = `A unique visual for "${goal}" (variation ${sequence}).`;
+  return { title, description, caption: `${title} - ${description}` };
 }
 
 function dateLabel(value) {
@@ -965,14 +977,71 @@ export function AIWorkspace({
       const generatedImageCount = requestedGeneratedImageCount(cleanIntent);
       const structuralScreenshotEdit = requestAttachments.length
         && requestsStructuralScreenshotEdit(cleanIntent);
-      if (!previousPlan && structuralScreenshotEdit) {
-        freshContext.currentPage.visualReferences = requestAttachments.map((attachment) => ({
-          id: attachment.id,
-          name: attachment.name,
-          url: attachment.url,
-          type: attachment.type,
-          alt: attachment.alt
-        }));
+      const visualReferences = requestAttachments.map((attachment) => ({
+        id: attachment.id,
+        name: attachment.name,
+        url: attachment.url,
+        type: attachment.type,
+        alt: attachment.alt,
+        selectionSnapshot: attachment.selectionSnapshot
+      }));
+      const prepareGeneratedGalleryAssets = async (count) => {
+        setImageGenerating(true);
+        setImageProgress(0);
+        log("image", `Generating ${count} unique image${count === 1 ? "" : "s"} with page content for a new gallery.`);
+        const assets = [];
+        for (let index = 0; index < count; index += 1) {
+          const content = generatedAssetContent(index, cleanIntent);
+          const generated = await aiWebsiteAgentService.generateImage({
+            prompt: `${cleanIntent}. Create visually distinct image ${index + 1} of ${count}; vary the subject, composition, and camera angle while keeping it relevant to the same request.`,
+            modelId: modelInfo.releaseId,
+            brandContext: {
+              pageTitle,
+              theme: freshContext?.designSystem?.theme,
+              memory
+            }
+          });
+          if (generated.modelInfo) setModelInfo(generated.modelInfo);
+          const file = generatedImageFile(
+            generated.imageBase64,
+            pageTitle,
+            generated.mimeType,
+            index + 1
+          );
+          const asset = await mediaService.upload(
+            websiteId,
+            file,
+            "ai-generated",
+            (progress) => setImageProgress(
+              ((index + progress / 100) / count) * 100
+            )
+          );
+          const generatedDescription = String(generated.revisedPrompt || "").trim()
+            || content.description;
+          assets.push({
+            id: asset.id,
+            url: asset.url,
+            ...content,
+            alt: generatedDescription.slice(0, 500),
+            description: generatedDescription,
+            caption: `${content.title} - ${generatedDescription}`
+          });
+          log("success", `Generated image ${index + 1} of ${count}: ${content.title}.`, {
+            model: generated.model,
+            assetId: asset.id
+          });
+        }
+        return assets;
+      };
+      if (!previousPlan && structuralScreenshotEdit && generatedImageCount) {
+        const preparedGeneratedAssets = await prepareGeneratedGalleryAssets(generatedImageCount);
+        freshContext = await refreshContext();
+        freshContext.currentPage.preparedGeneratedAssets = preparedGeneratedAssets;
+        freshContext.currentPage.visualReferences = visualReferences;
+        planningIntent = `Create one editable gallery with exactly ${generatedImageCount} generated images and matching content. Use the selected-area snapshot attached to the screenshot and place it where the user indicated. Original request: ${cleanIntent}`;
+        log("plan", `Using the screenshot's captured selection to place a ${generatedImageCount}-image gallery.`);
+      } else if (!previousPlan && structuralScreenshotEdit) {
+        freshContext.currentPage.visualReferences = visualReferences;
         planningIntent = `${cleanIntent}. An uploaded screenshot is attached as a visual reference for this structural page edit.`;
         log("plan", `Using ${requestAttachments.length} uploaded screenshot${requestAttachments.length === 1 ? "" : "s"} as a structural page reference.`);
       } else if (!previousPlan && requestAttachments.length && imageTargets.length) {
@@ -990,7 +1059,8 @@ export function AIWorkspace({
         planningIntent = `Write the prepared attached image to all selected images with accessible alt text. Follow this instruction: ${cleanIntent}`;
         log("image", `Attached ${requestAttachments.length} uploaded chat image${requestAttachments.length === 1 ? "" : "s"} to ${imageTargets.length} selected image target${imageTargets.length === 1 ? "" : "s"}.`);
       } else if (!previousPlan && requestAttachments.length && !imageTargets.length) {
-        planningIntent = `${cleanIntent}. An uploaded image is attached as a reference, but no editable image area is selected.`;
+        freshContext.currentPage.visualReferences = visualReferences;
+        planningIntent = `${cleanIntent}. Use the uploaded screenshot's captured selection and current page context as a reference; it is not a replacement image.`;
       } else if (!previousPlan && isImageRecolorRequest(cleanIntent) && imageTargets.length) {
         setImageGenerating(true);
         setImageProgress(0);
@@ -1029,47 +1099,7 @@ export function AIWorkspace({
         freshContext.currentPage.preparedImageAssignments = assignments;
         planningIntent = `Write the prepared image edits to all selected images. They were recolored to ${targetColor}. Original request: ${cleanIntent}`;
       } else if (!previousPlan && generatedImageCount && (generatedImageCount > 1 || !imageTargets.length)) {
-        setImageGenerating(true);
-        setImageProgress(0);
-        log("image", `Generating ${generatedImageCount} unique image${generatedImageCount === 1 ? "" : "s"} with page content for a new gallery.`);
-        const preparedGeneratedAssets = [];
-        for (let index = 0; index < generatedImageCount; index += 1) {
-          const content = generatedAssetContent(index);
-          const generated = await aiWebsiteAgentService.generateImage({
-            prompt: `${cleanIntent}. Unique visual ${index + 1} of ${generatedImageCount}: ${content.title}. ${content.description}`,
-            modelId: modelInfo.releaseId,
-            brandContext: {
-              pageTitle,
-              theme: freshContext?.designSystem?.theme,
-              memory
-            }
-          });
-          if (generated.modelInfo) setModelInfo(generated.modelInfo);
-          const file = generatedImageFile(
-            generated.imageBase64,
-            pageTitle,
-            generated.mimeType,
-            index + 1
-          );
-          const asset = await mediaService.upload(
-            websiteId,
-            file,
-            "ai-generated",
-            (progress) => setImageProgress(
-              ((index + progress / 100) / generatedImageCount) * 100
-            )
-          );
-          preparedGeneratedAssets.push({
-            id: asset.id,
-            url: asset.url,
-            alt: `${content.title} advertising campaign visual`,
-            ...content
-          });
-          log("success", `Generated image ${index + 1} of ${generatedImageCount}: ${content.title}.`, {
-            model: generated.model,
-            assetId: asset.id
-          });
-        }
+        const preparedGeneratedAssets = await prepareGeneratedGalleryAssets(generatedImageCount);
         freshContext = await refreshContext();
         freshContext.currentPage.preparedGeneratedAssets = preparedGeneratedAssets;
         planningIntent = `Create one editable gallery field with ${generatedImageCount} generated images and matching content, placed exactly as requested. Original request: ${cleanIntent}`;
@@ -1254,6 +1284,10 @@ export function AIWorkspace({
     setAttachmentError("");
     try {
       const uploaded = [];
+      const selectionSnapshot = {
+        active: compactSelectionTarget(selectedTarget),
+        targets: targetList.map(compactSelectionTarget).filter(Boolean)
+      };
       for (const [index, attachment] of pendingAttachments.entries()) {
         const asset = await mediaService.upload(
           websiteId,
@@ -1269,7 +1303,8 @@ export function AIWorkspace({
           url: asset.url,
           type: asset.type,
           size: asset.size,
-          alt: asset.alt
+          alt: asset.alt,
+          selectionSnapshot
         });
       }
       log("image", `Uploaded ${uploaded.length} Rocket Chat image attachment${uploaded.length === 1 ? "" : "s"}.`, {

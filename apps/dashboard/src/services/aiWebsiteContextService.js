@@ -344,7 +344,7 @@ export async function collectAIWebsiteContext({
       ? revisions.slice(0, 30).map(compactRevision)
       : [],
     constraints: {
-      noScreenshotInput: true,
+      screenshotReferenceMode: "selected-area-and-page-context",
       preserveWebsiteShell: surface === "connected-runtime",
       requireApproval: true,
       maxOperations: 80,

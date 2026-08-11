@@ -353,6 +353,61 @@ describe("embedded Rocket AI engine", () => {
     });
   });
 
+  it("handles the exact screenshot prompt as six images above its captured area", async () => {
+    const context = connectedRuntimeAdditionsContext();
+    context.currentPage.selectedRegion = null;
+    context.currentPage.selectedRegions = [];
+    context.currentPage.editableRegionDefinitions["ad.about_section"] = {
+      type: "section",
+      label: "About Advertisement"
+    };
+    context.currentPage.editableRegionValues["ad.about_section"] = {
+      background: "#ffffff"
+    };
+    context.currentPage.visualReferences = [{
+      id: "screenshot-gallery",
+      url: "https://cdn.example.com/about-advertisement.png",
+      selectionSnapshot: {
+        active: {
+          regionId: "ad.about_section",
+          type: "section",
+          label: "About Advertisement"
+        },
+        targets: []
+      }
+    }];
+    context.currentPage.preparedGeneratedAssets = Array.from({ length: 6 }, (_, index) => ({
+      id: `related-ad-${index + 1}`,
+      url: `https://cdn.example.com/related-ad-${index + 1}.svg`,
+      alt: `Related advertisement ${index + 1}`
+    }));
+
+    const response = await rocketLocalEngine.createPlan({
+      intent: "add new field above this 6 images add related ad",
+      context,
+      memory: {}
+    });
+
+    expect(response.usage.networkRequests).toBe(0);
+    expect(response.plan.operations).toHaveLength(1);
+    expect(response.plan.operations[0]).toMatchObject({
+      type: "insert_component",
+      componentType: "gallery",
+      position: "after"
+    });
+    expect(response.plan.operations[0].componentType).not.toBe("features");
+    const patches = Object.fromEntries(response.plan.operations[0].patches.map((item) => [
+      item.path,
+      JSON.parse(item.valueJson)
+    ]));
+    expect(patches["props.locales.en.title"]).toBe("Advertising Gallery");
+    expect(patches["props.images"]).toHaveLength(6);
+    expect(patches["metadata.runtimePlacement"]).toEqual({
+      anchorRegionId: "ad.about_section",
+      position: "before"
+    });
+  });
+
   it("changes the selected connected section background without an API request", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     const response = await aiWebsiteAgentService.createPlan({
@@ -992,6 +1047,24 @@ describe("embedded Rocket AI engine", () => {
     expect(result.model).toBe("rocket-ai-ultra-1.5-procedural-image");
     expect(result.mimeType).toBe("image/svg+xml");
     expect(result.imageBase64.length).toBeGreaterThan(100);
+  });
+
+  it("creates six distinct related local advertising compositions", async () => {
+    const first = await rocketLocalEngine.generateImage({
+      prompt: "add six related advertising images. Create visually distinct image 1 of 6",
+      brandContext: {}
+    });
+    const second = await rocketLocalEngine.generateImage({
+      prompt: "add six related advertising images. Create visually distinct image 2 of 6",
+      brandContext: {}
+    });
+    const firstSvg = Buffer.from(first.imageBase64, "base64").toString("utf8");
+    const secondSvg = Buffer.from(second.imageBase64, "base64").toString("utf8");
+
+    expect(first.imageBase64).not.toBe(second.imageBase64);
+    expect(firstSvg).toContain("Campaign Strategy");
+    expect(secondSvg).toContain("Audience Targeting");
+    expect(first.revisedPrompt).toMatch(/campaign strategy/i);
   });
 
   it("runs only Ultra and advances its adaptive version after each full-context prompt", async () => {
