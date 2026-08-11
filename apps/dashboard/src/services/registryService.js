@@ -1,6 +1,11 @@
 import { database } from "../lib/firebase";
 import { ref, get, set, update, onValue } from "firebase/database";
-import { paths, decodeFirebaseKey, decodeFirebaseObject } from "@anshif.rainhopes/shared";
+import {
+  paths,
+  decodeFirebaseKey,
+  decodeFirebaseObject,
+  encodeFirebaseKey
+} from "@anshif.rainhopes/shared";
 
 export const registryService = {
   async getRegistry(websiteId) {
@@ -50,6 +55,13 @@ export const registryService = {
       decoded[decodedPageKey] = decodeFirebaseObject(pageRegions);
     });
     return decoded;
+  },
+
+  async getEditableRegionsForPage(websiteId, pageKey) {
+    const encodedPageKey = encodeFirebaseKey(String(pageKey || "home"));
+    const regionsRef = ref(database, paths.registryRegions(websiteId, encodedPageKey));
+    const snapshot = await get(regionsRef);
+    return snapshot.exists() ? decodeFirebaseObject(snapshot.val()) : {};
   },
 
   async saveNavigation(websiteId, menus) {

@@ -2011,8 +2011,7 @@ export function VisualBuilderPage() {
   useEffect(() => {
     if (!websiteId || !pageId) return;
     fetchPageById(websiteId, pageId);
-    loadRevisions(websiteId, "page", pageId);
-  }, [fetchPageById, loadRevisions, pageId, websiteId]);
+  }, [fetchPageById, pageId, websiteId]);
 
   useEffect(() => {
     if (!websiteId) return undefined;
@@ -2238,7 +2237,6 @@ export function VisualBuilderPage() {
           },
           user?.email || user?.uid
         );
-        loadRevisions(websiteId, "page", pageId);
       }
 
       setSaveStatus(
@@ -2253,7 +2251,7 @@ export function VisualBuilderPage() {
     } finally {
       setSaving(false);
     }
-  }, [activeLocale, loadRevisions, pageId, toast, user, websiteId]);
+  }, [activeLocale, pageId, toast, user, websiteId]);
 
   useEffect(() => {
     if (isPreview || saveStatus !== "unsaved" || !initialTree) return undefined;
@@ -2978,7 +2976,10 @@ export function VisualBuilderPage() {
         onSave={() => performSave({ manual: true })}
         onAIDraftSave={saveNativeAIChanges}
         onPublish={publish}
-        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenSettings={() => {
+          setSettingsOpen(true);
+          void loadRevisions(websiteId, "page", pageId);
+        }}
         onTheme={() => navigate(`/content/${websiteId}/theme`)}
         onSaveTheme={saveAITheme}
         theme={themeTokens}

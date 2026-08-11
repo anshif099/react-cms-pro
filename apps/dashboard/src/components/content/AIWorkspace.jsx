@@ -418,7 +418,7 @@ export function AIWorkspace({
   const [tasks, setTasks] = useState([]);
   const [runs, setRuns] = useState([]);
   const [context, setContext] = useState(null);
-  const [contextLoading, setContextLoading] = useState(true);
+  const [contextLoading, setContextLoading] = useState(false);
   const [memory, setMemory] = useState({});
   const [memorySaving, setMemorySaving] = useState(false);
   const [imagePrompt, setImagePrompt] = useState("");
@@ -532,8 +532,7 @@ export function AIWorkspace({
 
     (async () => {
       try {
-        const [savedRuns, savedMemory, savedConversations, savedActiveConversationId] = await Promise.all([
-          aiBuilderPersistenceService.getRuns(websiteId, pageId),
+        const [savedMemory, savedConversations, savedActiveConversationId] = await Promise.all([
           aiBuilderPersistenceService.getMemory(websiteId),
           aiBuilderPersistenceService.getConversations(websiteId, pageId),
           aiBuilderPersistenceService.getActiveConversationId(websiteId, pageId)
@@ -571,7 +570,6 @@ export function AIWorkspace({
           `${loadingWorkspaceKey}:${activeConversation.id}`,
           conversationSignature(restoredMessages, restoredModel.releaseId)
         );
-        setRuns(savedRuns);
         setMemory(savedMemory);
         setConversations(conversationList);
         setActiveConversationId(activeConversation.id);
@@ -666,11 +664,7 @@ export function AIWorkspace({
   ]);
 
   useEffect(() => {
-    refreshContext().catch(() => undefined);
-  }, [refreshContext]);
-
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    chatEndRef.current?.scrollIntoView({ behavior: "auto", block: "nearest" });
   }, [messages, pending, planning]);
 
   const suggestions = useMemo(() => context ? auditAIContext(context) : [], [context]);
@@ -685,6 +679,8 @@ export function AIWorkspace({
   }, [selectedTarget, selectedTargets]);
   const activeConversation = conversations.find((item) => item.id === activeConversationId)
     || null;
+  const hiddenMessageCount = Math.max(0, messages.length - 30);
+  const visibleMessages = hiddenMessageCount ? messages.slice(-30) : messages;
   const canUndoChatTurn = Boolean(
     planning
     || pending
@@ -2016,7 +2012,12 @@ export function AIWorkspace({
           </div>
         </div>
 
-        {messages.map((message) => (
+        {hiddenMessageCount > 0 && (
+          <p className="rounded-lg border border-slate-800/70 bg-slate-950/30 px-3 py-2 text-center text-[8px] text-slate-600">
+            {hiddenMessageCount} earlier saved messages are kept in memory but hidden for performance.
+          </p>
+        )}
+        {visibleMessages.map((message) => (
             <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
               <div className={`max-w-[92%] rounded-xl px-3 py-2.5 text-[10px] leading-5 ${
                 message.role === "user"

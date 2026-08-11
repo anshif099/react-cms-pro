@@ -12,7 +12,6 @@ import mediaService from "./mediaService";
 import pageService from "./pageService";
 import pluginService from "./pluginService";
 import registryService from "./registryService";
-import revisionService from "./revisionService";
 import seoService from "./seoService";
 import settingsService from "./settingsService";
 import themeService from "./themeService";
@@ -21,27 +20,41 @@ const MAX_STRING = 180000;
 const MAX_ARRAY = 250;
 const MAX_DEPTH = 12;
 const MAX_TREE_NODES = 5000;
+const MAX_CONTEXT_OBJECTS = 20000;
+const MAX_CONTEXT_TEXT = 1500000;
+const MAX_OBJECT_KEYS = 500;
 const MAX_SOURCE_CONTEXT = 1200000;
 const SOURCE_TRUNCATED_MARKER = "\n/* ReactCMS context truncated */";
 
-export function asSerializable(value, depth = 0, ancestors = new WeakSet()) {
+export function asSerializable(
+  value,
+  depth = 0,
+  ancestors = new WeakSet(),
+  budget = { objects: 0, text: 0 }
+) {
   if (value === null || value === undefined) return value ?? null;
   if (typeof value === "string") {
-    return value.length > MAX_STRING
-      ? `${value.slice(0, MAX_STRING)}\n/* ReactCMS context truncated */`
+    const available = Math.max(0, MAX_CONTEXT_TEXT - budget.text);
+    if (!available) return "[context text limit]";
+    const length = Math.min(value.length, MAX_STRING, available);
+    budget.text += length;
+    return length < value.length
+      ? `${value.slice(0, length)}${SOURCE_TRUNCATED_MARKER}`
       : value;
   }
   if (["number", "boolean"].includes(typeof value)) return value;
   if (typeof value !== "object") return String(value);
   if (depth >= MAX_DEPTH) return "[context depth limit]";
   if (ancestors.has(value)) return "[circular]";
+  budget.objects += 1;
+  if (budget.objects > MAX_CONTEXT_OBJECTS) return "[context size limit]";
   ancestors.add(value);
 
   const serialized = Array.isArray(value)
-    ? value.slice(0, MAX_ARRAY).map((item) => asSerializable(item, depth + 1, ancestors))
-    : Object.fromEntries(Object.entries(value).map(([key, item]) => [
+    ? value.slice(0, MAX_ARRAY).map((item) => asSerializable(item, depth + 1, ancestors, budget))
+    : Object.fromEntries(Object.entries(value).slice(0, MAX_OBJECT_KEYS).map(([key, item]) => [
         key,
-        asSerializable(item, depth + 1, ancestors)
+        asSerializable(item, depth + 1, ancestors, budget)
       ]));
   ancestors.delete(value);
   return serialized;
@@ -54,27 +67,6 @@ async function safeRead(read, fallback) {
     console.warn("AI context source was unavailable", error);
     return fallback;
   }
-}
-
-function compactRevision(revision) {
-  const snapshot = revision?.snapshot || {};
-  const localeKeys = Object.keys(snapshot.locales || {});
-  return {
-    id: revision.id,
-    savedAt: revision.savedAt,
-    savedBy: revision.savedBy,
-    page: {
-      title: snapshot.title,
-      slug: snapshot.slug,
-      route: snapshot.route,
-      status: snapshot.status,
-      localeKeys,
-      componentCount: countTreeNodes(
-        snapshot.componentTree
-        || snapshot.locales?.[localeKeys[0]]?.componentTree
-      )
-    }
-  };
 }
 
 export function flattenContextTree(tree) {
@@ -132,14 +124,6 @@ function componentLibraryContext() {
       itemFields: field.fields?.map((item) => ({ key: item.key, type: item.type }))
     }))
   }));
-}
-
-function resolvePageRegions(editableRegions, pageKey) {
-  if (!editableRegions || typeof editableRegions !== "object") return {};
-  return editableRegions[pageKey]
-    || editableRegions[`/${pageKey}`]
-    || editableRegions.home
-    || {};
 }
 
 function resolveRegionValues(
@@ -221,11 +205,11 @@ export async function collectAIWebsiteContext({
 }) {
   const reads = await Promise.all([
     safeRead(() => pageService.getAll(websiteId), []),
-    safeRead(() => registryService.getRegistry(websiteId), {}),
+    safeRead(() => registryService.getRuntimeStatus(websiteId), null),
     safeRead(() => registryService.getRoutes(websiteId), {}),
     safeRead(() => registryService.getLayouts(websiteId), {}),
     safeRead(() => registryService.getNavigation(websiteId), {}),
-    safeRead(() => registryService.getEditableRegions(websiteId), {}),
+    safeRead(() => registryService.getEditableRegionsForPage(websiteId, pageKey), {}),
     safeRead(() => themeService.getTheme(websiteId), theme || {}),
     safeRead(() => mediaService.getAll(websiteId), []),
     safeRead(() => seoService.getSEOConfig(websiteId), {}),
@@ -233,16 +217,15 @@ export async function collectAIWebsiteContext({
     safeRead(() => contentTypeService.getAll(websiteId), []),
     safeRead(() => pluginService.getInstalledPlugins(websiteId), {}),
     safeRead(() => settingsService.getCMSSettings(websiteId), {}),
-    safeRead(() => revisionService.getAll(websiteId, "page", pageId), []),
     safeRead(() => contentSyncService.getDraft(websiteId, pageKey), null),
     safeRead(() => contentSyncService.getPublished(websiteId, pageKey), null),
     runtimeWebsiteId && runtimeWebsiteId !== websiteId
-      ? safeRead(() => registryService.getEditableRegions(runtimeWebsiteId), {})
+      ? safeRead(() => registryService.getEditableRegionsForPage(runtimeWebsiteId, pageKey), {})
       : Promise.resolve({})
   ]);
   const [
     pages,
-    registry,
+    registryRuntime,
     routes,
     layouts,
     navigation,
@@ -254,14 +237,13 @@ export async function collectAIWebsiteContext({
     contentTypes,
     plugins,
     cmsSettings,
-    revisions,
     draftContent,
     publishedContent,
     runtimeEditableRegions
   ] = reads;
   const pageRegions = {
-    ...resolvePageRegions(runtimeEditableRegions, pageKey),
-    ...resolvePageRegions(editableRegions, pageKey)
+    ...runtimeEditableRegions,
+    ...editableRegions
   };
   const decodedDraftContent = draftContent ? decodeFirebaseObject(draftContent) : null;
   const decodedPublishedContent = publishedContent
@@ -339,11 +321,11 @@ export async function collectAIWebsiteContext({
       layouts,
       globalContent,
       cmsSettings,
-      registryRuntime: registry?.runtime || null
+      registryRuntime
     },
     designSystem: {
       theme: resolvedTheme || theme,
-      registryTheme: registry?.theme || null,
+      registryTheme: null,
       componentLibrary: componentLibraryContext(),
       breakpoints: {
         desktop: 1440,
@@ -357,7 +339,7 @@ export async function collectAIWebsiteContext({
       plugins,
       seo,
       assets,
-      allEditableRegions: editableRegions
+      allEditableRegions: { [pageKey]: editableRegions }
     },
     sourceProject: sourceFileCount ? {
       provider: website?.connection?.provider,
@@ -365,9 +347,7 @@ export async function collectAIWebsiteContext({
       entryFile: page?.sourceFile,
       ...sourceProjectContext(sourceFiles, page?.sourceFile)
     } : null,
-    revisionHistory: Array.isArray(revisions)
-      ? revisions.slice(0, 30).map(compactRevision)
-      : [],
+    revisionHistory: [],
     constraints: {
       screenshotReferenceMode: "selected-area-and-page-context",
       preserveWebsiteShell: surface === "connected-runtime",
