@@ -168,6 +168,62 @@ describe("embedded Rocket AI engine", () => {
     expect(execution.tree.children[0].props.locales.en.items).toHaveLength(3);
   });
 
+  it("uses an attached screenshot prompt to remove the later duplicate component", async () => {
+    const context = connectedRuntimeAdditionsContext();
+    const feature = (id) => ({
+      id,
+      type: "features",
+      label: "Features",
+      props: {
+        locales: {
+          en: {
+            title: "API-Powered Advertising",
+            subtitle: "Connect advertising platforms and automate campaign workflows.",
+            items: [
+              { title: "Advertising API Integration", description: "Connect campaign APIs." },
+              { title: "Campaign Automation", description: "Synchronize campaign workflows." },
+              { title: "Real-Time Ad Insights", description: "Monitor live performance data." }
+            ]
+          }
+        }
+      },
+      styles: { base: {} },
+      children: []
+    });
+    context.currentPage.componentTree.children = [
+      feature("api-features-first"),
+      feature("api-features-duplicate")
+    ];
+    context.currentPage.visualReferences = [{
+      id: "screenshot-1",
+      name: "image.png",
+      type: "image/png",
+      url: "https://cdn.example.com/image.png"
+    }];
+
+    const response = await rocketLocalEngine.createPlan({
+      intent: "remove this area. An uploaded screenshot is attached as a visual reference for this structural page edit.",
+      context,
+      memory: {}
+    });
+
+    expect(response.plan.operations).toHaveLength(1);
+    expect(response.plan.operations[0]).toMatchObject({
+      type: "remove_component",
+      targetId: "api-features-duplicate",
+      summary: "Remove duplicate API-Powered Advertising"
+    });
+    const execution = applyAIPlan({
+      plan: response.plan,
+      tree: context.currentPage.componentTree,
+      componentTypes: context.constraints.registeredComponentTypes
+    });
+    expect(execution.summary).toEqual({ requested: 1, applied: 1, failed: 0 });
+    expect(execution.tree.children.map((node) => node.id)).toEqual([
+      "api-features-first"
+    ]);
+  });
+
   it("adds a requested field to the connected runtime component tree", async () => {
     const response = await rocketLocalEngine.createPlan({
       intent: "add an email field above the footer",

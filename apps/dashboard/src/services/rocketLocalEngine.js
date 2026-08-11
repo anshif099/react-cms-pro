@@ -472,6 +472,72 @@ function selectedComponentOperations(addOperation, context, path, value, summary
   }));
 }
 
+function requestsVisualReferenceRemoval(intent, context) {
+  const text = normalized(intent);
+  const hasVisualReference = Boolean(context?.currentPage?.visualReferences?.length)
+    || includesAny(text, [
+      "screenshot is attached as a visual reference",
+      "image is attached as a visual reference",
+      "uploaded screenshot",
+      "visual reference"
+    ]);
+  return hasVisualReference
+    && /\b(?:remove|delete|hide)\b/.test(text)
+    && /\b(?:this|shown|pictured|highlighted|duplicate|extra|second|area|section|component|block)\b/.test(text);
+}
+
+function componentDuplicateSignature(node) {
+  return JSON.stringify({
+    type: node?.type || "",
+    label: node?.label || "",
+    props: node?.props || {},
+    styles: node?.styles || {},
+    children: (node?.children || []).map(componentDuplicateSignature)
+  });
+}
+
+function duplicateComponentCandidates(tree) {
+  const candidates = [];
+  const visit = (children, depth = 0) => {
+    const seen = new Map();
+    (children || []).forEach((node, siblingIndex) => {
+      const signature = componentDuplicateSignature(node);
+      if (seen.has(signature) && node?.id && !node.locked) {
+        candidates.push({ node, depth, siblingIndex });
+      } else {
+        seen.set(signature, node);
+      }
+      visit(node?.children, depth + 1);
+    });
+  };
+  visit(tree?.children);
+  return candidates.sort((left, right) => (
+    left.depth - right.depth || right.siblingIndex - left.siblingIndex
+  ));
+}
+
+function visualReferenceRemovalOperations(addOperation, context, intent) {
+  const capabilities = new Set(context?.capabilities || []);
+  if (
+    !requestsVisualReferenceRemoval(intent, context)
+    || !capabilities.has("remove_component")
+  ) return [];
+
+  const target = duplicateComponentCandidates(context?.currentPage?.componentTree)[0]?.node;
+  if (!target) return [];
+  const locale = context?.currentPage?.locale || "en";
+  const title = target.props?.locales?.[locale]?.title
+    || target.label
+    || target.type
+    || "duplicate area";
+  return [addOperation("remove_component", {
+    targetId: target.id,
+    summary: `Remove duplicate ${title}`,
+    reason: "Match the structural screenshot request to the repeated editable component and remove only its later duplicate.",
+    patches: []
+  })];
+}
+
 function addThemeOperation(operations, addOperation, patches, summary, reason) {
   if (!patches.length) return;
   operations.push(addOperation("update_theme", { patches, summary, reason }));
@@ -1116,6 +1182,9 @@ function conversationalReply(intent, context) {
     }
     return "The header logo is not represented by an editable image in the current page model. Select an exposed logo image, or add it as an editable image in the header, and I can replace or configure it safely.";
   }
+  if (requestsVisualReferenceRemoval(intent, context)) {
+    return "I treated the attachment as a page screenshot, but I could not match it to one safely removable duplicate component. Select the exact area once, then send the screenshot prompt again.";
+  }
   if (includesAny(text, ["image", "photo", "picture"])) {
     const selected = selectedImageTarget(context, false);
     return selected
@@ -1151,6 +1220,16 @@ function buildPlan({ intent, context, memory = {}, conversation = [], previousPl
   if (imageItems.length) {
     operations.push(...imageItems);
     affected.add("Selected image");
+  }
+
+  const visualRemovalItems = visualReferenceRemovalOperations(
+    addOperation,
+    context,
+    combinedIntent
+  );
+  if (visualRemovalItems.length) {
+    operations.push(...visualRemovalItems);
+    affected.add("Screenshot-matched duplicate area");
   }
 
   const selectedCopyItems = selectedRegionCopyOperations(addOperation, context, combinedIntent);

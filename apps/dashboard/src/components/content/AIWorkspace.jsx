@@ -120,6 +120,13 @@ function requestsGeneratedImage(value) {
     && !/\b(existing|uploaded|media library)\b/.test(text);
 }
 
+function requestsStructuralScreenshotEdit(value) {
+  const text = String(value || "").trim().toLowerCase();
+  const removesArea = /\b(remove|delete|hide)\b/.test(text)
+    && /\b(this|shown|pictured|highlighted|duplicate|extra|second|area|section|component|block)\b/.test(text);
+  return removesArea || /\b(?:use|read|check)\b[\s\S]{0,40}\b(?:screenshot|attached image|visual reference)\b/.test(text);
+}
+
 const IMAGE_NUMBER_WORDS = Object.freeze({
   one: 1,
   two: 2,
@@ -956,7 +963,19 @@ export function AIWorkspace({
       let planningIntent = cleanIntent;
       const imageTargets = imageTargetsForRequest(freshContext, cleanIntent).slice(0, 24);
       const generatedImageCount = requestedGeneratedImageCount(cleanIntent);
-      if (!previousPlan && requestAttachments.length && imageTargets.length) {
+      const structuralScreenshotEdit = requestAttachments.length
+        && requestsStructuralScreenshotEdit(cleanIntent);
+      if (!previousPlan && structuralScreenshotEdit) {
+        freshContext.currentPage.visualReferences = requestAttachments.map((attachment) => ({
+          id: attachment.id,
+          name: attachment.name,
+          url: attachment.url,
+          type: attachment.type,
+          alt: attachment.alt
+        }));
+        planningIntent = `${cleanIntent}. An uploaded screenshot is attached as a visual reference for this structural page edit.`;
+        log("plan", `Using ${requestAttachments.length} uploaded screenshot${requestAttachments.length === 1 ? "" : "s"} as a structural page reference.`);
+      } else if (!previousPlan && requestAttachments.length && imageTargets.length) {
         freshContext.currentPage.preparedImageAssignments = imageTargets.map((imageTarget, index) => {
           const attachment = requestAttachments[Math.min(index, requestAttachments.length - 1)];
           return {
