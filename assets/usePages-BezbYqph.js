@@ -1,1 +1,0 @@
-import{T as e}from"./index-CzckGilK.js";function t(){return e()}export{t};
