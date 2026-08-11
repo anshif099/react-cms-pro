@@ -516,24 +516,63 @@ function duplicateComponentCandidates(tree) {
   ));
 }
 
-function visualReferenceRemovalOperations(addOperation, context, intent) {
+function componentDisplayTitle(node, locale = "en") {
+  return node?.props?.locales?.[locale]?.title
+    || node?.props?.title
+    || node?.label
+    || node?.type
+    || "component";
+}
+
+function previousRemovedComponentTitle(conversation) {
+  if (!Array.isArray(conversation)) return "";
+  for (const message of [...conversation].reverse()) {
+    if (message?.role !== "assistant" || typeof message.content !== "string") continue;
+    const match = message.content.match(
+      /\bRemove\s+(?:duplicate\s+|remaining\s+)?(.+?)(?=;|\.\s+A draft|\.\s+Approved|$)/i
+    );
+    if (match?.[1]) return match[1].trim();
+  }
+  return "";
+}
+
+function continuationRemovalTarget(context, intent, conversation) {
+  if (!/\b(?:too|also|another|remaining|same)\b/.test(normalized(intent))) return null;
+  const previousTitle = comparableText(previousRemovedComponentTitle(conversation));
+  if (!previousTitle) return null;
+  const locale = context?.currentPage?.locale || "en";
+  return flattenContextTree(context?.currentPage?.componentTree)
+    .filter((node) => node?.id && !node.locked)
+    .find((node) => {
+      const candidate = comparableText(componentDisplayTitle(node, locale));
+      return candidate === previousTitle
+        || candidate.includes(previousTitle)
+        || previousTitle.includes(candidate);
+    }) || null;
+}
+
+function visualReferenceRemovalOperations(addOperation, context, intent, conversation = []) {
   const capabilities = new Set(context?.capabilities || []);
   if (
     !requestsVisualReferenceRemoval(intent, context)
     || !capabilities.has("remove_component")
   ) return [];
 
-  const target = duplicateComponentCandidates(context?.currentPage?.componentTree)[0]?.node;
+  const duplicateTarget = duplicateComponentCandidates(
+    context?.currentPage?.componentTree
+  )[0]?.node;
+  const target = duplicateTarget
+    || continuationRemovalTarget(context, intent, conversation);
   if (!target) return [];
   const locale = context?.currentPage?.locale || "en";
-  const title = target.props?.locales?.[locale]?.title
-    || target.label
-    || target.type
-    || "duplicate area";
+  const title = componentDisplayTitle(target, locale);
+  const continued = !duplicateTarget;
   return [addOperation("remove_component", {
     targetId: target.id,
-    summary: `Remove duplicate ${title}`,
-    reason: "Match the structural screenshot request to the repeated editable component and remove only its later duplicate.",
+    summary: `Remove ${continued ? "remaining" : "duplicate"} ${title}`,
+    reason: continued
+      ? "Continue the prior approved removal and apply it to the remaining component with the same page identity."
+      : "Match the structural screenshot request to the repeated editable component and remove only its later duplicate.",
     patches: []
   })];
 }
@@ -1225,7 +1264,8 @@ function buildPlan({ intent, context, memory = {}, conversation = [], previousPl
   const visualRemovalItems = visualReferenceRemovalOperations(
     addOperation,
     context,
-    combinedIntent
+    combinedIntent,
+    conversation
   );
   if (visualRemovalItems.length) {
     operations.push(...visualRemovalItems);
