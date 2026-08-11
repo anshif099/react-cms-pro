@@ -16,7 +16,6 @@ import {
   Lightbulb,
   ListChecks,
   Loader2,
-  LogOut,
   Maximize2,
   MessageSquare,
   Minimize2,
@@ -49,7 +48,6 @@ import {
   requestedImageColor
 } from "../../services/imageTransformService";
 import mediaService, { MAX_REALTIME_MEDIA_BYTES } from "../../services/mediaService";
-import rocketAIAuthService from "../../services/rocketAIAuthService";
 
 const TABS = [
   { id: "chat", label: "Rocket Chat", icon: MessageSquare },
@@ -434,10 +432,6 @@ export function AIWorkspace({
   const [fullscreen, setFullscreen] = useState(false);
   const [clipboardStatus, setClipboardStatus] = useState("");
   const [consoleEntries, setConsoleEntries] = useState([]);
-  const [rocketUser, setRocketUser] = useState(() => rocketAIAuthService.currentUser());
-  const [rocketAuthLoading, setRocketAuthLoading] = useState(true);
-  const [rocketSigningIn, setRocketSigningIn] = useState(false);
-  const [rocketAuthError, setRocketAuthError] = useState("");
   const chatEndRef = useRef(null);
   const promptInputRef = useRef(null);
   const attachmentInputRef = useRef(null);
@@ -480,12 +474,6 @@ export function AIWorkspace({
     setSelectingArea(false);
     setActiveTab("chat");
   }, [inspectorSelectionKey, selectingArea]);
-
-  useEffect(() => rocketAIAuthService.subscribe((user) => {
-    setRocketUser(user);
-    setRocketAuthLoading(false);
-    if (user) setRocketAuthError("");
-  }), []);
 
   useEffect(() => {
     const refreshModelInfo = () => setModelInfo(aiWebsiteAgentService.getModelInfo());
@@ -956,37 +944,6 @@ export function AIWorkspace({
     }
   };
 
-  const connectRocketAI = async () => {
-    if (rocketSigningIn) return;
-    setRocketSigningIn(true);
-    setRocketAuthError("");
-    try {
-      const user = await rocketAIAuthService.signInWithGoogle();
-      setRocketUser(user);
-      log("auth", `Rocket AI connected as ${user.email || user.displayName}.`);
-    } catch (error) {
-      const message = error.message || "Google sign-in failed.";
-      setRocketAuthError(message);
-      log("error", message);
-    } finally {
-      setRocketSigningIn(false);
-    }
-  };
-
-  const disconnectRocketAI = async () => {
-    try {
-      await rocketAIAuthService.signOut();
-      setRocketUser(null);
-      setPending(null);
-      clearChatAttachments();
-      log("auth", "Rocket AI Google account disconnected.");
-    } catch (error) {
-      const message = error.message || "Rocket AI could not sign out.";
-      setRocketAuthError(message);
-      log("error", message);
-    }
-  };
-
   const requestPlan = useCallback(async ({
     intent,
     attachments = [],
@@ -1005,10 +962,6 @@ export function AIWorkspace({
       || applying
       || imageGenerating
     ) return;
-    if (!rocketUser) {
-      setRocketAuthError("Connect a Google account before asking Rocket AI.");
-      return;
-    }
     requestPlanInFlightRef.current = true;
     const requestGeneration = requestPlanGenerationRef.current + 1;
     requestPlanGenerationRef.current = requestGeneration;
@@ -1312,7 +1265,6 @@ export function AIWorkspace({
     pageTitle,
     planning,
     refreshContext,
-    rocketUser,
     websiteId
   ]);
 
@@ -2027,84 +1979,41 @@ export function AIWorkspace({
           </button>
         </div>
 
-        <div className={`rounded-xl border p-3 ${
-          rocketUser
-            ? "border-emerald-500/20 bg-emerald-500/5"
-            : "border-violet-500/25 bg-violet-500/[0.06]"
-        }`}>
-          {rocketAuthLoading ? (
-            <div className="flex items-center gap-2 text-[10px] text-slate-400">
-              <Loader2 className="h-3.5 w-3.5 animate-spin text-violet-300" />
-              Checking Rocket AI account…
+        <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3">
+          <div className="flex items-center gap-2.5">
+            <div className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-lg bg-emerald-500/10 text-emerald-300">
+              <BrainCircuit className="h-4 w-4" />
             </div>
-          ) : rocketUser ? (
-            <div>
-              <div className="flex items-center gap-2.5">
-                {rocketUser.photoURL ? (
-                  <img src={rocketUser.photoURL} alt="" className="h-8 w-8 rounded-full object-cover" referrerPolicy="no-referrer" />
-                ) : (
-                  <div className="grid h-8 w-8 place-items-center rounded-full bg-white text-xs font-black text-slate-900">G</div>
-                )}
-                <div className="min-w-0 flex-1">
-                  <p className="text-[9px] font-bold uppercase tracking-wider text-emerald-400">Rocket AI ready · local runtime</p>
-                  <p className="truncate text-[10px] text-slate-300">{rocketUser.email || rocketUser.displayName}</p>
-                  <p className="mt-0.5 truncate text-[8px] text-slate-500">
-                    Ultra only · {modelInfo.interactionCount || 0} learned prompt{modelInfo.interactionCount === 1 ? "" : "s"} · {modelInfo.trainedExamples} approved
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={disconnectRocketAI}
-                  className="grid h-7 w-7 place-items-center rounded-lg border border-slate-800 text-slate-500 hover:border-rose-500/30 hover:text-rose-300 cursor-pointer"
-                  title="Disconnect Google account"
-                >
-                  <LogOut className="h-3.5 w-3.5" />
-                </button>
-              </div>
-              <div className="mt-2 rounded-lg border border-emerald-500/15 bg-slate-950/35 px-2.5 py-2.5" title={modelInfo.description}>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="flex items-center gap-1.5 text-[8px] font-extrabold uppercase tracking-[0.13em] text-emerald-300">
-                    <BrainCircuit className="h-3 w-3" /> Learning intelligence
-                  </span>
-                  <span className="text-[8px] font-bold text-emerald-200">{modelInfo.learningProgress || 0}%</span>
-                </div>
-                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-800">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-violet-500 via-blue-400 to-emerald-400 transition-[width] duration-500"
-                    style={{ width: `${modelInfo.learningProgress || 0}%` }}
-                  />
-                </div>
-                <div className="mt-2 flex items-center justify-between gap-2 text-[8px] text-slate-500">
-                  <span>{modelInfo.name} {modelInfo.version}</span>
-                  <span>Next {modelInfo.nextVersion}</span>
-                </div>
-                <div className="mt-1 flex items-center justify-between gap-2 text-[8px] text-slate-600">
-                  <span>{modelInfo.contextCoverage || 0}% full-context coverage</span>
-                  <span>r{modelInfo.curriculumRevision || 0}</span>
-                </div>
-              </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[9px] font-bold uppercase tracking-wider text-emerald-400">Rocket AI ready · local runtime</p>
+              <p className="truncate text-[9px] text-slate-400">No external AI account or API required</p>
+              <p className="mt-0.5 truncate text-[8px] text-slate-500">
+                Ultra only · {modelInfo.interactionCount || 0} learned prompt{modelInfo.interactionCount === 1 ? "" : "s"} · {modelInfo.trainedExamples} approved
+              </p>
             </div>
-          ) : (
-            <div>
-              <div className="flex items-start gap-2.5">
-                <div className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-lg bg-white text-xs font-black text-slate-900">G</div>
-                <div>
-                  <p className="text-[10px] font-bold text-white">Connect Google to Rocket AI</p>
-                  <p className="mt-1 text-[9px] leading-4 text-slate-500">This is separate from your ReactCMS administrator session.</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={connectRocketAI}
-                disabled={rocketSigningIn}
-                className="mt-3 flex h-8 w-full items-center justify-center gap-2 rounded-lg bg-white px-3 text-[10px] font-bold text-slate-900 hover:bg-slate-100 disabled:opacity-60 cursor-pointer"
-              >
-                {rocketSigningIn ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <span className="text-xs font-black">G</span>}
-                {rocketSigningIn ? "Connecting…" : "Continue with Google"}
-              </button>
-              {rocketAuthError && <p className="mt-2 text-[9px] leading-4 text-rose-300">{rocketAuthError}</p>}
+          </div>
+          <div className="mt-2 rounded-lg border border-emerald-500/15 bg-slate-950/35 px-2.5 py-2.5" title={modelInfo.description}>
+            <div className="flex items-center justify-between gap-2">
+              <span className="flex items-center gap-1.5 text-[8px] font-extrabold uppercase tracking-[0.13em] text-emerald-300">
+                <BrainCircuit className="h-3 w-3" /> Learning intelligence
+              </span>
+              <span className="text-[8px] font-bold text-emerald-200">{modelInfo.learningProgress || 0}%</span>
             </div>
-          )}
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-800">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-violet-500 via-blue-400 to-emerald-400 transition-[width] duration-500"
+                style={{ width: `${modelInfo.learningProgress || 0}%` }}
+              />
+            </div>
+            <div className="mt-2 flex items-center justify-between gap-2 text-[8px] text-slate-500">
+              <span>{modelInfo.name} {modelInfo.version}</span>
+              <span>Next {modelInfo.nextVersion}</span>
+            </div>
+            <div className="mt-1 flex items-center justify-between gap-2 text-[8px] text-slate-600">
+              <span>{modelInfo.contextCoverage || 0}% full-context coverage</span>
+              <span>r{modelInfo.curriculumRevision || 0}</span>
+            </div>
+          </div>
         </div>
 
         {messages.map((message) => (
@@ -2222,7 +2131,6 @@ export function AIWorkspace({
                 key={request}
                 type="button"
                 onClick={() => requestPlan({ intent: request })}
-                disabled={!rocketUser}
                 className="rounded-lg border border-slate-800/80 bg-slate-950/30 px-3 py-2 text-left text-[9px] leading-4 text-slate-500 hover:border-violet-500/25 hover:text-slate-200 cursor-pointer"
               >
                 {request}
@@ -2281,7 +2189,7 @@ export function AIWorkspace({
             value={prompt}
             onChange={(event) => setPrompt(event.target.value)}
             onPaste={handleChatPaste}
-            disabled={!rocketUser || attachmentUploading}
+            disabled={attachmentUploading}
             onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();
@@ -2289,22 +2197,20 @@ export function AIWorkspace({
               }
             }}
             rows="3"
-            placeholder={rocketUser
-              ? chatAttachments.length
-                ? "Describe how Rocket should use the attached imageâ€¦"
-                : targetList.length
-                ? targetList.length === 1
-                  ? `Tell Rocket how to update this ${selectedTarget?.type || "area"}…`
-                  : `Tell Rocket how to update these ${targetList.length} selected areas…`
-                : "Ask Rocket AI to build, redesign, review, or optimize this page…"
-              : "Connect Google to start using Rocket AI…"}
+            placeholder={chatAttachments.length
+              ? "Describe how Rocket should use the attached image…"
+              : targetList.length
+              ? targetList.length === 1
+                ? `Tell Rocket how to update this ${selectedTarget?.type || "area"}…`
+                : `Tell Rocket how to update these ${targetList.length} selected areas…`
+              : "Ask Rocket AI to build, redesign, review, or optimize this page…"}
             className="w-full resize-none bg-transparent px-1 text-[11px] leading-5 text-slate-200 outline-none placeholder:text-slate-700"
           />
           <div className="mt-1 flex items-center gap-2">
             <button
               type="button"
               onClick={() => attachmentInputRef.current?.click()}
-              disabled={!rocketUser || planning || applying || imageGenerating || attachmentUploading || chatAttachments.length >= 4}
+              disabled={planning || applying || imageGenerating || attachmentUploading || chatAttachments.length >= 4}
               className="grid h-7 w-7 flex-shrink-0 place-items-center rounded-lg border border-slate-800 text-slate-500 hover:border-violet-500/40 hover:text-violet-200 disabled:opacity-30 cursor-pointer"
               title="Attach image (or paste with Ctrl+V)"
             >
@@ -2319,7 +2225,7 @@ export function AIWorkspace({
             </span>
             <button
               type="submit"
-              disabled={!rocketUser || (!prompt.trim() && !chatAttachments.length) || planning || applying || imageGenerating || attachmentUploading}
+              disabled={(!prompt.trim() && !chatAttachments.length) || planning || applying || imageGenerating || attachmentUploading}
               className="ml-auto grid h-7 w-7 place-items-center rounded-lg bg-violet-600 text-white disabled:opacity-30 cursor-pointer"
               title="Create plan"
             >
