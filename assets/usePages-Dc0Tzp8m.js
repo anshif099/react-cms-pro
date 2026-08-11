@@ -1,1 +1,0 @@
-import{E as e}from"./index-D4pr4m-j.js";function t(){return e()}export{t};
