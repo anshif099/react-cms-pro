@@ -151,6 +151,25 @@ function requestsStructuralScreenshotEdit(value) {
     || /\b(?:use|read|check)\b[\s\S]{0,40}\b(?:screenshot|attached image|visual reference)\b/.test(text);
 }
 
+function retriableScreenshotRequest(messages, assistantIndex) {
+  const assistant = messages?.[assistantIndex];
+  if (
+    assistant?.role !== "assistant"
+    || !String(assistant.content || "").includes(
+      "could not match it to one safely removable duplicate component"
+    )
+  ) return null;
+
+  return [...messages.slice(0, assistantIndex)].reverse().find((message) => (
+    message?.role === "user"
+    && requestsStructuralScreenshotEdit(message.content)
+    && Array.isArray(message.attachments)
+    && message.attachments.some((attachment) => (
+      attachment?.url && String(attachment.type || "").startsWith("image/")
+    ))
+  )) || null;
+}
+
 const IMAGE_NUMBER_WORDS = Object.freeze({
   one: 1,
   two: 2,
@@ -2015,43 +2034,61 @@ export function AIWorkspace({
           )}
         </div>
 
-        {messages.map((message) => (
-          <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
-            <div className={`max-w-[92%] rounded-xl px-3 py-2.5 text-[10px] leading-5 ${
-              message.role === "user"
-                ? "bg-blue-600 text-white"
-                : message.error
-                  ? "border border-rose-500/20 bg-rose-500/5 text-rose-200"
-                  : "border border-slate-800 bg-slate-950/50 text-slate-300"
-            }`}>
-              {!!message.attachments?.length && (
-                <div className={`mb-2 grid gap-1.5 ${message.attachments.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
-                  {message.attachments.map((attachment) => (
-                    <a
-                      key={attachment.id || attachment.url}
-                      href={attachment.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="block overflow-hidden rounded-lg border border-white/10 bg-black/20"
-                      title={attachment.name || "Attached image"}
-                    >
-                      <img
-                        src={attachment.url}
-                        alt={attachment.alt || attachment.name || "Rocket Chat attachment"}
-                        loading="lazy"
-                        className="h-28 w-full object-cover"
-                      />
-                      <span className="block truncate px-2 py-1 text-[8px] text-white/70">
-                        {attachment.name || "Attached image"}
-                      </span>
-                    </a>
-                  ))}
-                </div>
-              )}
-              <p className="whitespace-pre-wrap">{message.content}</p>
+        {messages.map((message, messageIndex) => {
+          const retryRequest = retriableScreenshotRequest(messages, messageIndex);
+          return (
+            <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
+              <div className={`max-w-[92%] rounded-xl px-3 py-2.5 text-[10px] leading-5 ${
+                message.role === "user"
+                  ? "bg-blue-600 text-white"
+                  : message.error
+                    ? "border border-rose-500/20 bg-rose-500/5 text-rose-200"
+                    : "border border-slate-800 bg-slate-950/50 text-slate-300"
+              }`}>
+                {!!message.attachments?.length && (
+                  <div className={`mb-2 grid gap-1.5 ${message.attachments.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
+                    {message.attachments.map((attachment) => (
+                      <a
+                        key={attachment.id || attachment.url}
+                        href={attachment.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="block overflow-hidden rounded-lg border border-white/10 bg-black/20"
+                        title={attachment.name || "Attached image"}
+                      >
+                        <img
+                          src={attachment.url}
+                          alt={attachment.alt || attachment.name || "Rocket Chat attachment"}
+                          loading="lazy"
+                          className="h-28 w-full object-cover"
+                        />
+                        <span className="block truncate px-2 py-1 text-[8px] text-white/70">
+                          {attachment.name || "Attached image"}
+                        </span>
+                      </a>
+                    ))}
+                  </div>
+                )}
+                <p className="whitespace-pre-wrap">{message.content}</p>
+                {retryRequest && (
+                  <button
+                    type="button"
+                    disabled={planning || applying || imageGenerating || attachmentUploading}
+                    onClick={() => requestPlan({
+                      intent: retryRequest.content,
+                      attachments: retryRequest.attachments,
+                      appendUser: false
+                    })}
+                    className="mt-2 flex h-8 items-center gap-1.5 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 text-[9px] font-bold text-violet-200 hover:bg-violet-500/20 disabled:opacity-40 cursor-pointer"
+                  >
+                    <RefreshCw className="h-3 w-3" />
+                    Retry screenshot edit
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
 
         {planning && (
           <div className="flex items-center gap-2 rounded-xl border border-violet-500/15 bg-violet-500/5 p-3">
