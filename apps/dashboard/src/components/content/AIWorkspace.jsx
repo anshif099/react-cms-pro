@@ -170,6 +170,15 @@ function retriableScreenshotRequest(messages, assistantIndex) {
   )) || null;
 }
 
+function withPlanningTimeout(promise, timeoutMs, message) {
+  let timeoutId;
+  const timeout = new Promise((_, reject) => {
+    timeoutId = window.setTimeout(() => reject(new Error(message)), timeoutMs);
+  });
+  return Promise.race([promise, timeout])
+    .finally(() => window.clearTimeout(timeoutId));
+}
+
 const IMAGE_NUMBER_WORDS = Object.freeze({
   one: 1,
   two: 2,
@@ -448,6 +457,7 @@ export function AIWorkspace({
   const conversationSaveQueueRef = useRef(Promise.resolve());
   const pendingConversationSavesRef = useRef(0);
   const savedConversationSignaturesRef = useRef(new Map());
+  const requestPlanInFlightRef = useRef(false);
   const workspaceKey = `${websiteId}:${pageId}`;
   const workspaceKeyRef = useRef(workspaceKey);
   const pageTitleRef = useRef(pageTitle);
@@ -967,17 +977,25 @@ export function AIWorkspace({
     attachments = [],
     previousPlan = null,
     feedback = "",
-    appendUser = true
+    appendUser = true,
+    reuseContext = false
   }) => {
     const cleanIntent = String(intent || "").trim();
     const suppliedAttachments = (Array.isArray(attachments) ? attachments : [])
       .filter((attachment) => attachment?.url && String(attachment.type || "").startsWith("image/"))
       .slice(0, 4);
-    if (!cleanIntent || planning || applying || imageGenerating) return;
+    if (
+      !cleanIntent
+      || requestPlanInFlightRef.current
+      || planning
+      || applying
+      || imageGenerating
+    ) return;
     if (!rocketUser) {
       setRocketAuthError("Connect a Google account before asking Rocket AI.");
       return;
     }
+    requestPlanInFlightRef.current = true;
     const userMessage = appendUser ? {
       id: `user_${Date.now()}`,
       role: "user",
@@ -1006,7 +1024,23 @@ export function AIWorkspace({
     setModifyOpen(false);
     log("plan", `Analyzing the full page for: ${cleanIntent}`);
     try {
-      let freshContext = await refreshContext();
+      // Let React paint the busy state before local planning performs synchronous
+      // tree analysis. Historical screenshot retries can safely reuse the context
+      // already collected for the currently displayed page.
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
+      const baseContext = reuseContext && context
+        ? context
+        : await withPlanningTimeout(
+            refreshContext(),
+            15000,
+            "Page context collection timed out. Reload the canvas and try again."
+          );
+      let freshContext = {
+        ...baseContext,
+        currentPage: {
+          ...(baseContext?.currentPage || {})
+        }
+      };
       let planningIntent = cleanIntent;
       const imageTargets = imageTargetsForRequest(freshContext, cleanIntent).slice(0, 24);
       const generatedImageCount = requestedGeneratedImageCount(cleanIntent);
@@ -1173,15 +1207,19 @@ export function AIWorkspace({
           assetId: asset.id
         });
       }
-      const response = await aiWebsiteAgentService.createPlan({
-        intent: planningIntent,
-        context: freshContext,
-        memory,
-        modelId: modelInfo.releaseId,
-        conversation: requestConversation,
-        previousPlan,
-        feedback
-      });
+      const response = await withPlanningTimeout(
+        aiWebsiteAgentService.createPlan({
+          intent: planningIntent,
+          context: freshContext,
+          memory,
+          modelId: modelInfo.releaseId,
+          conversation: requestConversation,
+          previousPlan,
+          feedback
+        }),
+        10000,
+        "Local planning timed out. The page was left unchanged; try selecting the area again."
+      );
       if (response.modelInfo) setModelInfo(response.modelInfo);
       if (!response.plan.operations.length) {
         setMessages((current) => [...current, {
@@ -1225,12 +1263,14 @@ export function AIWorkspace({
       }]);
       log("error", message);
     } finally {
+      requestPlanInFlightRef.current = false;
       setPlanning(false);
       setImageGenerating(false);
       setImageProgress(0);
     }
   }, [
     applying,
+    context,
     imageGenerating,
     log,
     memory,
@@ -2077,7 +2117,8 @@ export function AIWorkspace({
                     onClick={() => requestPlan({
                       intent: retryRequest.content,
                       attachments: retryRequest.attachments,
-                      appendUser: false
+                      appendUser: false,
+                      reuseContext: true
                     })}
                     className="mt-2 flex h-8 items-center gap-1.5 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 text-[9px] font-bold text-violet-200 hover:bg-violet-500/20 disabled:opacity-40 cursor-pointer"
                   >

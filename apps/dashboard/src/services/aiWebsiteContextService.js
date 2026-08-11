@@ -20,6 +20,7 @@ import themeService from "./themeService";
 const MAX_STRING = 180000;
 const MAX_ARRAY = 250;
 const MAX_DEPTH = 12;
+const MAX_TREE_NODES = 5000;
 const MAX_SOURCE_CONTEXT = 1200000;
 const SOURCE_TRUNCATED_MARKER = "\n/* ReactCMS context truncated */";
 
@@ -78,13 +79,37 @@ function compactRevision(revision) {
 
 export function flattenContextTree(tree) {
   const nodes = [];
-  const visit = (items, parentId = null) => {
-    (items || []).forEach((node, index) => {
-      nodes.push({ ...node, parentId, siblingIndex: index });
-      visit(node.children, node.id);
+  const visited = new WeakSet();
+  const roots = Array.isArray(tree?.children) ? tree.children : [];
+  const stack = roots.map((node, siblingIndex) => ({
+    node,
+    parentId: null,
+    siblingIndex,
+    depth: 0
+  })).reverse();
+
+  while (stack.length && nodes.length < MAX_TREE_NODES) {
+    const current = stack.pop();
+    const node = current?.node;
+    if (!node || typeof node !== "object" || visited.has(node)) continue;
+    visited.add(node);
+    nodes.push({
+      ...node,
+      parentId: current.parentId,
+      siblingIndex: current.siblingIndex
     });
-  };
-  visit(tree?.children || []);
+
+    if (current.depth >= MAX_DEPTH) continue;
+    const children = Array.isArray(node.children) ? node.children : [];
+    for (let index = children.length - 1; index >= 0; index -= 1) {
+      stack.push({
+        node: children[index],
+        parentId: node.id,
+        siblingIndex: index,
+        depth: current.depth + 1
+      });
+    }
+  }
   return nodes;
 }
 
