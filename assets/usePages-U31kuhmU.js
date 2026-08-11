@@ -1,1 +1,0 @@
-import{E as e}from"./index-DSUJKnvj.js";function t(){return e()}export{t};
