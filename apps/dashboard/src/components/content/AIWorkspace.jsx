@@ -151,23 +151,12 @@ function requestsStructuralScreenshotEdit(value) {
     || /\b(?:use|read|check)\b[\s\S]{0,40}\b(?:screenshot|attached image|visual reference)\b/.test(text);
 }
 
-function retriableScreenshotRequest(messages, assistantIndex) {
-  const assistant = messages?.[assistantIndex];
-  if (
-    assistant?.role !== "assistant"
-    || !String(assistant.content || "").includes(
-      "could not match it to one safely removable duplicate component"
-    )
-  ) return null;
-
-  return [...messages.slice(0, assistantIndex)].reverse().find((message) => (
-    message?.role === "user"
-    && requestsStructuralScreenshotEdit(message.content)
-    && Array.isArray(message.attachments)
-    && message.attachments.some((attachment) => (
-      attachment?.url && String(attachment.type || "").startsWith("image/")
-    ))
-  )) || null;
+function withoutLatestConversationTurn(messages) {
+  const values = Array.isArray(messages) ? messages : [];
+  for (let index = values.length - 1; index >= 0; index -= 1) {
+    if (values[index]?.role === "user") return values.slice(0, index);
+  }
+  return values;
 }
 
 function withPlanningTimeout(promise, timeoutMs, message) {
@@ -450,6 +439,7 @@ export function AIWorkspace({
   const [rocketSigningIn, setRocketSigningIn] = useState(false);
   const [rocketAuthError, setRocketAuthError] = useState("");
   const chatEndRef = useRef(null);
+  const promptInputRef = useRef(null);
   const attachmentInputRef = useRef(null);
   const attachmentPreviewUrlsRef = useRef(new Set());
   const getContextRef = useRef(getContext);
@@ -458,6 +448,7 @@ export function AIWorkspace({
   const pendingConversationSavesRef = useRef(0);
   const savedConversationSignaturesRef = useRef(new Map());
   const requestPlanInFlightRef = useRef(false);
+  const requestPlanGenerationRef = useRef(0);
   const workspaceKey = `${websiteId}:${pageId}`;
   const workspaceKeyRef = useRef(workspaceKey);
   const pageTitleRef = useRef(pageTitle);
@@ -706,6 +697,30 @@ export function AIWorkspace({
   }, [selectedTarget, selectedTargets]);
   const activeConversation = conversations.find((item) => item.id === activeConversationId)
     || null;
+  const canUndoChatTurn = Boolean(
+    planning
+    || pending
+    || messages.some((message) => message.role === "user")
+  );
+
+  const undoLatestChatTurn = () => {
+    if (applying || attachmentUploading) return;
+    requestPlanGenerationRef.current += 1;
+    requestPlanInFlightRef.current = false;
+    setPlanning(false);
+    setImageGenerating(false);
+    setImageProgress(0);
+    setPending(null);
+    setTasks([]);
+    setModifyOpen(false);
+    setPlanFeedback("");
+    setPrompt("");
+    clearChatAttachments();
+    setMessages((current) => withoutLatestConversationTurn(current));
+    setActiveTab("chat");
+    log("memory", "Removed the latest Rocket chat exchange. Page edits were not changed.");
+    window.requestAnimationFrame(() => promptInputRef.current?.focus());
+  };
 
   const openConversation = async (conversation) => {
     if (!conversation?.id || conversation.id === activeConversationId || conversationSwitching) {
@@ -977,8 +992,7 @@ export function AIWorkspace({
     attachments = [],
     previousPlan = null,
     feedback = "",
-    appendUser = true,
-    reuseContext = false
+    appendUser = true
   }) => {
     const cleanIntent = String(intent || "").trim();
     const suppliedAttachments = (Array.isArray(attachments) ? attachments : [])
@@ -996,6 +1010,9 @@ export function AIWorkspace({
       return;
     }
     requestPlanInFlightRef.current = true;
+    const requestGeneration = requestPlanGenerationRef.current + 1;
+    requestPlanGenerationRef.current = requestGeneration;
+    const isCurrentRequest = () => requestPlanGenerationRef.current === requestGeneration;
     const userMessage = appendUser ? {
       id: `user_${Date.now()}`,
       role: "user",
@@ -1025,16 +1042,15 @@ export function AIWorkspace({
     log("plan", `Analyzing the full page for: ${cleanIntent}`);
     try {
       // Let React paint the busy state before local planning performs synchronous
-      // tree analysis. Historical screenshot retries can safely reuse the context
-      // already collected for the currently displayed page.
+      // tree analysis.
       await new Promise((resolve) => window.setTimeout(resolve, 0));
-      const baseContext = reuseContext && context
-        ? context
-        : await withPlanningTimeout(
-            refreshContext(),
-            15000,
-            "Page context collection timed out. Reload the canvas and try again."
-          );
+      if (!isCurrentRequest()) return;
+      const baseContext = await withPlanningTimeout(
+        refreshContext(),
+        15000,
+        "Page context collection timed out. Reload the canvas and try again."
+      );
+      if (!isCurrentRequest()) return;
       let freshContext = {
         ...baseContext,
         currentPage: {
@@ -1060,6 +1076,7 @@ export function AIWorkspace({
         log("image", `Generating ${count} unique image${count === 1 ? "" : "s"} with page content for a new gallery.`);
         const assets = [];
         for (let index = 0; index < count; index += 1) {
+          if (!isCurrentRequest()) return assets;
           const content = generatedAssetContent(index, cleanIntent);
           const generated = await aiWebsiteAgentService.generateImage({
             prompt: `${cleanIntent}. Create visually distinct image ${index + 1} of ${count}; vary the subject, composition, and camera angle while keeping it relevant to the same request.`,
@@ -1070,6 +1087,7 @@ export function AIWorkspace({
               memory
             }
           });
+          if (!isCurrentRequest()) return assets;
           if (generated.modelInfo) setModelInfo(generated.modelInfo);
           const file = generatedImageFile(
             generated.imageBase64,
@@ -1085,6 +1103,7 @@ export function AIWorkspace({
               ((index + progress / 100) / count) * 100
             )
           );
+          if (!isCurrentRequest()) return assets;
           const generatedDescription = String(generated.revisedPrompt || "").trim()
             || content.description;
           assets.push({
@@ -1104,7 +1123,9 @@ export function AIWorkspace({
       };
       if (!previousPlan && structuralScreenshotEdit && generatedImageCount) {
         const preparedGeneratedAssets = await prepareGeneratedGalleryAssets(generatedImageCount);
+        if (!isCurrentRequest()) return;
         freshContext = await refreshContext();
+        if (!isCurrentRequest()) return;
         freshContext.currentPage.preparedGeneratedAssets = preparedGeneratedAssets;
         freshContext.currentPage.visualReferences = visualReferences;
         planningIntent = `Create one editable gallery with exactly ${generatedImageCount} generated images and matching content. Use the selected-area snapshot attached to the screenshot and place it where the user indicated. Original request: ${cleanIntent}`;
@@ -1137,11 +1158,13 @@ export function AIWorkspace({
         log("image", `Reading and recoloring ${imageTargets.length} selected image${imageTargets.length === 1 ? "" : "s"} to ${targetColor}.`);
         const assignments = [];
         for (const [index, imageTarget] of imageTargets.entries()) {
+          if (!isCurrentRequest()) return;
           const transformed = await recolorImageAsset({
             source: imageSource(imageTarget.target),
             baseUrl: freshContext?.website?.record?.domain,
             targetColor
           });
+          if (!isCurrentRequest()) return;
           const file = transformedImageFile(transformed.blob, pageTitle, transformed.extension);
           const asset = await mediaService.upload(
             websiteId,
@@ -1151,6 +1174,7 @@ export function AIWorkspace({
               ((index + progress / 100) / imageTargets.length) * 100
             )
           );
+          if (!isCurrentRequest()) return;
           assignments.push({
             kind: imageTarget.kind,
             targetId: imageTarget.targetId,
@@ -1165,11 +1189,14 @@ export function AIWorkspace({
           });
         }
         freshContext = await refreshContext();
+        if (!isCurrentRequest()) return;
         freshContext.currentPage.preparedImageAssignments = assignments;
         planningIntent = `Write the prepared image edits to all selected images. They were recolored to ${targetColor}. Original request: ${cleanIntent}`;
       } else if (!previousPlan && generatedImageCount && (generatedImageCount > 1 || !imageTargets.length)) {
         const preparedGeneratedAssets = await prepareGeneratedGalleryAssets(generatedImageCount);
+        if (!isCurrentRequest()) return;
         freshContext = await refreshContext();
+        if (!isCurrentRequest()) return;
         freshContext.currentPage.preparedGeneratedAssets = preparedGeneratedAssets;
         planningIntent = `Create one editable gallery field with ${generatedImageCount} generated images and matching content, placed exactly as requested. Original request: ${cleanIntent}`;
       } else if (!previousPlan && generatedImageCount && imageTargets.length) {
@@ -1185,6 +1212,7 @@ export function AIWorkspace({
             memory
           }
         });
+        if (!isCurrentRequest()) return;
         if (generated.modelInfo) setModelInfo(generated.modelInfo);
         const file = generatedImageFile(generated.imageBase64, pageTitle, generated.mimeType);
         const asset = await mediaService.upload(
@@ -1193,7 +1221,9 @@ export function AIWorkspace({
           "ai-generated",
           setImageProgress
         );
+        if (!isCurrentRequest()) return;
         freshContext = await refreshContext();
+        if (!isCurrentRequest()) return;
         freshContext.currentPage.preparedImageAssignments = imageTargets.map((imageTarget) => ({
           kind: imageTarget.kind,
           targetId: imageTarget.targetId,
@@ -1220,6 +1250,7 @@ export function AIWorkspace({
         10000,
         "Local planning timed out. The page was left unchanged; try selecting the area again."
       );
+      if (!isCurrentRequest()) return;
       if (response.modelInfo) setModelInfo(response.modelInfo);
       if (!response.plan.operations.length) {
         setMessages((current) => [...current, {
@@ -1254,6 +1285,7 @@ export function AIWorkspace({
         requestId: response.requestId
       });
     } catch (error) {
+      if (!isCurrentRequest()) return;
       const message = error.message || "Rocket AI could not create a plan.";
       setMessages((current) => [...current, {
         id: `error_${Date.now()}`,
@@ -1263,14 +1295,15 @@ export function AIWorkspace({
       }]);
       log("error", message);
     } finally {
-      requestPlanInFlightRef.current = false;
-      setPlanning(false);
-      setImageGenerating(false);
-      setImageProgress(0);
+      if (isCurrentRequest()) {
+        requestPlanInFlightRef.current = false;
+        setPlanning(false);
+        setImageGenerating(false);
+        setImageProgress(0);
+      }
     }
   }, [
     applying,
-    context,
     imageGenerating,
     log,
     memory,
@@ -2074,9 +2107,7 @@ export function AIWorkspace({
           )}
         </div>
 
-        {messages.map((message, messageIndex) => {
-          const retryRequest = retriableScreenshotRequest(messages, messageIndex);
-          return (
+        {messages.map((message) => (
             <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
               <div className={`max-w-[92%] rounded-xl px-3 py-2.5 text-[10px] leading-5 ${
                 message.role === "user"
@@ -2110,26 +2141,9 @@ export function AIWorkspace({
                   </div>
                 )}
                 <p className="whitespace-pre-wrap">{message.content}</p>
-                {retryRequest && (
-                  <button
-                    type="button"
-                    disabled={planning || applying || imageGenerating || attachmentUploading}
-                    onClick={() => requestPlan({
-                      intent: retryRequest.content,
-                      attachments: retryRequest.attachments,
-                      appendUser: false,
-                      reuseContext: true
-                    })}
-                    className="mt-2 flex h-8 items-center gap-1.5 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 text-[9px] font-bold text-violet-200 hover:bg-violet-500/20 disabled:opacity-40 cursor-pointer"
-                  >
-                    <RefreshCw className="h-3 w-3" />
-                    Retry screenshot edit
-                  </button>
-                )}
               </div>
             </div>
-          );
-        })}
+        ))}
 
         {planning && (
           <div className="flex items-center gap-2 rounded-xl border border-violet-500/15 bg-violet-500/5 p-3">
@@ -2263,6 +2277,7 @@ export function AIWorkspace({
           )}
           {attachmentError && <p className="mb-2 text-[8px] leading-4 text-rose-300">{attachmentError}</p>}
           <textarea
+            ref={promptInputRef}
             value={prompt}
             onChange={(event) => setPrompt(event.target.value)}
             onPaste={handleChatPaste}
@@ -2622,10 +2637,20 @@ export function AIWorkspace({
           <div className="ml-auto flex items-center gap-1">
             <button
               type="button"
-              disabled={!latestUndoableRun || applying}
-              onClick={() => latestUndoableRun && rollbackRun(latestUndoableRun)}
+              disabled={activeTab === "chat"
+                ? !canUndoChatTurn || applying || attachmentUploading
+                : !latestUndoableRun || applying}
+              onClick={() => {
+                if (activeTab === "chat") {
+                  undoLatestChatTurn();
+                } else if (latestUndoableRun) {
+                  rollbackRun(latestUndoableRun);
+                }
+              }}
               className="grid h-7 w-7 place-items-center rounded-lg text-slate-600 hover:bg-slate-900 hover:text-white disabled:opacity-25 cursor-pointer"
-              title="Undo the latest applied AI edit"
+              title={activeTab === "chat"
+                ? "Remove the latest chat exchange and return to the prompt"
+                : "Undo the latest applied AI edit"}
             >
               <Undo2 className="h-3.5 w-3.5" />
             </button>
