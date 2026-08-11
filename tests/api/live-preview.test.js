@@ -190,6 +190,24 @@ describe("live preview HTML rewriting", () => {
     );
   });
 
+  it("suppresses connected-site preloaders in edit mode without changing preview mode", () => {
+    const editResult = rewritePreviewHtml(
+      "<html><head></head><body><div class=\"preloader-overlay\">Loading</div></body></html>",
+      "https://example.com/",
+      "/ad?rcms_edit=1"
+    );
+    const previewResult = rewritePreviewHtml(
+      "<html><head></head><body><div class=\"preloader-overlay\">Loading</div></body></html>",
+      "https://example.com/",
+      "/ad?rcms_preview=1"
+    );
+
+    expect(editResult).toContain('data-rcms-connected-canvas="edit"');
+    expect(editResult).toContain(".preloader-overlay");
+    expect(editResult).toContain("overflow: auto !important");
+    expect(previewResult).not.toContain("data-rcms-canvas-reset");
+  });
+
   it("bridges section styles for connected sites using an older SDK", () => {
     const result = rewritePreviewHtml(
       "<html><head></head><body><div id=\"root\"></div></body></html>",

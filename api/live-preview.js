@@ -520,6 +520,37 @@ function runtimeBootstrap(baseUrl, route, proxyOrigin) {
 </script>`;
 }
 
+function editorCanvasReset(route) {
+  let editMode = false;
+  try {
+    editMode = new URL(String(route || "/"), "https://preview.invalid")
+      .searchParams.get("rcms_edit") === "1";
+  } catch {
+    editMode = false;
+  }
+  if (!editMode) return "";
+
+  return `<style data-rcms-canvas-reset>
+html[data-rcms-connected-canvas="edit"] body {
+  overflow: auto !important;
+}
+html[data-rcms-connected-canvas="edit"] .preloader,
+html[data-rcms-connected-canvas="edit"] .preloader-overlay,
+html[data-rcms-connected-canvas="edit"] #preloader,
+html[data-rcms-connected-canvas="edit"] [data-preloader],
+html[data-rcms-connected-canvas="edit"] .page-loader,
+html[data-rcms-connected-canvas="edit"] .loading-screen,
+html[data-rcms-connected-canvas="edit"] .splash-screen {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  animation: none !important;
+  transition: none !important;
+}
+</style><script>document.documentElement.setAttribute("data-rcms-connected-canvas", "edit");</script>`;
+}
+
 export function rewritePreviewHtml(html, upstreamUrl, route, proxyOrigin = "") {
   const url = new URL(upstreamUrl);
   const baseUrl = new URL(".", url).toString();
@@ -543,7 +574,7 @@ export function rewritePreviewHtml(html, upstreamUrl, route, proxyOrigin = "") {
       )
     );
 
-  const injection = `<base href="${escapeAttribute(baseUrl)}">${runtimeBootstrap(baseUrl, route, normalizedProxyOrigin)}`;
+  const injection = `<base href="${escapeAttribute(baseUrl)}">${editorCanvasReset(route)}${runtimeBootstrap(baseUrl, route, normalizedProxyOrigin)}`;
   if (/<head\b[^>]*>/i.test(output)) {
     output = output.replace(/<head\b([^>]*)>/i, `<head$1>${injection}`);
   } else {
