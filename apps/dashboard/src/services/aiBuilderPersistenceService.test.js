@@ -15,6 +15,7 @@ import { ref, remove, update } from "firebase/database";
 import {
   default as aiBuilderPersistenceService,
   compactAIConversationMessages,
+  compactAIMessageAttachments,
   inferAIConversationTitle,
   normalizeAIConversationTitle
 } from "./aiBuilderPersistenceService";
@@ -41,6 +42,35 @@ describe("AI conversation persistence", () => {
     expect(compacted[0].id).toBe("message_10");
     expect(compacted.at(-1).content).toHaveLength(6000);
     expect(compacted.some((message) => message.role === "system")).toBe(false);
+  });
+
+  it("persists safe uploaded image metadata without browser blob URLs", () => {
+    const attachments = compactAIMessageAttachments([
+      {
+        id: "asset-1",
+        name: "reference.png",
+        url: "https://react-cms-pro.vercel.app/api/media?websiteId=site&fileId=asset-1",
+        type: "image/png",
+        size: 2048,
+        alt: "Reference layout"
+      },
+      { name: "notes.txt", url: "blob:temporary", type: "text/plain" },
+      { name: "temporary.png", url: "blob:temporary", type: "image/png" }
+    ]);
+
+    expect(attachments).toEqual([expect.objectContaining({
+      id: "asset-1",
+      name: "reference.png",
+      type: "image/png",
+      size: 2048,
+      alt: "Reference layout"
+    })]);
+    expect(compactAIConversationMessages([{
+      id: "message-with-image",
+      role: "user",
+      content: "Use this image",
+      attachments
+    }])[0].attachments).toEqual(attachments);
   });
 
   it("uses the first user instruction as the durable chat title", () => {

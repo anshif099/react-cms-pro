@@ -21,6 +21,7 @@ import {
   MessageSquare,
   Minimize2,
   MousePointer2,
+  Paperclip,
   PanelRightClose,
   ClipboardPaste,
   Pencil,
@@ -47,7 +48,7 @@ import {
   recolorImageAsset,
   requestedImageColor
 } from "../../services/imageTransformService";
-import mediaService from "../../services/mediaService";
+import mediaService, { MAX_REALTIME_MEDIA_BYTES } from "../../services/mediaService";
 import rocketAIAuthService from "../../services/rocketAIAuthService";
 
 const TABS = [
@@ -99,6 +100,14 @@ function conversationSignature(messages, modelId) {
       id: message.id,
       role: message.role,
       content: message.content,
+      attachments: (message.attachments || []).map((attachment) => ({
+        id: attachment.id,
+        name: attachment.name,
+        url: attachment.url,
+        type: attachment.type,
+        size: attachment.size,
+        alt: attachment.alt
+      })),
       error: Boolean(message.error)
     }))
   });
@@ -376,6 +385,10 @@ export function AIWorkspace({
   const [imagePrompt, setImagePrompt] = useState("");
   const [imageGenerating, setImageGenerating] = useState(false);
   const [imageProgress, setImageProgress] = useState(0);
+  const [chatAttachments, setChatAttachments] = useState([]);
+  const [attachmentUploading, setAttachmentUploading] = useState(false);
+  const [attachmentProgress, setAttachmentProgress] = useState(0);
+  const [attachmentError, setAttachmentError] = useState("");
   const [selectingArea, setSelectingArea] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [clipboardStatus, setClipboardStatus] = useState("");
@@ -385,6 +398,8 @@ export function AIWorkspace({
   const [rocketSigningIn, setRocketSigningIn] = useState(false);
   const [rocketAuthError, setRocketAuthError] = useState("");
   const chatEndRef = useRef(null);
+  const attachmentInputRef = useRef(null);
+  const attachmentPreviewUrlsRef = useRef(new Set());
   const getContextRef = useRef(getContext);
   const areaSelectionStartKeyRef = useRef("");
   const conversationSaveQueueRef = useRef(Promise.resolve());
@@ -397,6 +412,19 @@ export function AIWorkspace({
   workspaceKeyRef.current = workspaceKey;
   pageTitleRef.current = pageTitle;
   surfaceRef.current = surface;
+
+  const clearChatAttachments = useCallback(() => {
+    attachmentPreviewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+    attachmentPreviewUrlsRef.current.clear();
+    setChatAttachments([]);
+    setAttachmentError("");
+    setAttachmentProgress(0);
+  }, []);
+
+  useEffect(() => () => {
+    attachmentPreviewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+    attachmentPreviewUrlsRef.current.clear();
+  }, []);
 
   useEffect(() => {
     getContextRef.current = getContext;
@@ -468,6 +496,7 @@ export function AIWorkspace({
     setPending(null);
     setTasks([]);
     setPrompt("");
+    clearChatAttachments();
 
     (async () => {
       try {
@@ -534,7 +563,7 @@ export function AIWorkspace({
     return () => {
       cancelled = true;
     };
-  }, [pageId, websiteId, log]);
+  }, [pageId, websiteId, log, clearChatAttachments]);
 
   useEffect(() => {
     const capturedWorkspaceKey = `${websiteId}:${pageId}`;
@@ -630,7 +659,7 @@ export function AIWorkspace({
       setConversationListOpen(false);
       return;
     }
-    if (planning || applying || imageGenerating) {
+    if (planning || applying || imageGenerating || attachmentUploading) {
       log("warning", "Finish the current Rocket operation before switching chats.");
       return;
     }
@@ -657,6 +686,7 @@ export function AIWorkspace({
       setMessages(restoredMessages);
       setModelInfo(restoredModel);
       setPrompt("");
+      clearChatAttachments();
       setPending(null);
       setTasks([]);
       setModifyOpen(false);
@@ -680,7 +710,7 @@ export function AIWorkspace({
 
   const createNewConversation = async () => {
     if (conversationSwitching) return;
-    if (planning || applying || imageGenerating) {
+    if (planning || applying || imageGenerating || attachmentUploading) {
       log("warning", "Finish the current Rocket operation before starting a new chat.");
       return;
     }
@@ -713,6 +743,7 @@ export function AIWorkspace({
       setActiveConversationId(conversation.id);
       setMessages(nextMessages);
       setPrompt("");
+      clearChatAttachments();
       setPending(null);
       setTasks([]);
       setModifyOpen(false);
@@ -773,7 +804,7 @@ export function AIWorkspace({
 
   const deleteConversation = async (conversation) => {
     if (!conversation?.id || conversationDeletingId) return;
-    if (planning || applying || imageGenerating) {
+    if (planning || applying || imageGenerating || attachmentUploading) {
       log("warning", "Finish the current Rocket operation before deleting a chat.");
       return;
     }
@@ -838,6 +869,7 @@ export function AIWorkspace({
         setMessages(restoredMessages);
         setModelInfo(restoredModel);
         setPrompt("");
+        clearChatAttachments();
         setPending(null);
         setTasks([]);
         setModifyOpen(false);
@@ -878,6 +910,7 @@ export function AIWorkspace({
       await rocketAIAuthService.signOut();
       setRocketUser(null);
       setPending(null);
+      clearChatAttachments();
       log("auth", "Rocket AI Google account disconnected.");
     } catch (error) {
       const message = error.message || "Rocket AI could not sign out.";
@@ -888,11 +921,15 @@ export function AIWorkspace({
 
   const requestPlan = useCallback(async ({
     intent,
+    attachments = [],
     previousPlan = null,
     feedback = "",
     appendUser = true
   }) => {
     const cleanIntent = String(intent || "").trim();
+    const requestAttachments = (Array.isArray(attachments) ? attachments : [])
+      .filter((attachment) => attachment?.url && String(attachment.type || "").startsWith("image/"))
+      .slice(0, 4);
     if (!cleanIntent || planning || applying || imageGenerating) return;
     if (!rocketUser) {
       setRocketAuthError("Connect a Google account before asking Rocket AI.");
@@ -901,7 +938,8 @@ export function AIWorkspace({
     const userMessage = appendUser ? {
       id: `user_${Date.now()}`,
       role: "user",
-      content: feedback || cleanIntent
+      content: feedback || cleanIntent,
+      ...(requestAttachments.length ? { attachments: requestAttachments } : {})
     } : null;
     const requestConversation = userMessage
       ? [...messages, userMessage]
@@ -918,7 +956,23 @@ export function AIWorkspace({
       let planningIntent = cleanIntent;
       const imageTargets = imageTargetsForRequest(freshContext, cleanIntent).slice(0, 24);
       const generatedImageCount = requestedGeneratedImageCount(cleanIntent);
-      if (!previousPlan && isImageRecolorRequest(cleanIntent) && imageTargets.length) {
+      if (!previousPlan && requestAttachments.length && imageTargets.length) {
+        freshContext.currentPage.preparedImageAssignments = imageTargets.map((imageTarget, index) => {
+          const attachment = requestAttachments[Math.min(index, requestAttachments.length - 1)];
+          return {
+            kind: imageTarget.kind,
+            targetId: imageTarget.targetId,
+            label: imageTarget.target.label || imageTarget.targetId,
+            url: attachment.url,
+            alt: String(attachment.alt || attachment.name || "Attached image")
+              .replace(/\.[a-z0-9]+$/i, "")
+          };
+        });
+        planningIntent = `Write the prepared attached image to all selected images with accessible alt text. Follow this instruction: ${cleanIntent}`;
+        log("image", `Attached ${requestAttachments.length} uploaded chat image${requestAttachments.length === 1 ? "" : "s"} to ${imageTargets.length} selected image target${imageTargets.length === 1 ? "" : "s"}.`);
+      } else if (!previousPlan && requestAttachments.length && !imageTargets.length) {
+        planningIntent = `${cleanIntent}. An uploaded image is attached as a reference, but no editable image area is selected.`;
+      } else if (!previousPlan && isImageRecolorRequest(cleanIntent) && imageTargets.length) {
         setImageGenerating(true);
         setImageProgress(0);
         const targetColor = requestedImageColor(cleanIntent, freshContext?.designSystem?.theme);
@@ -1105,11 +1159,114 @@ export function AIWorkspace({
     websiteId
   ]);
 
-  const submitPrompt = (event) => {
+  const addChatAttachmentFiles = (files, source = "upload") => {
+    const candidates = Array.from(files || []).filter(Boolean);
+    if (!candidates.length) return;
+    const accepted = [];
+    const rejected = [];
+    candidates.forEach((file) => {
+      if (!String(file.type || "").startsWith("image/")) {
+        rejected.push(`${file.name || "File"} is not an image.`);
+        return;
+      }
+      if (!file.size || file.size > MAX_REALTIME_MEDIA_BYTES) {
+        rejected.push(`${file.name || "Image"} must be 4 MB or smaller.`);
+        return;
+      }
+      const previewUrl = URL.createObjectURL(file);
+      attachmentPreviewUrlsRef.current.add(previewUrl);
+      accepted.push({
+        id: `attachment_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        file,
+        name: file.name || `pasted-image-${Date.now()}.png`,
+        type: file.type,
+        size: file.size,
+        previewUrl,
+        source
+      });
+    });
+    const available = Math.max(0, 4 - chatAttachments.length);
+    const added = accepted.slice(0, available);
+    accepted.slice(available).forEach((attachment) => {
+      URL.revokeObjectURL(attachment.previewUrl);
+      attachmentPreviewUrlsRef.current.delete(attachment.previewUrl);
+    });
+    if (accepted.length > available) rejected.push("Rocket Chat accepts up to 4 images per prompt.");
+    setChatAttachments((current) => [...current, ...added].slice(0, 4));
+    setAttachmentError(rejected.join(" "));
+  };
+
+  const removeChatAttachment = (attachmentId) => {
+    setChatAttachments((current) => current.filter((attachment) => {
+      if (attachment.id !== attachmentId) return true;
+      URL.revokeObjectURL(attachment.previewUrl);
+      attachmentPreviewUrlsRef.current.delete(attachment.previewUrl);
+      return false;
+    }));
+    setAttachmentError("");
+  };
+
+  const handleChatPaste = (event) => {
+    const imageFiles = Array.from(event.clipboardData?.items || [])
+      .filter((item) => item.kind === "file" && String(item.type || "").startsWith("image/"))
+      .map((item) => item.getAsFile())
+      .filter(Boolean);
+    if (!imageFiles.length) return;
+    event.preventDefault();
+    addChatAttachmentFiles(imageFiles, "clipboard");
+    showClipboardStatus(`${imageFiles.length} clipboard image${imageFiles.length === 1 ? "" : "s"} attached to the prompt.`);
+  };
+
+  const submitPrompt = async (event) => {
     event?.preventDefault();
-    const intent = prompt;
-    setPrompt("");
-    requestPlan({ intent });
+    const pendingAttachments = [...chatAttachments];
+    const intent = prompt.trim() || (pendingAttachments.length
+      ? "Replace the selected editable image with the attached image."
+      : "");
+    if (!intent || planning || applying || imageGenerating || attachmentUploading) return;
+    if (!pendingAttachments.length) {
+      setPrompt("");
+      requestPlan({ intent });
+      return;
+    }
+
+    setAttachmentUploading(true);
+    setAttachmentProgress(0);
+    setAttachmentError("");
+    try {
+      const uploaded = [];
+      for (const [index, attachment] of pendingAttachments.entries()) {
+        const asset = await mediaService.upload(
+          websiteId,
+          attachment.file,
+          "rocket-chat",
+          (progress) => setAttachmentProgress(
+            ((index + progress / 100) / pendingAttachments.length) * 100
+          )
+        );
+        uploaded.push({
+          id: asset.id,
+          name: asset.name,
+          url: asset.url,
+          type: asset.type,
+          size: asset.size,
+          alt: asset.alt
+        });
+      }
+      log("image", `Uploaded ${uploaded.length} Rocket Chat image attachment${uploaded.length === 1 ? "" : "s"}.`, {
+        assetIds: uploaded.map((attachment) => attachment.id)
+      });
+      setPrompt("");
+      clearChatAttachments();
+      requestPlan({ intent, attachments: uploaded });
+    } catch (error) {
+      const message = error.message || "The attached image could not be uploaded.";
+      setAttachmentError(message);
+      log("error", message);
+    } finally {
+      setAttachmentUploading(false);
+      setAttachmentProgress(0);
+    }
   };
 
   const approvePlan = async () => {
@@ -1462,7 +1619,7 @@ export function AIWorkspace({
             <button
               type="button"
               onClick={createNewConversation}
-              disabled={conversationSwitching || planning || applying || imageGenerating}
+              disabled={conversationSwitching || planning || applying || imageGenerating || attachmentUploading}
               className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-lg border border-slate-800 text-slate-500 hover:border-violet-500/30 hover:text-white disabled:opacity-35 cursor-pointer"
               title="Start a new saved chat"
             >
@@ -1489,6 +1646,7 @@ export function AIWorkspace({
                   || planning
                   || applying
                   || imageGenerating
+                  || attachmentUploading
                   || Boolean(conversationRenamingId)
                   || Boolean(conversationDeletingId);
                 return (
@@ -1796,7 +1954,31 @@ export function AIWorkspace({
                   ? "border border-rose-500/20 bg-rose-500/5 text-rose-200"
                   : "border border-slate-800 bg-slate-950/50 text-slate-300"
             }`}>
-              {message.content}
+              {!!message.attachments?.length && (
+                <div className={`mb-2 grid gap-1.5 ${message.attachments.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
+                  {message.attachments.map((attachment) => (
+                    <a
+                      key={attachment.id || attachment.url}
+                      href={attachment.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block overflow-hidden rounded-lg border border-white/10 bg-black/20"
+                      title={attachment.name || "Attached image"}
+                    >
+                      <img
+                        src={attachment.url}
+                        alt={attachment.alt || attachment.name || "Rocket Chat attachment"}
+                        loading="lazy"
+                        className="h-28 w-full object-cover"
+                      />
+                      <span className="block truncate px-2 py-1 text-[8px] text-white/70">
+                        {attachment.name || "Attached image"}
+                      </span>
+                    </a>
+                  ))}
+                </div>
+              )}
+              <p className="whitespace-pre-wrap">{message.content}</p>
             </div>
           </div>
         ))}
@@ -1890,11 +2072,53 @@ export function AIWorkspace({
       </div>
 
       <form onSubmit={submitPrompt} className="border-t border-slate-800 p-3">
+        <input
+          ref={attachmentInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={(event) => {
+            addChatAttachmentFiles(event.target.files, "upload");
+            event.target.value = "";
+          }}
+        />
         <div className="rounded-xl border border-slate-700 bg-[#070b14] p-2 focus-within:border-violet-500/60">
+          {!!chatAttachments.length && (
+            <div className="mb-2 flex gap-2 overflow-x-auto pb-1">
+              {chatAttachments.map((attachment) => (
+                <div key={attachment.id} className="relative h-16 w-20 flex-shrink-0 overflow-hidden rounded-lg border border-violet-500/30 bg-slate-950">
+                  <img src={attachment.previewUrl} alt={attachment.name} className="h-full w-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => removeChatAttachment(attachment.id)}
+                    disabled={attachmentUploading}
+                    className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-full bg-black/75 text-white hover:bg-rose-600 disabled:opacity-40 cursor-pointer"
+                    title={`Remove ${attachment.name}`}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                  <span className="absolute inset-x-0 bottom-0 truncate bg-black/70 px-1 py-0.5 text-[7px] text-white/80">
+                    {attachment.name}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+          {attachmentUploading && (
+            <div className="mb-2">
+              <div className="h-1 overflow-hidden rounded-full bg-slate-800">
+                <div className="h-full rounded-full bg-violet-500 transition-[width]" style={{ width: `${attachmentProgress}%` }} />
+              </div>
+              <p className="mt-1 text-[8px] text-violet-300">Uploading attached imageâ€¦ {Math.round(attachmentProgress)}%</p>
+            </div>
+          )}
+          {attachmentError && <p className="mb-2 text-[8px] leading-4 text-rose-300">{attachmentError}</p>}
           <textarea
             value={prompt}
             onChange={(event) => setPrompt(event.target.value)}
-            disabled={!rocketUser}
+            onPaste={handleChatPaste}
+            disabled={!rocketUser || attachmentUploading}
             onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();
@@ -1903,7 +2127,9 @@ export function AIWorkspace({
             }}
             rows="3"
             placeholder={rocketUser
-              ? targetList.length
+              ? chatAttachments.length
+                ? "Describe how Rocket should use the attached imageâ€¦"
+                : targetList.length
                 ? targetList.length === 1
                   ? `Tell Rocket how to update this ${selectedTarget?.type || "area"}…`
                   : `Tell Rocket how to update these ${targetList.length} selected areas…`
@@ -1912,14 +2138,25 @@ export function AIWorkspace({
             className="w-full resize-none bg-transparent px-1 text-[11px] leading-5 text-slate-200 outline-none placeholder:text-slate-700"
           />
           <div className="mt-1 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => attachmentInputRef.current?.click()}
+              disabled={!rocketUser || planning || applying || imageGenerating || attachmentUploading || chatAttachments.length >= 4}
+              className="grid h-7 w-7 flex-shrink-0 place-items-center rounded-lg border border-slate-800 text-slate-500 hover:border-violet-500/40 hover:text-violet-200 disabled:opacity-30 cursor-pointer"
+              title="Attach image (or paste with Ctrl+V)"
+            >
+              <Paperclip className="h-3.5 w-3.5" />
+            </button>
             <span className="truncate text-[8px] text-slate-700">
-              {targetList.length
+              {chatAttachments.length
+                ? `${chatAttachments.length} image${chatAttachments.length === 1 ? "" : "s"} attached; add a prompt`
+                : targetList.length
                 ? `Targets: ${targetList.length}${selectedTarget ? ` · active ${selectedTarget.label || selectedTarget.regionId || selectedTarget.id}` : ""}`
                 : "Enter to plan · Shift+Enter for a line"}
             </span>
             <button
               type="submit"
-              disabled={!rocketUser || !prompt.trim() || planning || applying || imageGenerating}
+              disabled={!rocketUser || (!prompt.trim() && !chatAttachments.length) || planning || applying || imageGenerating || attachmentUploading}
               className="ml-auto grid h-7 w-7 place-items-center rounded-lg bg-violet-600 text-white disabled:opacity-30 cursor-pointer"
               title="Create plan"
             >

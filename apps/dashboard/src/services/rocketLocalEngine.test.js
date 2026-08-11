@@ -517,6 +517,47 @@ describe("embedded Rocket AI engine", () => {
     ))).toBe(true);
   });
 
+  it("writes an uploaded Rocket Chat attachment to the selected image", async () => {
+    const context = connectedContext();
+    context.currentPage.selectedRegion = {
+      regionId: "ad.hero_image",
+      type: "image",
+      label: "Hero visual",
+      value: { src: "https://example.com/old.jpg", alt: "Old visual" }
+    };
+    context.currentPage.editableRegionDefinitions["ad.hero_image"] = {
+      type: "image",
+      label: "Hero visual"
+    };
+    context.currentPage.editableRegionValues["ad.hero_image"] = context.currentPage.selectedRegion.value;
+    context.currentPage.preparedImageAssignments = [{
+      kind: "region",
+      targetId: "ad.hero_image",
+      label: "Hero visual",
+      url: "https://react-cms-pro.vercel.app/api/media?websiteId=site&fileId=attached",
+      alt: "Campaign reference"
+    }];
+
+    const response = await rocketLocalEngine.createPlan({
+      intent: "Write the prepared attached image to the selected image. Make this the new hero visual.",
+      context,
+      memory: {}
+    });
+
+    expect(response.plan.operations).toHaveLength(1);
+    expect(response.plan.operations[0]).toMatchObject({
+      type: "update_region",
+      targetId: "ad.hero_image",
+      patches: [
+        {
+          path: "value.src",
+          valueJson: '"https://react-cms-pro.vercel.app/api/media?websiteId=site&fileId=attached"'
+        },
+        { path: "value.alt", valueJson: '"Campaign reference"' }
+      ]
+    });
+  });
+
   it("asks for an image area when an image request has no selection", async () => {
     const context = connectedContext();
     context.currentPage.selectedRegion = null;

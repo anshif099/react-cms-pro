@@ -52,16 +52,39 @@ export function parseAISnapshot(value) {
   return JSON.parse(value);
 }
 
+export function compactAIMessageAttachments(attachments = []) {
+  return (Array.isArray(attachments) ? attachments : [])
+    .filter((attachment) => (
+      attachment
+      && String(attachment.url || "").trim()
+      && !/^(?:blob:|data:)/i.test(String(attachment.url || "").trim())
+      && String(attachment.type || "").startsWith("image/")
+    ))
+    .slice(0, 4)
+    .map((attachment, index) => ({
+      id: String(attachment.id || `attachment_${index}`).slice(0, 180),
+      name: String(attachment.name || "Attached image").slice(0, 180),
+      url: String(attachment.url).slice(0, 2048),
+      type: String(attachment.type).slice(0, 100),
+      size: Math.max(0, Number(attachment.size) || 0),
+      ...(attachment.alt ? { alt: String(attachment.alt).slice(0, 300) } : {})
+    }));
+}
+
 export function compactAIConversationMessages(messages = []) {
   return (Array.isArray(messages) ? messages : [])
     .filter((message) => message && ["assistant", "user"].includes(message.role))
     .slice(-MAX_CONVERSATION_MESSAGES)
-    .map((message, index) => ({
-      id: String(message.id || `message_${index}`),
-      role: message.role,
-      content: String(message.content || "").slice(0, MAX_MESSAGE_LENGTH),
-      ...(message.error ? { error: true } : {})
-    }));
+    .map((message, index) => {
+      const attachments = compactAIMessageAttachments(message.attachments);
+      return {
+        id: String(message.id || `message_${index}`),
+        role: message.role,
+        content: String(message.content || "").slice(0, MAX_MESSAGE_LENGTH),
+        ...(attachments.length ? { attachments } : {}),
+        ...(message.error ? { error: true } : {})
+      };
+    });
 }
 
 export function inferAIConversationTitle(messages = [], fallback = "New chat") {
