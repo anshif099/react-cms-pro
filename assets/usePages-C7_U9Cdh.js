@@ -1,0 +1,1 @@
+import{E as e}from"./index-Bcfs_3Kz.js";function t(){return e()}export{t};
