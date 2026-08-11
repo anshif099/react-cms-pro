@@ -796,6 +796,67 @@ function selectedRegionTextColorOperations(addOperation, context, color) {
   });
 }
 
+function requestsSingleLineText(intent) {
+  const text = normalized(intent);
+  return /\b(?:one|single)\s*[- ]?line\b/.test(text)
+    || /\bno\s*[- ]?wrap\b/.test(text)
+    || /\bnowrap\b/.test(text)
+    || /\b(?:do\s+not|don'?t)\s+wrap\b/.test(text);
+}
+
+function selectedRegionSingleLineOperations(addOperation, context, intent) {
+  if (!requestsSingleLineText(intent)) return [];
+  const capabilities = new Set(context?.capabilities || []);
+  if (!capabilities.has("update_region")) return [];
+
+  const page = context?.currentPage || {};
+  const selectedTextTargets = selectedRegions(context).filter((selected) => (
+    ["text", "richtext"].includes(selected.type)
+  ));
+  if (!selectedTextTargets.length) return [];
+
+  const requestsEveryTarget = /\b(?:all|both|every)\b/.test(normalized(intent));
+  const activeTarget = page.selectedRegion?.regionId
+    ? selectedTextTargets.find((target) => target.regionId === page.selectedRegion.regionId)
+    : null;
+  const targets = requestsEveryTarget
+    ? selectedTextTargets
+    : [activeTarget || selectedTextTargets.at(-1)];
+
+  return targets.map((target) => {
+    const currentValue = target.value;
+    const nextValue = currentValue && typeof currentValue === "object"
+      ? { ...currentValue }
+      : { text: String(currentValue ?? "") };
+    nextValue.text = String(nextValue.text ?? "").replace(/\s+/g, " ").trim();
+
+    const currentFontSize = Number.parseFloat(
+      nextValue.fontSize || target.computedStyle?.fontSize || ""
+    );
+    const estimatedFontSize = Math.floor(800 / Math.max(1, nextValue.text.length * 0.58));
+    const desktopFontSize = Math.max(16, Math.min(
+      32,
+      estimatedFontSize,
+      Number.isFinite(currentFontSize) ? Math.floor(currentFontSize * 0.9) : 32
+    ));
+    nextValue.fontSize = `${desktopFontSize}px`;
+    nextValue.fontSizeTablet = nextValue.fontSizeTablet || `${Math.min(desktopFontSize, 28)}px`;
+    nextValue.fontSizeMobile = nextValue.fontSizeMobile || `${Math.min(desktopFontSize, 22)}px`;
+    nextValue.width = "100%";
+    nextValue.maxWidth = "100%";
+    nextValue.whiteSpaceDesktop = "nowrap";
+    nextValue.overflowWrapDesktop = "normal";
+    nextValue.wordBreakDesktop = "normal";
+
+    return addOperation("update_region", {
+      targetId: target.regionId,
+      summary: `Keep ${target.label || "selected heading"} on one line`,
+      reason: "Fit the active text within its desktop area while preserving responsive wrapping on smaller screens.",
+      patches: [patch("value", nextValue)]
+    });
+  });
+}
+
 function mediaAssetFromIntent(intent, context) {
   const assets = Array.isArray(context?.contentSystem?.assets)
     ? context.contentSystem.assets
@@ -962,6 +1023,16 @@ function buildPlan({ intent, context, memory = {}, conversation = [], previousPl
   if (selectedCopyItems.length) {
     operations.push(...selectedCopyItems);
     affected.add("Selected content");
+  }
+
+  const singleLineItems = selectedRegionSingleLineOperations(
+    addOperation,
+    context,
+    combinedIntent
+  );
+  if (singleLineItems.length) {
+    operations.push(...singleLineItems);
+    affected.add("Selected text layout");
   }
 
   if (color && includesAny(text, ["background", " bg ", "bg colour", "bg color"])) {

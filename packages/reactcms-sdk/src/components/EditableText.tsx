@@ -75,6 +75,14 @@ export function EditableText({
     if (value.color) textStyle.color = value.color;
     if (value.width) textStyle.width = value.width;
     if (value.maxWidth) textStyle.maxWidth = value.maxWidth;
+    if (vw >= 1024) {
+      if (value.whiteSpaceDesktop) textStyle.whiteSpace = value.whiteSpaceDesktop;
+      if (value.overflowWrapDesktop) textStyle.overflowWrap = value.overflowWrapDesktop;
+      if (value.wordBreakDesktop) textStyle.wordBreak = value.wordBreakDesktop;
+    }
+    if (value.whiteSpace) textStyle.whiteSpace = value.whiteSpace;
+    if (value.overflowWrap) textStyle.overflowWrap = value.overflowWrap;
+    if (value.wordBreak) textStyle.wordBreak = value.wordBreak;
 
     // Responsive alignment: pick breakpoint-specific value based on viewport width, defaulting to Desktop alignment
     let resolvedAlign: string | undefined;

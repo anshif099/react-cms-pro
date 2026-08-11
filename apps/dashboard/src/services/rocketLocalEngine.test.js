@@ -670,6 +670,56 @@ describe("embedded Rocket AI engine", () => {
     ))).toBe(true);
   });
 
+  it("keeps the active selected heading on one desktop line from natural language", async () => {
+    const context = connectedContext();
+    const title = {
+      regionId: "ad.cta_title",
+      type: "text",
+      label: "CTA Title",
+      value: "Ready to transform your business with Ad?",
+      computedStyle: { fontSize: "35.2px" }
+    };
+    const subtext = {
+      regionId: "ad.cta_subtext",
+      type: "text",
+      label: "CTA Subtext",
+      value: "Get in touch with our expert team."
+    };
+    context.currentPage.selectedRegion = title;
+    context.currentPage.selectedRegions = [title, subtext];
+    context.currentPage.editableRegionDefinitions[title.regionId] = { type: "text" };
+    context.currentPage.editableRegionDefinitions[subtext.regionId] = { type: "text" };
+    context.currentPage.editableRegionValues[title.regionId] = title.value;
+    context.currentPage.editableRegionValues[subtext.regionId] = subtext.value;
+
+    const response = await rocketLocalEngine.createPlan({
+      intent: "make fu words in one line now it 2 line ad in second line",
+      context,
+      memory: {}
+    });
+
+    expect(response.plan.operations).toHaveLength(1);
+    expect(response.plan.operations[0]).toMatchObject({
+      type: "update_region",
+      targetId: "ad.cta_title"
+    });
+    const nextValue = JSON.parse(response.plan.operations[0].patches[0].valueJson);
+    expect(nextValue).toMatchObject({
+      text: title.value,
+      fontSize: "31px",
+      width: "100%",
+      maxWidth: "100%",
+      whiteSpaceDesktop: "nowrap"
+    });
+
+    const execution = applyAIPlan({
+      plan: response.plan,
+      regions: context.currentPage.editableRegionValues
+    });
+    expect(execution.regions[title.regionId]).toEqual(nextValue);
+    expect(execution.regions[subtext.regionId]).toBe(subtext.value);
+  });
+
   it("builds a native landing page from real registered components", async () => {
     const response = await rocketLocalEngine.createPlan({
       intent: "Build a SaaS landing page",

@@ -3,6 +3,10 @@ export interface ElementComputedStyle {
   fontWeight?: string;
   color?: string;
   align?: string;
+  width?: string;
+  maxWidth?: string;
+  whiteSpace?: string;
+  lineHeight?: string;
 }
 
 export function rgbToHex(colorStr: string): string | null {
@@ -26,6 +30,10 @@ export function getElementComputedStyle(el: HTMLElement | null): ElementComputed
       fontWeight: cs.fontWeight,
       color: colorHex,
       align: cs.textAlign,
+      width: cs.width,
+      maxWidth: cs.maxWidth,
+      whiteSpace: cs.whiteSpace,
+      lineHeight: cs.lineHeight,
     };
   } catch {
     return {};
