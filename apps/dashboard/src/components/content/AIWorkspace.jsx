@@ -528,184 +528,23 @@ export function AIWorkspace({
     window.requestAnimationFrame(() => promptInputRef.current?.focus());
   };
 
-  const createNewConversation = async () => {
-    if (conversationSwitching) return;
-    if (planning || applying || imageGenerating || attachmentUploading) {
-      log("warning", "Finish the current Rocket operation before starting a new chat.");
-      return;
-    }
-    if (!messages.some((message) => message.role === "user")) {
-      setConversationListOpen(false);
-      setActiveTab("chat");
-      return;
-    }
-    setConversationSwitching(true);
-    setConversationHydrated(false);
-    try {
-      await conversationSaveQueueRef.current.catch(() => undefined);
-      const nextMessages = freshConversationMessages();
-      const conversation = await aiBuilderPersistenceService.createConversation(
-        websiteId,
-        pageId,
-        {
-          title: "New chat",
-          messages: nextMessages,
-          modelId: modelInfo.releaseId,
-          surface: surfaceRef.current,
-          pageTitle: pageTitleRef.current
-        }
-      );
-      savedConversationSignaturesRef.current.set(
-        `${websiteId}:${pageId}:${conversation.id}`,
-        conversationSignature(nextMessages, modelInfo.releaseId)
-      );
-      setConversations((current) => [conversation, ...current]);
-      setActiveConversationId(conversation.id);
-      setMessages(nextMessages);
-      setPrompt("");
-      clearChatAttachments();
-      setPending(null);
-      setTasks([]);
-      setModifyOpen(false);
-      setConversationEditingId("");
-      setConversationTitleDraft("");
-      setConversationDeleteConfirmId("");
-      setConversationListOpen(false);
-      setActiveTab("chat");
-      setConversationHydrated(true);
-      log("memory", "Started a new saved Rocket chat.", { conversationId: conversation.id });
-    } catch (error) {
-      log("error", error.message || "A new Rocket chat could not be created.");
-      setConversationHydrated(true);
-    } finally {
-      setConversationSwitching(false);
-    }
-  };
-
-  const beginConversationRename = (conversation) => {
-    if (!conversation?.id || conversationSwitching || conversationDeletingId) return;
-    setConversationEditingId(conversation.id);
-    setConversationTitleDraft(conversation.title || "New chat");
-    setConversationDeleteConfirmId("");
-  };
-
-  const cancelConversationRename = () => {
-    if (conversationRenamingId) return;
-    setConversationEditingId("");
-    setConversationTitleDraft("");
-  };
-
-  const saveConversationRename = async (conversation) => {
-    const title = conversationTitleDraft.replace(/\s+/g, " ").trim();
-    if (!conversation?.id || !title || conversationRenamingId) return;
-    setConversationRenamingId(conversation.id);
-    try {
-      await conversationSaveQueueRef.current.catch(() => undefined);
-      const saved = await aiBuilderPersistenceService.renameConversation(
-        websiteId,
-        pageId,
-        conversation.id,
-        title
-      );
-      setConversations((current) => current
-        .map((item) => item.id === saved.id ? { ...item, ...saved } : item)
-        .sort((first, second) => (second.updatedAt || 0) - (first.updatedAt || 0)));
-      setConversationEditingId("");
-      setConversationTitleDraft("");
-      log("memory", `Renamed Rocket chat to: ${saved.title}.`, {
-        conversationId: conversation.id
-      });
-    } catch (error) {
-      log("error", error.message || "The Rocket chat could not be renamed.");
-    } finally {
-      setConversationRenamingId("");
-    }
-  };
-
-  const deleteConversation = async (conversation) => {
-    if (!conversation?.id || conversationDeletingId) return;
-    if (planning || applying || imageGenerating || attachmentUploading) {
-      log("warning", "Finish the current Rocket operation before deleting a chat.");
-      return;
-    }
-    const deletingActiveConversation = conversation.id === activeConversationId;
-    const remaining = conversations.filter((item) => item.id !== conversation.id);
-    setConversationDeletingId(conversation.id);
-    setConversationEditingId("");
-    setConversationTitleDraft("");
-    if (deletingActiveConversation) {
-      setConversationSwitching(true);
-      setConversationHydrated(false);
-    }
-    try {
-      await conversationSaveQueueRef.current.catch(() => undefined);
-      await aiBuilderPersistenceService.deleteConversation(
-        websiteId,
-        pageId,
-        conversation.id
-      );
-      savedConversationSignaturesRef.current.delete(
-        `${websiteId}:${pageId}:${conversation.id}`
-      );
-
-      if (!deletingActiveConversation) {
-        setConversations(remaining);
-      } else {
-        let nextConversation = remaining[0] || null;
-        if (nextConversation) {
-          await aiBuilderPersistenceService.setActiveConversationId(
-            websiteId,
-            pageId,
-            nextConversation.id
-          );
-        } else {
-          const nextMessages = freshConversationMessages();
-          nextConversation = await aiBuilderPersistenceService.createConversation(
-            websiteId,
-            pageId,
-            {
-              title: "New chat",
-              messages: nextMessages,
-              modelId: modelInfo.releaseId,
-              surface: surfaceRef.current,
-              pageTitle: pageTitleRef.current
-            }
-          );
-          remaining.push(nextConversation);
-        }
-
-        const restoredMessages = nextConversation.messages?.length
-          ? nextConversation.messages
-          : freshConversationMessages();
-        const restoredModel = aiWebsiteAgentService.setActiveModel(
-          nextConversation.modelId || modelInfo.releaseId
-        );
-        savedConversationSignaturesRef.current.set(
-          `${websiteId}:${pageId}:${nextConversation.id}`,
-          conversationSignature(restoredMessages, restoredModel.releaseId)
-        );
-        setConversations(remaining);
-        setActiveConversationId(nextConversation.id);
-        setMessages(restoredMessages);
-        setModelInfo(restoredModel);
-        setPrompt("");
-        clearChatAttachments();
-        setPending(null);
-        setTasks([]);
-        setModifyOpen(false);
-        setConversationHydrated(true);
-      }
-      setConversationDeleteConfirmId("");
-      log("memory", `Deleted Rocket chat: ${conversation.title || "New chat"}.`, {
-        conversationId: conversation.id
-      });
-    } catch (error) {
-      if (deletingActiveConversation) setConversationHydrated(true);
-      log("error", error.message || "The Rocket chat could not be deleted.");
-    } finally {
-      if (deletingActiveConversation) setConversationSwitching(false);
-      setConversationDeletingId("");
-    }
+  const startFreshChat = () => {
+    if (applying || attachmentUploading) return;
+    requestPlanGenerationRef.current += 1;
+    requestPlanInFlightRef.current = false;
+    setPlanning(false);
+    setImageGenerating(false);
+    setImageProgress(0);
+    setMessages(freshConversationMessages());
+    setPrompt("");
+    clearChatAttachments();
+    setPending(null);
+    setTasks([]);
+    setModifyOpen(false);
+    setPlanFeedback("");
+    setActiveTab("chat");
+    log("memory", "Started a fresh session-only Rocket chat.");
+    window.requestAnimationFrame(() => promptInputRef.current?.focus());
   };
 
   const requestPlan = useCallback(async ({
@@ -1160,8 +999,7 @@ export function AIWorkspace({
         prompt: pending.prompt,
         plan: pending.plan,
         model: pending.model,
-        requestId: pending.requestId,
-        ...(activeConversationId ? { conversationId: activeConversationId } : {})
+        requestId: pending.requestId
       });
       const execution = await onApplyPlan(pending.plan, pending.context);
       if (!execution) {
@@ -1472,187 +1310,26 @@ export function AIWorkspace({
       <div className="flex-1 space-y-3 overflow-y-auto p-3">
         <div className="sticky top-0 z-20 rounded-xl border border-slate-800 bg-[#0b1120]/95 p-2.5 shadow-lg backdrop-blur">
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setConversationListOpen((value) => !value)}
-              disabled={conversationSwitching}
-              className="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-1.5 py-1 text-left hover:bg-slate-900/70 disabled:opacity-50 cursor-pointer"
-              title="Open saved Rocket chats"
-            >
+            <div className="flex min-w-0 flex-1 items-center gap-2 px-1.5 py-1">
               <MessageSquare className="h-3.5 w-3.5 flex-shrink-0 text-violet-300" />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[10px] font-bold text-slate-200">
-                  {activeConversation?.title || "New chat"}
-                </p>
+                <p className="truncate text-[10px] font-bold text-slate-200">Fresh chat</p>
                 <p className="mt-0.5 text-[8px] text-slate-600">
-                  {conversationSwitching
-                    ? "Opening chat..."
-                    : conversationSaving
-                      ? "Saving memory..."
-                      : `${messages.length} messages · saved chat memory`}
+                  {messages.length} messages · session only
                 </p>
               </div>
-              <ChevronDown className={`h-3.5 w-3.5 flex-shrink-0 text-slate-600 transition-transform ${conversationListOpen ? "rotate-180" : ""}`} />
-            </button>
+            </div>
             <button
               type="button"
-              onClick={createNewConversation}
-              disabled={conversationSwitching || planning || applying || imageGenerating || attachmentUploading}
+              onClick={startFreshChat}
+              disabled={applying || attachmentUploading}
               className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-lg border border-slate-800 text-slate-500 hover:border-violet-500/30 hover:text-white disabled:opacity-35 cursor-pointer"
-              title="Start a new saved chat"
+              title="Clear messages and start a fresh chat"
             >
-              {conversationSwitching
-                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                : <Plus className="h-3.5 w-3.5" />}
+              <RefreshCw className="h-3.5 w-3.5" />
             </button>
           </div>
 
-          {conversationListOpen && (
-            <div className="mt-2 max-h-56 space-y-1 overflow-y-auto border-t border-slate-800 pt-2">
-              <div className="flex items-center justify-between px-1.5 pb-1">
-                <p className="text-[8px] font-extrabold uppercase tracking-wider text-slate-600">Recent chats</p>
-                <span className="text-[8px] text-slate-700">{conversations.length} saved</span>
-              </div>
-              {conversations.map((conversation) => {
-                const runCount = runs.filter((run) => run.conversationId === conversation.id).length;
-                const isActive = conversation.id === activeConversationId;
-                const isEditing = conversation.id === conversationEditingId;
-                const isRenaming = conversation.id === conversationRenamingId;
-                const isDeleting = conversation.id === conversationDeletingId;
-                const confirmDelete = conversation.id === conversationDeleteConfirmId;
-                const conversationBusy = conversationSwitching
-                  || planning
-                  || applying
-                  || imageGenerating
-                  || attachmentUploading
-                  || Boolean(conversationRenamingId)
-                  || Boolean(conversationDeletingId);
-                return (
-                  <div
-                    key={conversation.id}
-                    className={`group flex w-full items-center gap-1 rounded-lg border px-1.5 py-1.5 ${
-                      isActive
-                        ? "border-violet-500/30 bg-violet-500/10"
-                        : "border-transparent hover:border-slate-800 hover:bg-slate-900/60"
-                    }`}
-                  >
-                    {isEditing ? (
-                      <form
-                        className="flex min-w-0 flex-1 items-center gap-1"
-                        onSubmit={(event) => {
-                          event.preventDefault();
-                          saveConversationRename(conversation);
-                        }}
-                      >
-                        <input
-                          autoFocus
-                          value={conversationTitleDraft}
-                          maxLength={64}
-                          onChange={(event) => setConversationTitleDraft(event.target.value)}
-                          onKeyDown={(event) => {
-                            if (event.key === "Escape") cancelConversationRename();
-                          }}
-                          disabled={isRenaming}
-                          aria-label="Edit chat name"
-                          className="h-8 min-w-0 flex-1 rounded-md border border-violet-500/40 bg-slate-950 px-2 text-[9px] font-semibold text-slate-200 outline-none focus:border-violet-400 disabled:opacity-50"
-                        />
-                        <button
-                          type="submit"
-                          disabled={isRenaming || !conversationTitleDraft.trim()}
-                          className="grid h-7 w-7 place-items-center rounded-md text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-30 cursor-pointer"
-                          title="Save chat name"
-                        >
-                          {isRenaming
-                            ? <Loader2 className="h-3 w-3 animate-spin" />
-                            : <Check className="h-3 w-3" />}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={cancelConversationRename}
-                          disabled={isRenaming}
-                          className="grid h-7 w-7 place-items-center rounded-md text-slate-600 hover:bg-slate-800 hover:text-white disabled:opacity-30 cursor-pointer"
-                          title="Cancel rename"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </form>
-                    ) : (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => openConversation(conversation)}
-                          disabled={conversationBusy}
-                          className="min-w-0 flex-1 rounded-md px-1 py-0.5 text-left disabled:opacity-40 cursor-pointer"
-                          title={`Open ${conversation.title || "New chat"}`}
-                        >
-                    <p className={`truncate text-[9px] font-semibold ${isActive ? "text-violet-100" : "text-slate-400"}`}>
-                      {conversation.title || "New chat"}
-                    </p>
-                    <p className="mt-1 text-[8px] text-slate-700">
-                      {dateLabel(conversation.updatedAt || conversation.createdAt)} · {conversation.messages?.length || 0} messages{runCount ? ` · ${runCount} edits` : ""}
-                    </p>
-                        </button>
-                        <div className="flex flex-shrink-0 items-center gap-0.5">
-                          {!confirmDelete && (
-                            <button
-                              type="button"
-                              onClick={() => beginConversationRename(conversation)}
-                              disabled={conversationBusy}
-                              className="grid h-7 w-7 place-items-center rounded-md text-slate-700 opacity-60 hover:bg-slate-800 hover:text-violet-300 group-hover:opacity-100 disabled:opacity-25 cursor-pointer"
-                              title="Rename chat"
-                              aria-label={`Rename ${conversation.title || "New chat"}`}
-                            >
-                              <Pencil className="h-3 w-3" />
-                            </button>
-                          )}
-                          {confirmDelete ? (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => setConversationDeleteConfirmId("")}
-                                disabled={isDeleting}
-                                className="grid h-7 w-7 place-items-center rounded-md text-slate-600 hover:bg-slate-800 hover:text-white disabled:opacity-30 cursor-pointer"
-                                title="Cancel delete"
-                              >
-                                <X className="h-3 w-3" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => deleteConversation(conversation)}
-                                disabled={isDeleting}
-                                className="flex h-7 items-center gap-1 rounded-md bg-red-500/10 px-2 text-[8px] font-bold text-red-300 hover:bg-red-500/20 disabled:opacity-40 cursor-pointer"
-                                title="Confirm delete chat"
-                              >
-                                {isDeleting
-                                  ? <Loader2 className="h-3 w-3 animate-spin" />
-                                  : <Trash2 className="h-3 w-3" />}
-                                Delete
-                              </button>
-                            </>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setConversationEditingId("");
-                                setConversationTitleDraft("");
-                                setConversationDeleteConfirmId(conversation.id);
-                              }}
-                              disabled={conversationBusy}
-                              className="grid h-7 w-7 place-items-center rounded-md text-slate-700 opacity-60 hover:bg-red-500/10 hover:text-red-300 group-hover:opacity-100 disabled:opacity-25 cursor-pointer"
-                              title="Delete chat"
-                              aria-label={`Delete ${conversation.title || "New chat"}`}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </button>
-                          )}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
         </div>
 
         <div className="rounded-xl border border-blue-500/15 bg-blue-500/5 p-3">
@@ -2264,8 +1941,7 @@ export function AIWorkspace({
   const active = visibleTabs.find((tab) => tab.id === activeTab) || visibleTabs[0];
   const ActiveIcon = active.icon;
   const latestUndoableRun = runs.find((run) => (
-    (!run.conversationId || run.conversationId === activeConversationId)
-    && run.beforeSnapshotJson
+    run.beforeSnapshotJson
     && !["rolled_back", "no_change"].includes(run.status)
   ));
 
