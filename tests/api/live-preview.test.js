@@ -248,6 +248,21 @@ describe("live preview HTML rewriting", () => {
     expect(result).toContain("event.stopImmediatePropagation()");
   });
 
+  it("audits and previews SEO metadata inside the connected canvas", () => {
+    const result = rewritePreviewHtml(
+      "<html><head></head><body><h1>Welcome</h1><img src=\"/hero.jpg\"></body></html>",
+      "https://example.com/",
+      "/ad?rcms_edit=1"
+    );
+
+    expect(result).toContain('message.type === "rcms/v1/request-seo-scan"');
+    expect(result).toContain('type: "rcms/v1/seo-scan"');
+    expect(result).toContain('document.querySelectorAll(level)');
+    expect(result).toContain('document.images || []');
+    expect(result).toContain('message.type === "rcms/v1/seo-update"');
+    expect(result).toContain('script[data-rcms-seo="json-ld"]');
+  });
+
   it("blocks javascript iframe navigation without granting preview same-origin access", () => {
     const result = rewritePreviewHtml(
       "<html><head></head><body></body></html>",

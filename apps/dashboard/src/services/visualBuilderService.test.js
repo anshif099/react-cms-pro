@@ -149,6 +149,35 @@ describe("visualBuilderService draft persistence & hydration", () => {
     );
   });
 
+  it("saves page SEO without overwriting connected page regions or source", async () => {
+    await visualBuilderService.savePageSEO({
+      websiteId: "website-1",
+      pageId: "-firebase-page-id",
+      pageKey: "api/live-preview",
+      locale: "en",
+      page: { slug: "api-live-preview", route: "/api/live-preview" },
+      seo: {
+        focusKeyword: "API advertising",
+        metaTitle: "API Advertising | Triosis",
+        jsonLd: '{"@type":"WebPage"}'
+      }
+    });
+
+    expect(firebaseMocks.update).toHaveBeenCalledWith(
+      { path: undefined },
+      expect.objectContaining({
+        "pages/website-1/-firebase-page-id/locales/en/seo": expect.objectContaining({
+          focusKeyword: "API advertising"
+        }),
+        "content/website-1/sync/draft/pages/api/live-preview/seo": expect.objectContaining({
+          metaTitle: "API Advertising | Triosis"
+        }),
+        "content/website-1/sync/draft/pages/api-live-preview/seo": expect.anything()
+      })
+    );
+    expect(firebaseMocks.set).not.toHaveBeenCalled();
+  });
+
   it("successfully verifies persistRegionTargets when values contain null or undefined properties", async () => {
     firebaseMocks.get.mockImplementation((_refObj) => Promise.resolve({
       exists: () => true,

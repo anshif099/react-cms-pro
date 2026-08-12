@@ -516,6 +516,38 @@ export const visualBuilderService = {
     return draftPayload;
   },
 
+  async savePageSEO({ websiteId, pageId, pageKey, locale = "en", page = {}, seo = {} }) {
+    if (!websiteId || !pageId) throw new Error("Website and page are required to save SEO.");
+    const candidateKeys = Array.from(new Set([
+      pageKey,
+      pageId,
+      page?.id,
+      page?.routeId,
+      page?.slug,
+      page?.route,
+      pageKey ? String(pageKey).replace(/\//g, "-") : null,
+      page?.route ? String(page.route).replace(/^\/+|\/+$/g, "").replace(/\//g, "-") : null
+    ]
+      .filter(Boolean)
+      .map((value) => String(value).split("?")[0].replace(/^\/+|\/+$/g, "") || "home")));
+    const now = Date.now();
+    const encodedSEO = encodeFirebaseObject(seo || {});
+    const updates = {
+      [`pages/${websiteId}/${pageId}/seo`]: encodedSEO,
+      [`pages/${websiteId}/${pageId}/locales/${locale}/seo`]: encodedSEO,
+      [`pages/${websiteId}/${pageId}/updatedAt`]: now
+    };
+
+    candidateKeys.forEach((key) => {
+      const draftPath = paths.contentDraft(websiteId, key);
+      updates[`${draftPath}/seo`] = encodedSEO;
+      updates[`${draftPath}/updatedAt`] = now;
+    });
+
+    await update(ref(database), updates);
+    return seo;
+  },
+
   async publish({ websiteId, pageId, pageKey, routeId }) {
     const draftRef = ref(database, paths.contentDraft(websiteId, pageKey));
     const draftSnapshot = await get(draftRef);

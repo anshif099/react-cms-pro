@@ -364,6 +364,96 @@ function runtimeBootstrap(baseUrl, route, proxyOrigin) {
 
   document.addEventListener("click", bridgeAreaSelection, true);
 
+  function pageSEOScan() {
+    var headings = [];
+    ["h1", "h2", "h3", "h4"].forEach(function (level) {
+      document.querySelectorAll(level).forEach(function (element, index) {
+        headings.push({
+          id: element.id || level + "-" + index,
+          level: level,
+          text: (element.textContent || "").trim().slice(0, 500),
+          regionId: element.closest && element.closest("[data-rcms-region]")
+            ? element.closest("[data-rcms-region]").getAttribute("data-rcms-region") || ""
+            : ""
+        });
+      });
+    });
+    var images = Array.prototype.map.call(document.images || [], function (element, index) {
+      var region = element.closest && element.closest("[data-rcms-region]");
+      return {
+        id: element.id || "image-" + index,
+        label: element.getAttribute("aria-label") || element.getAttribute("title") || element.getAttribute("src") || "Image " + (index + 1),
+        src: element.currentSrc || element.getAttribute("src") || "",
+        alt: element.getAttribute("alt") || "",
+        regionId: region ? region.getAttribute("data-rcms-region") || "" : ""
+      };
+    });
+    return {
+      title: document.title || "",
+      metaDescription: (document.querySelector('meta[name="description"]') || {}).content || "",
+      canonicalUrl: (document.querySelector('link[rel="canonical"]') || {}).href || "",
+      headings: headings,
+      images: images,
+      schemas: Array.prototype.map.call(
+        document.querySelectorAll('script[type="application/ld+json"]'),
+        function (element) { return (element.textContent || "").trim(); }
+      ),
+      text: ((document.body && document.body.innerText) || "").slice(0, 50000),
+      scannedAt: Date.now()
+    };
+  }
+
+  function postSEOScan() {
+    window.parent.postMessage({
+      rcms: true,
+      version: "v1",
+      websiteId: bridgeWebsiteId,
+      type: "rcms/v1/seo-scan",
+      payload: pageSEOScan(),
+      timestamp: Date.now()
+    }, "*");
+  }
+
+  function applySEOUpdate(payload) {
+    if (!payload || typeof payload !== "object") return;
+    if (typeof payload.metaTitle === "string") document.title = payload.metaTitle;
+    if (typeof payload.metaDescription === "string") {
+      var description = document.querySelector('meta[name="description"]');
+      if (!description) {
+        description = document.createElement("meta");
+        description.setAttribute("name", "description");
+        document.head.appendChild(description);
+      }
+      description.setAttribute("content", payload.metaDescription);
+    }
+    if (typeof payload.canonicalUrl === "string") {
+      var canonical = document.querySelector('link[rel="canonical"]');
+      if (!canonical && payload.canonicalUrl) {
+        canonical = document.createElement("link");
+        canonical.setAttribute("rel", "canonical");
+        canonical.setAttribute("data-rcms-seo", "canonical");
+        document.head.appendChild(canonical);
+      }
+      if (canonical) {
+        if (payload.canonicalUrl) canonical.setAttribute("href", payload.canonicalUrl);
+        else canonical.remove();
+      }
+    }
+    if (typeof payload.jsonLd === "string") {
+      var schema = document.querySelector('script[data-rcms-seo="json-ld"]');
+      if (!schema && payload.jsonLd.trim()) {
+        schema = document.createElement("script");
+        schema.setAttribute("type", "application/ld+json");
+        schema.setAttribute("data-rcms-seo", "json-ld");
+        document.head.appendChild(schema);
+      }
+      if (schema) {
+        if (payload.jsonLd.trim()) schema.textContent = payload.jsonLd;
+        else schema.remove();
+      }
+    }
+  }
+
   window.addEventListener("message", function (event) {
     var message = event.data;
     if (
@@ -380,6 +470,15 @@ function runtimeBootstrap(baseUrl, route, proxyOrigin) {
     }
     if (message.type === "rcms/v1/exit-area-select") {
       areaSelectionArmed = false;
+      return;
+    }
+    if (message.type === "rcms/v1/request-seo-scan") {
+      postSEOScan();
+      return;
+    }
+    if (message.type === "rcms/v1/seo-update") {
+      applySEOUpdate(message.payload);
+      postSEOScan();
       return;
     }
     if (message.type !== "rcms/v1/field-update") return;

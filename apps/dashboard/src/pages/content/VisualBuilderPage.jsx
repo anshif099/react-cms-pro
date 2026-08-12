@@ -159,6 +159,7 @@ function ConnectedSourceWorkspace({
   onSourceFilesChange,
   onThemeChange,
   onPageSettingsChange,
+  onSaveSEO,
   onAIDraftSave,
   onSave,
   onPublish,
@@ -194,6 +195,7 @@ function ConnectedSourceWorkspace({
   const [visualError, setVisualError] = useState("");
   const [liveRouteError, setLiveRouteError] = useState("");
   const [aiOpen, setAIOpen] = useState(true);
+  const [canvasSEOScan, setCanvasSEOScan] = useState(null);
 
   const requestedLivePageUrl = useMemo(
     () => buildConnectedPageUrl(website, page, isPreview ? "preview" : "edit"),
@@ -362,6 +364,9 @@ function ConnectedSourceWorkspace({
       "*"
     );
   }, []);
+  const requestCanvasSEOScan = useCallback(() => {
+    sendRuntimeMessage("rcms/v1/request-seo-scan");
+  }, [sendRuntimeMessage]);
 
   const updateConnectedSelection = useCallback((regions) => {
     const nextRegions = Array.from(new Map((regions || [])
@@ -540,6 +545,12 @@ function ConnectedSourceWorkspace({
         sendRuntimeMessage(
           isPreview ? "rcms/v1/exit-edit-mode" : "rcms/v1/enter-edit-mode"
         );
+        if (!isPreview) {
+          requestCanvasSEOScan();
+          window.setTimeout(() => {
+            if (active) requestCanvasSEOScan();
+          }, 500);
+        }
         if (!isPreview && visualOnly && websiteId && pageKey) {
           void visualBuilderService.loadSavedDraftRegions(websiteId, pageKey, {
             pageId,
@@ -582,6 +593,11 @@ function ConnectedSourceWorkspace({
               connectedDraftHydratedRef.current = true;
             });
         }
+        return;
+      }
+
+      if (!isPreview && message.type === "rcms/v1/seo-scan") {
+        setCanvasSEOScan(message.payload || null);
         return;
       }
 
@@ -660,6 +676,7 @@ function ConnectedSourceWorkspace({
     pageId,
     pageKey,
     runtimeWebsiteIdFallback,
+    requestCanvasSEOScan,
     sendRuntimeMessage,
     updateConnectedSelection,
     visualOnly,
@@ -671,6 +688,7 @@ function ConnectedSourceWorkspace({
     setFrameLoading(false);
     setLiveRouteError("");
     setRuntimeConnected(false);
+    setCanvasSEOScan(null);
     sendRuntimeMessage(
       isPreview ? "rcms/v1/exit-edit-mode" : "rcms/v1/enter-edit-mode"
     );
@@ -1484,6 +1502,13 @@ function ConnectedSourceWorkspace({
                 inspectorSelectionVersion={connectedSelectionVersion}
                 selectedTarget={selectedRegion}
                 selectedTargets={selectedRegions}
+                pageSettings={pageSettings}
+                seoScan={canvasSEOScan}
+                onRequestSEOScan={requestCanvasSEOScan}
+                onSaveSEO={async (seo) => {
+                  await onSaveSEO?.(seo);
+                  sendRuntimeMessage("rcms/v1/seo-update", seo);
+                }}
                 onRequestAreaSelect={(options) => {
                   setWorkspaceMode("visual");
                   additiveSelectionRequestRef.current = Boolean(options?.additive);
@@ -1543,6 +1568,13 @@ function ConnectedSourceWorkspace({
                 inspectorSelectionVersion={connectedSelectionVersion}
                 selectedTarget={selectedRegion}
                 selectedTargets={selectedRegions}
+                pageSettings={pageSettings}
+                seoScan={canvasSEOScan}
+                onRequestSEOScan={requestCanvasSEOScan}
+                onSaveSEO={async (seo) => {
+                  await onSaveSEO?.(seo);
+                  sendRuntimeMessage("rcms/v1/seo-update", seo);
+                }}
                 onRequestAreaSelect={(options) => {
                   setWorkspaceMode("visual");
                   additiveSelectionRequestRef.current = Boolean(options?.additive);
@@ -1634,6 +1666,7 @@ function NativeBuilderWorkspace({
   onCloseSettings,
   onApplySettings,
   onSaveSettings,
+  onSaveSEO,
   onRestoreRevision
 }) {
   const editor = useNativeEditor();
@@ -1903,6 +1936,8 @@ function NativeBuilderWorkspace({
               selectedTargets={editor.selectedIds
                 .map((nodeId) => findNode(editor.tree, nodeId))
                 .filter(Boolean)}
+              pageSettings={pageSettings}
+              onSaveSEO={onSaveSEO}
               onRequestAreaSelect={(options) => {
                 if (!options?.additive) editor.clearSelection();
               }}
@@ -2373,6 +2408,39 @@ export function VisualBuilderPage() {
     setSaveStatus("unsaved");
   };
 
+  const savePageSEOSettings = async (seo) => {
+    const page = pageRef.current;
+    if (!page) throw new Error("The current page is not ready.");
+    await visualBuilderService.savePageSEO({
+      websiteId,
+      pageId,
+      pageKey: visualBuilderService.resolvePageKey(page),
+      locale: activeLocale,
+      page,
+      seo
+    });
+
+    const nextSettings = {
+      ...settingsRef.current,
+      seo
+    };
+    settingsRef.current = nextSettings;
+    setPageSettings(nextSettings);
+    setSelectedPage((current) => current ? {
+      ...current,
+      seo,
+      locales: {
+        ...(current.locales || {}),
+        [activeLocale]: {
+          ...(current.locales?.[activeLocale] || {}),
+          seo
+        }
+      }
+    } : current);
+    toast.success("Page SEO draft saved.");
+    return seo;
+  };
+
   const savePageSettings = async (settings) => {
     settingsRef.current = settings;
     setPageSettings(settings);
@@ -2715,20 +2783,20 @@ export function VisualBuilderPage() {
         spaRouting = await sourceProviderService.ensureSpaRouting(sourceWebsite);
       }
 
-      if (!gitPublish) {
-        const publishTargets = Array.from(new Map([
-          [`${websiteId}:${pageKey}`, { websiteId, pageKey }],
-          ...connectedPublishTargetsRef.current.entries()
-        ]).values());
-        const publishResults = await Promise.all(
-          publishTargets.map((target) => contentSyncService.publishDraft(
-            target.websiteId,
-            target.pageKey
-          ))
-        );
-        if (!publishResults[0]) {
-          throw new Error("The connected page draft is empty.");
-        }
+      // Firebase remains the source for page SEO even when editable content is
+      // also committed to Git, so publish both parts of the same page draft.
+      const publishTargets = Array.from(new Map([
+        [`${websiteId}:${pageKey}`, { websiteId, pageKey }],
+        ...connectedPublishTargetsRef.current.entries()
+      ]).values());
+      const publishResults = await Promise.all(
+        publishTargets.map((target) => contentSyncService.publishDraft(
+          target.websiteId,
+          target.pageKey
+        ))
+      );
+      if (!publishResults[0]) {
+        throw new Error("The connected page draft is empty.");
       }
       const publishedAt = await pageService.markPublished(
         websiteId,
@@ -2883,6 +2951,7 @@ export function VisualBuilderPage() {
         onSourceFilesChange={applyAISourceFiles}
         onThemeChange={saveAITheme}
         onPageSettingsChange={applyPageSettings}
+        onSaveSEO={savePageSEOSettings}
         onAIDraftSave={saveSourceAIChanges}
         onSave={saveSourceDraft}
         onPublish={publishSource}
@@ -2933,6 +3002,7 @@ export function VisualBuilderPage() {
         onSourceFilesChange={() => {}}
         onThemeChange={saveAITheme}
         onPageSettingsChange={applyPageSettings}
+        onSaveSEO={savePageSEOSettings}
         onAIDraftSave={saveConnectedAIChanges}
         onSave={saveConnectedDraft}
         onPublish={publishConnectedPage}
@@ -3012,6 +3082,7 @@ export function VisualBuilderPage() {
         onCloseSettings={() => setSettingsOpen(false)}
         onApplySettings={applyPageSettings}
         onSaveSettings={savePageSettings}
+        onSaveSEO={savePageSEOSettings}
         onRestoreRevision={restorePageRevision}
       />
     </NativeEditorProvider>

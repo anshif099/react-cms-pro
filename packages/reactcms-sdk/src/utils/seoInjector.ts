@@ -44,4 +44,19 @@ export function injectSEO(seo: PageSEO) {
     }
     link.href = seo.canonicalUrl;
   }
+
+  // JSON-LD schema managed by ReactCMS. Existing application-owned schema
+  // scripts are preserved, while repeated page updates reuse this one node.
+  let schema = document.querySelector('script[data-rcms-seo="json-ld"]') as HTMLScriptElement | null;
+  if (seo.jsonLd) {
+    if (!schema) {
+      schema = document.createElement('script');
+      schema.type = 'application/ld+json';
+      schema.setAttribute('data-rcms-seo', 'json-ld');
+      document.head.appendChild(schema);
+    }
+    schema.textContent = seo.jsonLd;
+  } else if (schema) {
+    schema.remove();
+  }
 }

@@ -2,16 +2,22 @@ import React, { useCallback, useContext, useEffect, useMemo, useState } from 're
 import {
   CMSContext,
   CMSProvider,
+  CMSSEOProvider,
   EditableRegistryContext,
   MessageBus,
+  SEOContext,
   editableSync,
+  getFirebaseDatabase,
 } from '@anshif.rainhopes/reactcms-sdk';
 import {
   EditableRegion,
   EditableType,
   NavMenu,
+  PageSEO,
   ThemeTokens,
+  paths,
 } from '@anshif.rainhopes/shared';
+import { onValue, ref } from 'firebase/database';
 import { RuntimeContext } from './RuntimeContext';
 import type { RuntimeLayoutDefinition } from './RuntimeContext';
 import { BuilderSections } from './BuilderSections';
@@ -65,6 +71,14 @@ function dispatchRegionValue(
 
 export function runtimeRegionContentSource(editMode: boolean): 'draft' | 'published' {
   return editMode ? 'draft' : 'published';
+}
+
+export function pageSEOFromContent(value: unknown): PageSEO | null {
+  if (!value || typeof value !== 'object') return null;
+  const seo = (value as { seo?: unknown }).seo;
+  return seo && typeof seo === 'object' && !Array.isArray(seo)
+    ? seo as PageSEO
+    : null;
 }
 
 type EditableRegionRegistry = Record<string, Record<string, EditableRegion>>;
@@ -162,6 +176,31 @@ function RegionContentHydrator({
       unsubscribe();
     };
   }, [apiKey, pageId, source, websiteId]);
+
+  return null;
+}
+
+function SEOContentHydrator({
+  websiteId,
+  apiKey,
+}: {
+  websiteId: string;
+  apiKey: string;
+}) {
+  const cms = useContext(CMSContext);
+  const setSEO = useContext(SEOContext)?.setSEO;
+  const pageId = useMemo(resolveCurrentPageId, []);
+  const source = runtimeRegionContentSource(Boolean(cms?.editMode));
+
+  useEffect(() => {
+    if (!setSEO) return () => {};
+    const db = getFirebaseDatabase(apiKey);
+    return onValue(ref(db, source === 'draft'
+      ? paths.contentDraft(websiteId, pageId)
+      : paths.contentPublished(websiteId, pageId)), (snapshot) => {
+      setSEO(snapshot.exists() ? pageSEOFromContent(snapshot.val()) || {} as PageSEO : {} as PageSEO);
+    });
+  }, [apiKey, pageId, setSEO, source, websiteId]);
 
   return null;
 }
@@ -302,13 +341,16 @@ export function RuntimeProvider({
       <EditableRegistryContext.Provider value={editableRegistryValue}>
         <CMSProvider websiteId={websiteId} apiKey={apiKey} environment="production">
           <RegionContentHydrator websiteId={websiteId} apiKey={apiKey} />
-          <BuilderSections
-            websiteId={websiteId}
-            apiKey={apiKey}
-            fallback={children}
-            layout={defaultLayout?.component}
-            preserveApplicationPage={preserveApplicationPage}
-          />
+          <SEOContentHydrator websiteId={websiteId} apiKey={apiKey} />
+          <CMSSEOProvider>
+            <BuilderSections
+              websiteId={websiteId}
+              apiKey={apiKey}
+              fallback={children}
+              layout={defaultLayout?.component}
+              preserveApplicationPage={preserveApplicationPage}
+            />
+          </CMSSEOProvider>
         </CMSProvider>
       </EditableRegistryContext.Provider>
     </RuntimeContext.Provider>

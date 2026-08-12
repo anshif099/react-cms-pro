@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  pageSEOFromContent,
   registerEditableRegionState,
   runtimeRegionContentSource,
   unregisterEditableRegionState,
@@ -12,6 +13,23 @@ describe('runtimeRegionContentSource', () => {
 
   it('hydrates published fields on the public site', () => {
     expect(runtimeRegionContentSource(false)).toBe('published');
+  });
+});
+
+describe('pageSEOFromContent', () => {
+  it('reads SEO metadata from a synchronized page document', () => {
+    expect(pageSEOFromContent({
+      regions: {},
+      seo: { metaTitle: 'API Advertising', jsonLd: '{"@type":"WebPage"}' },
+    })).toEqual({
+      metaTitle: 'API Advertising',
+      jsonLd: '{"@type":"WebPage"}',
+    });
+  });
+
+  it('ignores missing or invalid SEO values', () => {
+    expect(pageSEOFromContent({ regions: {} })).toBeNull();
+    expect(pageSEOFromContent({ seo: 'not-an-object' })).toBeNull();
   });
 });
 

@@ -24,6 +24,7 @@ import {
   PanelRightClose,
   ClipboardPaste,
   RefreshCw,
+  SearchCheck,
   Send,
   ShieldCheck,
   Sparkles,
@@ -46,10 +47,12 @@ import {
 } from "../../services/imageTransformService";
 import mediaService, { MAX_REALTIME_MEDIA_BYTES } from "../../services/mediaService";
 import { didAreaSelectionComplete } from "../../services/areaSelectionState";
+import SEOWorkspacePanel from "./SEOWorkspacePanel";
 
 const TABS = [
   { id: "chat", label: "Rocket Chat", icon: MessageSquare },
   { id: "inspector", label: "Inspector", icon: MousePointer2 },
+  { id: "seo", label: "SEO", icon: SearchCheck },
   { id: "tasks", label: "Tasks", icon: ListChecks },
   { id: "history", label: "History", icon: FileClock },
   { id: "suggestions", label: "Suggestions", icon: Lightbulb },
@@ -370,6 +373,10 @@ export function AIWorkspace({
   selectedTargets = [],
   onRequestAreaSelect,
   onClearAreaSelection,
+  pageSettings,
+  seoScan,
+  onRequestSEOScan,
+  onSaveSEO,
   onClose
 }) {
   const [activeTab, setActiveTab] = useState("chat");
@@ -469,6 +476,12 @@ export function AIWorkspace({
       setContextLoading(false);
     }
   }, [log]);
+
+  useEffect(() => {
+    if (activeTab !== "seo") return;
+    if (!context && !contextLoading) void refreshContext();
+    onRequestSEOScan?.();
+  }, [activeTab, context, contextLoading, onRequestSEOScan, refreshContext]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1934,9 +1947,27 @@ export function AIWorkspace({
     </div>
   ) : <EmptyPanel icon={Code2} title="Console is quiet">Context collection, planning, execution, validation, and rollback events appear here.</EmptyPanel>;
 
+  const renderSEO = () => (
+    <SEOWorkspacePanel
+      websiteId={websiteId}
+      pageSettings={pageSettings}
+      context={context}
+      canvasScan={seoScan}
+      contextLoading={contextLoading}
+      onRefresh={refreshContext}
+      onRequestScan={onRequestSEOScan}
+      onSaveSEO={onSaveSEO}
+      onRequestFix={(intent) => {
+        setActiveTab("chat");
+        void requestPlan({ intent });
+      }}
+    />
+  );
+
   const panels = {
     chat: renderChat,
     inspector: renderInspectorPanel,
+    seo: renderSEO,
     tasks: renderTasks,
     history: renderHistory,
     suggestions: renderSuggestions,
