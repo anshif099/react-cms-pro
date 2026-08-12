@@ -304,13 +304,7 @@ function RuntimeAdditionsPortal({
         'footer, [data-rcms-type="footer"], .footer-section',
       );
       const parent = footer?.parentElement || document.querySelector<HTMLElement>('#root') || document.body;
-      if (footer && footer.parentElement === parent) {
-        if (portalHost.parentElement !== parent || portalHost.nextSibling !== footer) {
-          parent.insertBefore(portalHost, footer);
-        }
-      } else if (portalHost.parentElement !== parent) {
-        parent.appendChild(portalHost);
-      }
+      attachRuntimeHostFallback(portalHost, parent, footer);
       setHost(portalHost);
     };
     attach();
@@ -457,6 +451,28 @@ function RuntimeAdditionsPortal({
     ) : null,
     host,
   );
+}
+
+/**
+ * Places an additions host near the page footer when its requested anchor is
+ * unavailable. Once attached to the correct parent, leave it in place: more
+ * than one fallback host may share that footer, and making every host insist
+ * on being the footer's immediate previous sibling causes them to move each
+ * other forever through the MutationObserver above.
+ */
+export function attachRuntimeHostFallback(
+  portalHost: HTMLElement,
+  parent: HTMLElement,
+  footer: HTMLElement | null,
+): boolean {
+  if (portalHost.parentElement === parent) return false;
+
+  if (footer?.parentElement === parent) {
+    parent.insertBefore(portalHost, footer);
+  } else {
+    parent.appendChild(portalHost);
+  }
+  return true;
 }
 
 export interface BuilderSectionsProps {

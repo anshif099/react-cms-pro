@@ -477,10 +477,17 @@ function runtimeBootstrap(baseUrl, route, proxyOrigin) {
     }
   }
 
-  function hideEmbeddedEditorToolbar() {
+  function hideEmbeddedEditorToolbar(root) {
     if (embeddedEditorToolbarHidden || !document.body) return;
 
-    var labels = document.querySelectorAll("span");
+    var scope = root && root.nodeType === 1
+      ? root
+      : document;
+    var labels = [];
+    if (scope.matches && scope.matches("span")) labels.push(scope);
+    if (scope.querySelectorAll) {
+      labels = labels.concat(Array.prototype.slice.call(scope.querySelectorAll("span")));
+    }
     var label = Array.prototype.find.call(labels, function (element) {
       return (element.textContent || "").indexOf("ReactCMS Visual Editor") !== -1;
     });
@@ -505,10 +512,18 @@ function runtimeBootstrap(baseUrl, route, proxyOrigin) {
     hideEmbeddedEditorToolbar();
     new MutationObserver(function (mutations) {
       mutations.forEach(function (mutation) {
-        repairTree(mutation.target);
-        mutation.addedNodes.forEach(repairTree);
+        if (mutation.type === "attributes") {
+          // Attribute changes can be emitted every animation frame. Repair only
+          // the changed element; walking its whole subtree here can saturate the
+          // main thread on animated connected sites.
+          repairElement(mutation.target);
+          return;
+        }
+        mutation.addedNodes.forEach(function (node) {
+          repairTree(node);
+          hideEmbeddedEditorToolbar(node);
+        });
       });
-      hideEmbeddedEditorToolbar();
     }).observe(document.documentElement, {
       childList: true,
       subtree: true,

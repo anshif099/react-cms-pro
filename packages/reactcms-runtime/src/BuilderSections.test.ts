@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { RUNTIME_ADDITIONS_REGION } from '@anshif.rainhopes/reactcms-renderer';
-import { decodeRuntimeAdditionsForMode } from './BuilderSections';
+import {
+  attachRuntimeHostFallback,
+  decodeRuntimeAdditionsForMode,
+} from './BuilderSections';
 
 const publishedTree = {
   id: 'runtime_additions_published',
@@ -31,5 +34,43 @@ describe('decodeRuntimeAdditionsForMode', () => {
       { regions: { [RUNTIME_ADDITIONS_REGION]: draftTree } },
       false,
     )).toEqual(publishedTree);
+  });
+});
+
+describe('attachRuntimeHostFallback', () => {
+  it('does not make multiple fallback hosts fight for the footer position', () => {
+    const parent = {
+      insertBefore: (host: { parentElement: unknown }, _footer: unknown) => {
+        host.parentElement = parent;
+      },
+      appendChild: (host: { parentElement: unknown }) => {
+        host.parentElement = parent;
+      },
+    };
+    const footer = { parentElement: parent };
+    const firstHost = { parentElement: null };
+    const secondHost = { parentElement: null };
+
+    expect(attachRuntimeHostFallback(
+      firstHost as unknown as HTMLElement,
+      parent as unknown as HTMLElement,
+      footer as unknown as HTMLElement,
+    )).toBe(true);
+    expect(attachRuntimeHostFallback(
+      secondHost as unknown as HTMLElement,
+      parent as unknown as HTMLElement,
+      footer as unknown as HTMLElement,
+    )).toBe(true);
+
+    expect(attachRuntimeHostFallback(
+      firstHost as unknown as HTMLElement,
+      parent as unknown as HTMLElement,
+      footer as unknown as HTMLElement,
+    )).toBe(false);
+    expect(attachRuntimeHostFallback(
+      secondHost as unknown as HTMLElement,
+      parent as unknown as HTMLElement,
+      footer as unknown as HTMLElement,
+    )).toBe(false);
   });
 });

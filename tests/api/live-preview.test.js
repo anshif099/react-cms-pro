@@ -190,6 +190,19 @@ describe("live preview HTML rewriting", () => {
     );
   });
 
+  it("does not rescan an animated element subtree for every style mutation", () => {
+    const result = rewritePreviewHtml(
+      "<html><head></head><body><div id=\"root\"></div></body></html>",
+      "https://example.com/",
+      "/ad?rcms_edit=1"
+    );
+
+    expect(result).toContain('if (mutation.type === "attributes")');
+    expect(result).toContain("repairElement(mutation.target)");
+    expect(result).not.toContain("repairTree(mutation.target)");
+    expect(result).toContain("hideEmbeddedEditorToolbar(node)");
+  });
+
   it("suppresses connected-site preloaders in edit mode without changing preview mode", () => {
     const editResult = rewritePreviewHtml(
       "<html><head></head><body><div class=\"preloader-overlay\">Loading</div></body></html>",

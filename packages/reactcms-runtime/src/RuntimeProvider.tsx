@@ -67,6 +67,57 @@ export function runtimeRegionContentSource(editMode: boolean): 'draft' | 'publis
   return editMode ? 'draft' : 'published';
 }
 
+type EditableRegionRegistry = Record<string, Record<string, EditableRegion>>;
+
+export function registerEditableRegionState(
+  current: EditableRegionRegistry,
+  pageId: string,
+  regionId: string,
+  type: EditableType,
+  label: string,
+  defaultValue?: unknown,
+): EditableRegionRegistry {
+  const pageRegions = current[pageId] || {};
+  const existing = pageRegions[regionId];
+  if (
+    existing?.type === type
+    && existing.label === label
+    && JSON.stringify(existing.defaultValue) === JSON.stringify(defaultValue)
+  ) {
+    return current;
+  }
+
+  return {
+    ...current,
+    [pageId]: {
+      ...pageRegions,
+      [regionId]: {
+        id: regionId,
+        type,
+        label,
+        editable: true,
+        ...(defaultValue !== undefined ? { defaultValue } : {}),
+        registeredAt: existing?.registeredAt || Date.now(),
+      },
+    },
+  };
+}
+
+export function unregisterEditableRegionState(
+  current: EditableRegionRegistry,
+  pageId: string,
+  regionId: string,
+): EditableRegionRegistry {
+  const currentPageRegions = current[pageId];
+  if (!currentPageRegions || !Object.prototype.hasOwnProperty.call(currentPageRegions, regionId)) {
+    return current;
+  }
+
+  const pageRegions = { ...currentPageRegions };
+  delete pageRegions[regionId];
+  return { ...current, [pageId]: pageRegions };
+}
+
 function RegionContentHydrator({
   websiteId,
   apiKey,
@@ -131,7 +182,7 @@ export function RuntimeProvider({
 }: RuntimeProviderProps) {
   const [layouts, setLayouts] = useState<Record<string, RuntimeLayoutDefinition>>({});
   const [navigations, setNavigations] = useState<Record<string, NavMenu>>({});
-  const [regions, setRegions] = useState<Record<string, Record<string, EditableRegion>>>({});
+  const [regions, setRegions] = useState<EditableRegionRegistry>({});
 
   const registerLayout = useCallback((layout: RuntimeLayoutDefinition) => {
     setLayouts((current) => ({ ...current, [layout.id]: layout }));
@@ -180,48 +231,31 @@ export function RuntimeProvider({
     unregisterNavigation,
   ]);
 
-  const registerRegion = (
+  const registerRegion = useCallback((
     pageId: string,
     regionId: string,
     type: EditableType,
     label: string,
     defaultValue?: unknown,
   ) => {
-    setRegions((current) => {
-      const pageRegions = current[pageId] || {};
-      const existing = pageRegions[regionId];
-      if (
-        existing?.type === type
-        && existing.label === label
-        && JSON.stringify(existing.defaultValue) === JSON.stringify(defaultValue)
-      ) {
-        return current;
-      }
+    setRegions((current) => registerEditableRegionState(
+      current,
+      pageId,
+      regionId,
+      type,
+      label,
+      defaultValue,
+    ));
+  }, []);
 
-      return {
-        ...current,
-        [pageId]: {
-          ...pageRegions,
-          [regionId]: {
-            id: regionId,
-            type,
-            label,
-            editable: true,
-            ...(defaultValue !== undefined ? { defaultValue } : {}),
-            registeredAt: existing?.registeredAt || Date.now(),
-          },
-        },
-      };
-    });
-  };
+  const unregisterRegion = useCallback((pageId: string, regionId: string) => {
+    setRegions((current) => unregisterEditableRegionState(current, pageId, regionId));
+  }, []);
 
-  const unregisterRegion = (pageId: string, regionId: string) => {
-    setRegions((current) => {
-      const pageRegions = { ...(current[pageId] || {}) };
-      delete pageRegions[regionId];
-      return { ...current, [pageId]: pageRegions };
-    });
-  };
+  const editableRegistryValue = useMemo(() => ({
+    registerRegion,
+    unregisterRegion,
+  }), [registerRegion, unregisterRegion]);
 
   useEffect(() => {
     const start = async () => {
@@ -265,7 +299,7 @@ export function RuntimeProvider({
 
   return (
     <RuntimeContext.Provider value={runtimeContextValue}>
-      <EditableRegistryContext.Provider value={{ registerRegion, unregisterRegion }}>
+      <EditableRegistryContext.Provider value={editableRegistryValue}>
         <CMSProvider websiteId={websiteId} apiKey={apiKey} environment="production">
           <RegionContentHydrator websiteId={websiteId} apiKey={apiKey} />
           <BuilderSections
