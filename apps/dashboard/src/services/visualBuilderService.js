@@ -271,7 +271,10 @@ export const visualBuilderService = {
     ]);
 
     let published = decodePageDocument(null);
-    publishedSnapshots.forEach((snapshot) => {
+    // Candidate aliases are ordered with the canonical page key first. Merge
+    // them in reverse so stale page-id/route aliases can fill missing values
+    // without overwriting a newer canonical draft.
+    [...publishedSnapshots].reverse().forEach((snapshot) => {
       if (snapshot.exists()) {
         const decoded = decodePageDocument(snapshot.val());
         published = {
@@ -284,7 +287,7 @@ export const visualBuilderService = {
 
     let draftDocument = decodePageDocument(null);
     const mergedDraftRegions = {};
-    draftSnapshots.forEach((snapshot) => {
+    [...draftSnapshots].reverse().forEach((snapshot) => {
       if (!snapshot.exists()) return;
       const decoded = decodePageDocument(snapshot.val());
       Object.assign(mergedDraftRegions, decoded.regions);
@@ -302,7 +305,7 @@ export const visualBuilderService = {
       snapshot.exists() && isPageComponentTree(snapshot.val())
     ))?.val() || null;
 
-    const registeredRegionDefinitions = registeredRegionSnapshots.reduce((all, snapshot) => {
+    const registeredRegionDefinitions = [...registeredRegionSnapshots].reverse().reduce((all, snapshot) => {
       if (!snapshot.exists()) return all;
       return {
         ...all,
@@ -374,13 +377,15 @@ export const visualBuilderService = {
     ]);
 
     const mergedRegions = {};
-    snapshots.forEach((snapshot) => {
+    // Prefer the canonical page key while retaining fields that exist only on
+    // a legacy page-id or route alias.
+    [...snapshots].reverse().forEach((snapshot) => {
       if (snapshot.exists()) {
         const decoded = decodePageDocument(snapshot.val());
         Object.assign(mergedRegions, decoded.regions);
       }
     });
-    const registeredRegionDefinitions = registeredRegionSnapshots.reduce((all, snapshot) => {
+    const registeredRegionDefinitions = [...registeredRegionSnapshots].reverse().reduce((all, snapshot) => {
       if (!snapshot.exists()) return all;
       return {
         ...all,

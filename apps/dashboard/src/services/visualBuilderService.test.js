@@ -47,6 +47,46 @@ describe("visualBuilderService draft persistence & hydration", () => {
     });
   });
 
+  it("keeps the canonical draft when a page-id alias contains stale runtime additions", async () => {
+    const canonicalTree = {
+      id: "runtime_additions_ad",
+      type: "page",
+      version: 2,
+      children: [{ id: "gallery", type: "gallery", children: [] }]
+    };
+    const staleAliasTree = {
+      ...canonicalTree,
+      children: [
+        ...canonicalTree.children,
+        { id: "deleted-features", type: "features", children: [] }
+      ]
+    };
+    firebaseMocks.get.mockImplementation((refObj) => {
+      const path = refObj.path || "";
+      if (path.endsWith("/draft/pages/ad")) {
+        return Promise.resolve({
+          exists: () => true,
+          val: () => ({ regions: { __rcms_runtime_additions__: canonicalTree } })
+        });
+      }
+      if (path.endsWith("/draft/pages/-firebase-page-id")) {
+        return Promise.resolve({
+          exists: () => true,
+          val: () => ({ regions: { __rcms_runtime_additions__: staleAliasTree } })
+        });
+      }
+      return Promise.resolve({ exists: () => false });
+    });
+
+    const regions = await visualBuilderService.loadSavedDraftRegions(
+      "website-1",
+      "ad",
+      { pageId: "-firebase-page-id" }
+    );
+
+    expect(regions.__rcms_runtime_additions__).toEqual(canonicalTree);
+  });
+
   it("hydrates corrupted draft values from registered defaults", async () => {
     firebaseMocks.get.mockImplementation((refObj) => {
       const path = refObj.path || "";

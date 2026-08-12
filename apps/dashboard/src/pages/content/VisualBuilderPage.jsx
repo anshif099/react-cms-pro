@@ -2601,6 +2601,13 @@ export function VisualBuilderPage() {
       runtimeWebsiteId: change.runtimeWebsiteId,
       runtimeWebsiteIds: change.runtimeWebsiteIds,
       runtimePageId: change.pageId,
+      pageAliases: [
+        pageId,
+        selectedPage?.id,
+        selectedPage?.routeId,
+        selectedPage?.slug,
+        selectedPage?.route
+      ],
       regionId: change.regionId
     });
     targets.forEach((target) => {
@@ -2630,7 +2637,16 @@ export function VisualBuilderPage() {
       });
 
     return { changed: true };
-  }, [pageKey, toast, websiteId]);
+  }, [
+    pageId,
+    pageKey,
+    selectedPage?.id,
+    selectedPage?.route,
+    selectedPage?.routeId,
+    selectedPage?.slug,
+    toast,
+    websiteId
+  ]);
 
   const saveConnectedDraft = useCallback(async (showToast = true) => {
     setConnectedSaving(true);

@@ -199,6 +199,21 @@ describe("connected visual routes", () => {
     ]);
   });
 
+  it("persists runtime additions across CMS page aliases", () => {
+    expect(connectedDraftTargets({
+      websiteId: "cms-site",
+      pageKey: "ad",
+      runtimeWebsiteId: "embedded-site",
+      runtimePageId: "ad",
+      pageAliases: ["-firebase-page-id", "/ad", "ad"]
+    })).toEqual([
+      { key: "cms-site:ad", websiteId: "cms-site", pageKey: "ad" },
+      { key: "cms-site:-firebase-page-id", websiteId: "cms-site", pageKey: "-firebase-page-id" },
+      { key: "embedded-site:-firebase-page-id", websiteId: "embedded-site", pageKey: "-firebase-page-id" },
+      { key: "embedded-site:ad", websiteId: "embedded-site", pageKey: "ad" }
+    ]);
+  });
+
   it("selects only registered canonical values for a Git content commit", () => {
     expect(selectGitContentRegions({
       "ad.title": "API KEY",
