@@ -1,1 +1,0 @@
-import{E as e}from"./index-CgJF8mta.js";function t(){return e()}export{t};
