@@ -184,6 +184,7 @@ function ConnectedSourceWorkspace({
   const [runtimeWebsiteId, setRuntimeWebsiteId] = useState(runtimeWebsiteIdFallback);
   const [selectedRegion, setSelectedRegion] = useState(null);
   const [selectedRegions, setSelectedRegions] = useState([]);
+  const [connectedSelectionVersion, setConnectedSelectionVersion] = useState(0);
   const selectedRegionRef = useRef(null);
   const selectedRegionsRef = useRef([]);
   const additiveSelectionRequestRef = useRef(false);
@@ -595,7 +596,10 @@ function ConnectedSourceWorkspace({
               ? mergeRegionSelection(region, payload)
               : region
           ));
-          if (nextRegions.length) updateConnectedSelection(nextRegions);
+          if (nextRegions.length) {
+            updateConnectedSelection(nextRegions);
+            setConnectedSelectionVersion((version) => version + 1);
+          }
           return;
         }
 
@@ -618,6 +622,7 @@ function ConnectedSourceWorkspace({
             : [...selectedRegionsRef.current, nextRegion]
           : [nextRegion];
         updateConnectedSelection(nextRegions);
+        setConnectedSelectionVersion((version) => version + 1);
         setVisualError("");
         return;
       }
@@ -1476,6 +1481,7 @@ function ConnectedSourceWorkspace({
                 onRollback={rollbackConnectedAIPlan}
                 renderInspector={() => renderVisualInspector(true)}
                 inspectorSelectionKey={selectedRegions.map((region) => region.regionId).join("|")}
+                inspectorSelectionVersion={connectedSelectionVersion}
                 selectedTarget={selectedRegion}
                 selectedTargets={selectedRegions}
                 onRequestAreaSelect={(options) => {
@@ -1534,6 +1540,7 @@ function ConnectedSourceWorkspace({
                 onRollback={rollbackConnectedAIPlan}
                 renderInspector={() => renderVisualInspector(true)}
                 inspectorSelectionKey={selectedRegions.map((region) => region.regionId).join("|")}
+                inspectorSelectionVersion={connectedSelectionVersion}
                 selectedTarget={selectedRegion}
                 selectedTargets={selectedRegions}
                 onRequestAreaSelect={(options) => {

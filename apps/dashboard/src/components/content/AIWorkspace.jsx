@@ -45,6 +45,7 @@ import {
   requestedImageColor
 } from "../../services/imageTransformService";
 import mediaService, { MAX_REALTIME_MEDIA_BYTES } from "../../services/mediaService";
+import { didAreaSelectionComplete } from "../../services/areaSelectionState";
 
 const TABS = [
   { id: "chat", label: "Rocket Chat", icon: MessageSquare },
@@ -364,6 +365,7 @@ export function AIWorkspace({
   onInsertComponent,
   renderInspector,
   inspectorSelectionKey,
+  inspectorSelectionVersion,
   selectedTarget,
   selectedTargets = [],
   onRequestAreaSelect,
@@ -402,6 +404,7 @@ export function AIWorkspace({
   const attachmentPreviewUrlsRef = useRef(new Set());
   const getContextRef = useRef(getContext);
   const areaSelectionStartKeyRef = useRef("");
+  const areaSelectionStartVersionRef = useRef(inspectorSelectionVersion);
   const requestPlanInFlightRef = useRef(false);
   const requestPlanGenerationRef = useRef(0);
 
@@ -424,10 +427,15 @@ export function AIWorkspace({
 
   useEffect(() => {
     if (!selectingArea) return;
-    if (!inspectorSelectionKey || inspectorSelectionKey === areaSelectionStartKeyRef.current) return;
+    if (!didAreaSelectionComplete({
+      startKey: areaSelectionStartKeyRef.current,
+      currentKey: inspectorSelectionKey,
+      startVersion: areaSelectionStartVersionRef.current,
+      currentVersion: inspectorSelectionVersion
+    })) return;
     setSelectingArea(false);
     setActiveTab("chat");
-  }, [inspectorSelectionKey, selectingArea]);
+  }, [inspectorSelectionKey, inspectorSelectionVersion, selectingArea]);
 
   useEffect(() => {
     const refreshModelInfo = () => setModelInfo(aiWebsiteAgentService.getModelInfo());
@@ -1294,6 +1302,7 @@ export function AIWorkspace({
 
   const beginAreaSelection = () => {
     areaSelectionStartKeyRef.current = inspectorSelectionKey || "";
+    areaSelectionStartVersionRef.current = inspectorSelectionVersion;
     setSelectingArea(true);
     setActiveTab("chat");
     onRequestAreaSelect?.({ additive: targetList.length > 0 });
@@ -1301,6 +1310,7 @@ export function AIWorkspace({
 
   const clearAreaSelection = () => {
     areaSelectionStartKeyRef.current = "";
+    areaSelectionStartVersionRef.current = inspectorSelectionVersion;
     setSelectingArea(false);
     onClearAreaSelection?.();
   };
