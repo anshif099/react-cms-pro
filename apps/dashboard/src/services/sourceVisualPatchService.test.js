@@ -10,7 +10,8 @@ import {
   mergeRegionSelection,
   patchEditableRegionSource,
   selectGitContentRegions,
-  shouldUseConnectedWebsiteCanvas
+  shouldUseConnectedWebsiteCanvas,
+  updateRegionFieldValue
 } from "./sourceVisualPatchService";
 
 describe("source visual patches", () => {
@@ -160,6 +161,23 @@ describe("connected region selections", () => {
     })).toEqual({
       ...complete,
       computedStyle: { fontSize: "72px" }
+    });
+  });
+
+  it("keeps text content when the first manual style is added", () => {
+    expect(updateRegionFieldValue("text", "API KEY", "color", "#ff4f4f")).toEqual({
+      text: "API KEY",
+      color: "#ff4f4f"
+    });
+    expect(updateRegionFieldValue(
+      "text",
+      { text: "API KEY", color: "#ff4f4f" },
+      "fontSize",
+      "64px"
+    )).toEqual({
+      text: "API KEY",
+      color: "#ff4f4f",
+      fontSize: "64px"
     });
   });
 });

@@ -283,12 +283,30 @@ function runtimeBootstrap(baseUrl, route, proxyOrigin) {
     var hasPadding = typeof value.paddingY === "number" && Number.isFinite(value.paddingY);
     var hasLayout = value.layout === "flex" || value.layout === "grid";
     var hasFullWidth = value.layout === "full";
+    var hasColor = typeof value.color === "string" && value.color.length > 0;
+    var responsiveFontSize = window.innerWidth < 768
+      ? value.fontSizeMobile || value.fontSizeTablet || value.fontSize
+      : window.innerWidth < 1024
+        ? value.fontSizeTablet || value.fontSize
+        : value.fontSize;
+    var hasFontSize = typeof responsiveFontSize === "string" && responsiveFontSize.length > 0;
+    var hasFontWeight = typeof value.fontWeight === "string" || typeof value.fontWeight === "number";
+    var responsiveAlign = window.innerWidth < 768
+      ? value.alignMobile || value.alignTablet || value.align
+      : window.innerWidth < 1024
+        ? value.alignTablet || value.align
+        : value.align;
+    var hasTextAlign = ["left", "center", "right", "justify"].indexOf(responsiveAlign) !== -1;
     setBridgedStyle(element, "background", value.background, hasBackground);
     setBridgedStyle(element, "background-color", value.backgroundColor, hasBackgroundColor);
     setBridgedStyle(element, "padding-top", hasPadding ? value.paddingY + "px" : "", hasPadding);
     setBridgedStyle(element, "padding-bottom", hasPadding ? value.paddingY + "px" : "", hasPadding);
     setBridgedStyle(element, "display", value.layout, hasLayout);
     setBridgedStyle(element, "width", "100%", hasFullWidth);
+    setBridgedStyle(element, "color", value.color, hasColor);
+    setBridgedStyle(element, "font-size", responsiveFontSize, hasFontSize);
+    setBridgedStyle(element, "font-weight", value.fontWeight, hasFontWeight);
+    setBridgedStyle(element, "text-align", responsiveAlign, hasTextAlign);
   }
 
   function applyLiveRegion(regionId) {

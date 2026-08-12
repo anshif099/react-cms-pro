@@ -59,7 +59,8 @@ import {
   mergeRegionSelection,
   patchEditableRegionSource,
   selectGitContentRegions,
-  shouldUseConnectedWebsiteCanvas
+  shouldUseConnectedWebsiteCanvas,
+  updateRegionFieldValue
 } from "../../services/sourceVisualPatchService";
 import {
   generateReactPageSource,
@@ -725,26 +726,12 @@ function ConnectedSourceWorkspace({
 
   const updateSelectedField = (field, nextFieldValue) => {
     if (!selectedRegion) return;
-    const currentValue = selectedRegion.value;
-    let nextValue;
-
-    if (selectedRegion.type === "richtext" && field === "html") {
-      nextValue = nextFieldValue;
-    } else if (selectedRegion.type === "text" && field === "text") {
-      nextValue = currentValue && typeof currentValue === "object"
-        ? { ...currentValue, text: nextFieldValue }
-        : nextFieldValue;
-    } else {
-      let base = currentValue && typeof currentValue === "object"
-        ? { ...currentValue }
-        : {};
-      if (typeof currentValue === "string") {
-        if (selectedRegion.type === "image") base = { src: currentValue };
-        if (selectedRegion.type === "button") base = { text: currentValue };
-        if (selectedRegion.type === "video") base = { url: currentValue };
-      }
-      nextValue = { ...base, [field]: nextFieldValue };
-    }
+    const nextValue = updateRegionFieldValue(
+      selectedRegion.type,
+      selectedRegion.value,
+      field,
+      nextFieldValue
+    );
     applyVisualValue(selectedRegion, nextValue);
   };
 
@@ -789,6 +776,20 @@ function ConnectedSourceWorkspace({
     const textValue = typeof value === "object" && value !== null
       ? value.text || ""
       : value || "";
+    const textStyleValue = typeof value === "object" && value !== null ? value : {};
+    const selectedComputedStyle = selectedRegion.computedStyle || {};
+    const fontSizeField = device === "mobile"
+      ? "fontSizeMobile"
+      : device === "tablet"
+        ? "fontSizeTablet"
+        : "fontSize";
+    const inheritedFontSize = textStyleValue[fontSizeField]
+      || textStyleValue.fontSize
+      || selectedComputedStyle.fontSize
+      || "";
+    const numericFontSize = String(inheritedFontSize).match(/[\d.]+/)?.[0] || "";
+    const textColor = textStyleValue.color || selectedComputedStyle.color || "#0f172a";
+    const safeTextColor = /^#[0-9a-f]{6}$/i.test(textColor) ? textColor : "#0f172a";
 
     return (
       <aside className={embedded
@@ -807,17 +808,78 @@ function ConnectedSourceWorkspace({
         </div>
         <div className="p-4 space-y-4">
           {selectedRegion.type === "text" && (
-            <label className="block">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                Text
-              </span>
-              <textarea
-                value={textValue}
-                onChange={(event) => updateSelectedField("text", event.target.value)}
-                rows="5"
-                className="mt-2 w-full resize-y rounded-lg border border-slate-800 bg-[#070b14] p-3 text-xs leading-5 text-slate-200 outline-none focus:border-blue-500"
-              />
-            </label>
+            <>
+              <label className="block">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  Text
+                </span>
+                <textarea
+                  value={textValue}
+                  onChange={(event) => updateSelectedField("text", event.target.value)}
+                  rows="5"
+                  className="mt-2 w-full resize-y rounded-lg border border-slate-800 bg-[#070b14] p-3 text-xs leading-5 text-slate-200 outline-none focus:border-blue-500"
+                />
+              </label>
+
+              <div className="rounded-xl border border-slate-800 bg-slate-950/35 p-3">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  Manual style
+                </p>
+                <div className="mt-3 space-y-3">
+                  <label className="block">
+                    <span className="text-[10px] font-semibold text-slate-500">Text colour</span>
+                    <div className="mt-1.5 flex gap-2">
+                      <input
+                        type="color"
+                        value={safeTextColor}
+                        onChange={(event) => updateSelectedField("color", event.target.value)}
+                        className="h-9 w-11 cursor-pointer rounded-lg border border-slate-700 bg-[#070b14] p-1"
+                        title="Choose text colour"
+                      />
+                      <input
+                        value={textStyleValue.color || selectedComputedStyle.color || ""}
+                        onChange={(event) => updateSelectedField("color", event.target.value)}
+                        placeholder="#ff4f4f"
+                        className="h-9 min-w-0 flex-1 rounded-lg border border-slate-800 bg-[#070b14] px-3 font-mono text-xs text-slate-200 outline-none focus:border-blue-500"
+                      />
+                    </div>
+                  </label>
+
+                  <label className="block">
+                    <span className="flex items-center justify-between text-[10px] font-semibold text-slate-500">
+                      Font size
+                      <span className="text-[9px] font-normal text-blue-400">
+                        {device === "mobile" ? "Mobile" : device === "tablet" ? "Tablet" : "Desktop"}
+                      </span>
+                    </span>
+                    <div className="mt-1.5 flex items-center gap-2">
+                      <input
+                        type="number"
+                        min="8"
+                        max="240"
+                        step="1"
+                        value={numericFontSize}
+                        onChange={(event) => updateSelectedField(
+                          fontSizeField,
+                          event.target.value ? `${event.target.value}px` : ""
+                        )}
+                        className="h-9 min-w-0 flex-1 rounded-lg border border-slate-800 bg-[#070b14] px-3 text-xs text-slate-200 outline-none focus:border-blue-500"
+                      />
+                      <span className="text-[10px] font-bold text-slate-600">px</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="8"
+                      max="120"
+                      step="1"
+                      value={Math.min(120, Math.max(8, Number(numericFontSize) || 16))}
+                      onChange={(event) => updateSelectedField(fontSizeField, `${event.target.value}px`)}
+                      className="mt-2 h-1.5 w-full cursor-pointer accent-blue-500"
+                    />
+                  </label>
+                </div>
+              </div>
+            </>
           )}
 
           {selectedRegion.type === "richtext" && (
@@ -1024,7 +1086,7 @@ function ConnectedSourceWorkspace({
           <div className="rounded-lg border border-emerald-500/15 bg-emerald-500/5 p-3">
             <p className="text-[10px] leading-4 text-emerald-200/70">
               {visualOnly
-                ? "Changes are saved to this page draft while the real website supplies its header, footer, fonts, and colors."
+                ? "Text, colour, and size overrides are saved to this page draft. The connected website continues to supply its base theme, header, and footer."
                 : <>Supported changes update the connected source immediately. Use {isGitHub
                   ? " Update Git "
                   : isSftp

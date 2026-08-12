@@ -232,6 +232,8 @@ describe("live preview HTML rewriting", () => {
     expect(result).toContain('document.querySelectorAll("[data-rcms-region]")');
     expect(result).toContain('element.style.setProperty(property, nextValue, "important")');
     expect(result).toContain('setBridgedStyle(element, "background", value.background, hasBackground)');
+    expect(result).toContain('setBridgedStyle(element, "color", value.color, hasColor)');
+    expect(result).toContain('setBridgedStyle(element, "font-size", responsiveFontSize, hasFontSize)');
   });
 
   it("bridges one-shot AI area selection from an opaque sandbox", () => {

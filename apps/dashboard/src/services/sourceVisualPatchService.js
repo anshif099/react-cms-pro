@@ -480,6 +480,26 @@ export function mergeRegionSelection(current, payload) {
   };
 }
 
+export function updateRegionFieldValue(type, currentValue, field, nextFieldValue) {
+  if (type === "richtext" && field === "html") return nextFieldValue;
+  if (type === "text" && field === "text") {
+    return currentValue && typeof currentValue === "object"
+      ? { ...currentValue, text: nextFieldValue }
+      : nextFieldValue;
+  }
+
+  let base = currentValue && typeof currentValue === "object"
+    ? { ...currentValue }
+    : {};
+  if (typeof currentValue === "string") {
+    if (type === "text") base = { text: currentValue };
+    if (type === "image") base = { src: currentValue };
+    if (type === "button") base = { text: currentValue };
+    if (type === "video") base = { url: currentValue };
+  }
+  return { ...base, [field]: nextFieldValue };
+}
+
 function normalizedDraftPageKey(value) {
   const clean = String(value || "")
     .split("?")[0]
