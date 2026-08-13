@@ -1,17 +1,133 @@
 import { database } from "../lib/firebase";
-import { ref, get, set, push, remove, onValue, update, serverTimestamp } from "firebase/database";
+import { ref, get, set, push, onValue, update, serverTimestamp } from "firebase/database";
 import contentSyncService from "./contentSyncService";
 import revisionService from "./revisionService";
 import searchService from "./searchService";
 import activityLogService from "./activityLogService";
 import { pageConversionService } from "./pageConversionService";
-import { decodeFirebaseObject, paths } from "@anshif.rainhopes/shared";
+import {
+  decodeFirebaseObject,
+  encodeFirebaseKey,
+  paths
+} from "@anshif.rainhopes/shared";
 import {
   cloneDraftDocument,
   clonePageLocales,
   resolveCreationLayout,
   resolvePageKey
 } from "./pageCreationUtils";
+
+function pageDeletionAliases(pageId, page) {
+  return Array.from(new Set([
+    resolvePageKey(page),
+    String(page?.slug || "").replace(/^\/+|\/+$/g, ""),
+    String(page?.routeId || "").replace(/^\/+|\/+$/g, ""),
+    String(pageId || "").trim()
+  ].filter(Boolean)));
+}
+
+export function createDeletedPageTombstone(pageKey, deletedAt = Date.now()) {
+  const safeKey = String(pageKey || "page").replace(/[^a-zA-Z0-9_-]/g, "-");
+  const heading = (id, text, level, color) => ({
+    id: `${safeKey}-${id}`,
+    type: "heading",
+    label: text,
+    props: {
+      locales: { en: { text } },
+      level,
+      alignment: "center",
+      color
+    },
+    children: [],
+    metadata: {}
+  });
+
+  return {
+    id: pageKey,
+    slug: pageKey,
+    title: "Page not found",
+    deleted: true,
+    deletedAt,
+    tree: {
+      id: `deleted-${safeKey}`,
+      type: "page",
+      version: 2,
+      title: "Page not found",
+      locale: "en",
+      styles: {
+        base: {
+          minHeight: "100vh",
+          background: "#f8fafc",
+          color: "#0f172a"
+        }
+      },
+      children: [{
+        id: `${safeKey}-not-found`,
+        type: "container",
+        label: "Deleted page",
+        props: { maxWidth: 840 },
+        styles: {
+          base: {
+            minHeight: "100vh",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            textAlign: "center"
+          }
+        },
+        children: [
+          heading("status", "404", "h1", "#ef4444"),
+          heading("title", "Page not found", "h2", "#0f172a"),
+          heading(
+            "message",
+            "This page has been removed and is no longer available.",
+            "h3",
+            "#64748b"
+          )
+        ],
+        metadata: {}
+      }],
+      metadata: {
+        deleted: true,
+        deletedAt
+      }
+    }
+  };
+}
+
+export function createPageDeletionUpdates(websiteId, pageId, page, deletedAt = Date.now()) {
+  const pageKey = resolvePageKey(page);
+  const aliases = pageDeletionAliases(pageId, page);
+  const updates = {
+    [`pages/${websiteId}/${pageId}`]: null,
+    [`revisions/${websiteId}/page/${pageId}`]: null,
+    [`searchIndex/${websiteId}/${pageId}`]: null
+  };
+
+  aliases.forEach((alias) => {
+    updates[paths.contentDraft(websiteId, alias)] = null;
+    updates[paths.contentPublished(websiteId, alias)] = null;
+    updates[paths.registryRegions(websiteId, encodeFirebaseKey(alias))] = null;
+    updates[paths.registryPageTree(websiteId, alias)] = null;
+  });
+
+  [page?.routeId, page?.slug, pageKey].filter(Boolean).forEach((routeId) => {
+    updates[`${paths.registryRoutes(websiteId)}/${routeId}`] = null;
+  });
+
+  // Direct-host applications may intentionally contain a source-level
+  // catch-all page. Leave a renderer-compatible tombstone for CMS-created
+  // routes so the deleted URL cannot fall through and resurrect that page.
+  if (!page?.isImported) {
+    updates[paths.contentPublished(websiteId, pageKey)] = createDeletedPageTombstone(
+      pageKey,
+      deletedAt
+    );
+  }
+
+  return updates;
+}
 
 export const pageService = {
   async markPublished(websiteId, pageId, routeId = "") {
@@ -343,22 +459,19 @@ export const pageService = {
       const snapshot = await get(pageRef);
       const page = snapshot.val();
 
-      await remove(pageRef);
+      if (!page) return true;
 
-      // Remove from sync paths
-      await contentSyncService.unsync(websiteId, "pages", pageId);
+      await update(
+        ref(database),
+        createPageDeletionUpdates(websiteId, pageId, page)
+      );
 
-      // Remove from search index
-      await searchService.removeFromIndex(websiteId, pageId);
-
-      if (page) {
-        await activityLogService.logActivity(
-          "page_deleted",
-          "Page deleted",
-          `Deleted page "${page.title}"`,
-          websiteId
-        );
-      }
+      await activityLogService.logActivity(
+        "page_deleted",
+        "Page deleted",
+        `Deleted page "${page.title}"`,
+        websiteId
+      );
       return true;
     } catch (error) {
       console.error(`Failed to delete page ${pageId}:`, error);

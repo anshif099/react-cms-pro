@@ -2,10 +2,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import sourceProviderService, {
   bindRuntimeWebsiteId,
   ensureReactCmsContentLoader,
+  ensureRouteDeletionBootstrapHtml,
   ensureSpaHtaccess,
   ensureVercelSpaConfig,
   mergeReactCmsGitContent,
   parseReactCmsGitContent,
+  routeDeletionBootstrapSource,
   versionLocalBuildAssets
 } from "./sourceProviderService";
 
@@ -44,15 +46,17 @@ describe("connected source providers", () => {
     const html = [
       '<link rel="stylesheet" href="/assets/index.css?theme=dark#app">',
       '<script src="./assets/index.js"></script>',
+      '<script data-reactcms-app="/assets/app.js?theme=dark"></script>',
       '<script src="https://cdn.example.com/library.js"></script>',
       '<img src="/assets/logo.png">'
     ].join("");
 
     const result = versionLocalBuildAssets(html, 12345);
 
-    expect(result.changedReferences).toBe(2);
+    expect(result.changedReferences).toBe(3);
     expect(result.content).toContain('/assets/index.css?theme=dark&rcms=12345#app');
     expect(result.content).toContain('./assets/index.js?rcms=12345');
+    expect(result.content).toContain('/assets/app.js?theme=dark&rcms=12345');
     expect(result.content).toContain('https://cdn.example.com/library.js');
     expect(result.content).toContain('/assets/logo.png');
   });
@@ -82,6 +86,26 @@ describe("connected source providers", () => {
       result.content.indexOf('/src/main.jsx')
     );
     expect(ensureReactCmsContentLoader(result.content).changed).toBe(false);
+  });
+
+  it("replaces the deployed application module with a deleted-route bootstrap", () => {
+    const html = '<div id="root"></div><script type="module" crossorigin src="/assets/index.js?theme=dark&amp;rcms=1"></script>';
+    const result = ensureRouteDeletionBootstrapHtml(html, "website-1");
+
+    expect(result.changed).toBe(true);
+    expect(result.applicationSource).toBe("/assets/index.js?theme=dark&rcms=1");
+    expect(result.content).toContain('src="/reactcms-route-bootstrap.js"');
+    expect(result.content).toContain('data-reactcms-app="/assets/index.js?theme=dark&amp;rcms=1"');
+    expect(result.content).toContain('data-reactcms-website="website-1"');
+    expect(ensureRouteDeletionBootstrapHtml(result.content, "website-1").changed).toBe(false);
+  });
+
+  it("builds a route guard that checks tombstones before importing the app", () => {
+    const source = routeDeletionBootstrapSource();
+
+    expect(source).toContain('page?.deleted === true');
+    expect(source).toContain('data-reactcms-deleted-route');
+    expect(source).toContain('await import(new URL(applicationSource');
   });
 
   it("writes page content and its loader to the connected Git source", async () => {
@@ -146,8 +170,10 @@ describe("connected source providers", () => {
     expect(remoteFiles.get("assets/index.js")).toContain(currentId);
     expect(remoteFiles.get("assets/index.js")).not.toContain(previousId);
     expect(remoteFiles.get("index.html")).toMatch(
-      /src="\/assets\/index\.js\?rcms=\d+"/
+      /data-reactcms-app="\/assets\/index\.js\?rcms=\d+"/
     );
+    expect(remoteFiles.get("reactcms-route-bootstrap.js"))
+      .toContain("page?.deleted === true");
     expect(result).toEqual(expect.objectContaining({
       provider: "sftp",
       verified: true,

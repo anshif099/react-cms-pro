@@ -2887,7 +2887,10 @@ export function VisualBuilderPage() {
       } : current);
       const routingRepairRequired = Boolean(
         spaRouting.skipped
-        && !sourceWebsite?.connection?.spaRoutingConfigured
+        && (
+          !sourceWebsite?.connection?.spaRoutingConfigured
+          || !sourceWebsite?.connection?.routeDeletionGuardConfigured
+        )
       );
       const publishMessage = gitPublish?.deploymentPending
         ? "Page content committed to GitHub. Vercel is rebuilding the live site."
@@ -2951,6 +2954,7 @@ export function VisualBuilderPage() {
       connection: {
         ...connection,
         spaRoutingConfigured: routing.configured,
+        routeDeletionGuardConfigured: routing.deletionGuardConfigured,
         spaRoutingPath: routing.path,
         spaRoutingUpdatedAt: Date.now()
       }
@@ -2959,8 +2963,8 @@ export function VisualBuilderPage() {
     setShowRouteRepair(false);
     toast.success(
       routing.changed
-        ? "Live nested URLs were enabled and verified."
-        : "Live nested URL routing is configured and verified."
+        ? "Live routes and deleted-page handling were installed and verified."
+        : "Live routes and deleted-page handling are configured and verified."
     );
   }, [toast, websiteId]);
 

@@ -172,7 +172,7 @@ export function versionLocalBuildAssets(html, version = Date.now()) {
   const cacheVersion = String(version);
   let changedReferences = 0;
   const updated = source.replace(
-    /(\b(?:src|href)\s*=\s*)(["'])([^"']+)(\2)/gi,
+    /(\b(?:src|href|data-reactcms-app)\s*=\s*)(["'])([^"']+)(\2)/gi,
     (match, prefix, quote, resource, closingQuote) => {
       if (
         /^(?:[a-z][a-z\d+.-]*:)?\/\//i.test(resource)
@@ -233,6 +233,126 @@ export function ensureSpaHtaccess(existingContent = "") {
 
   const updated = content ? `${content.trimEnd()}\n\n${spaBlock}` : spaBlock;
   return { content: updated, changed: true };
+}
+
+export const ROUTE_BOOTSTRAP_PATH = "reactcms-route-bootstrap.js";
+const DEFAULT_FIREBASE_DATABASE_URL = "https://react-cms-pro-default-rtdb.firebaseio.com";
+
+function escapeHtmlAttribute(value) {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
+function decodeHtmlAttribute(value) {
+  return String(value || "")
+    .replaceAll("&quot;", '"')
+    .replaceAll("&#39;", "'")
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">")
+    .replaceAll("&amp;", "&");
+}
+
+export function ensureRouteDeletionBootstrapHtml(
+  existingContent,
+  websiteId,
+  databaseUrl = DEFAULT_FIREBASE_DATABASE_URL
+) {
+  const content = String(existingContent || "");
+  const modulePattern = /<script\b(?=[^>]*\btype=["']module["'])(?=[^>]*\bsrc=["'][^"']+["'])[^>]*>\s*<\/script>/gi;
+  const moduleScripts = Array.from(content.matchAll(modulePattern));
+  const existingBootstrap = moduleScripts.find((match) => (
+    /\bdata-reactcms-route-bootstrap(?:\s|=|>)/i.test(match[0])
+  ));
+  const applicationScript = existingBootstrap || moduleScripts.find((match) => (
+    !/reactcms-route-bootstrap\.js/i.test(match[0])
+  ));
+  if (!applicationScript) {
+    throw new Error(
+      "ReactCMS could not find the website application module in index.html. Confirm that the document root contains the deployed Vite index.html file."
+    );
+  }
+
+  const sourceAttribute = applicationScript[0].match(/\bsrc=["']([^"']+)["']/i);
+  const currentAppAttribute = applicationScript[0].match(/\bdata-reactcms-app=["']([^"']+)["']/i);
+  const applicationSource = decodeHtmlAttribute(
+    currentAppAttribute?.[1] || sourceAttribute?.[1]
+  );
+  if (!applicationSource || /reactcms-route-bootstrap\.js/i.test(applicationSource)) {
+    throw new Error("ReactCMS could not identify the original website application module.");
+  }
+
+  const replacement = [
+    '<script type="module"',
+    ` src="/${ROUTE_BOOTSTRAP_PATH}"`,
+    ' data-reactcms-route-bootstrap="true"',
+    ` data-reactcms-app="${escapeHtmlAttribute(applicationSource)}"`,
+    ` data-reactcms-website="${escapeHtmlAttribute(websiteId)}"`,
+    ` data-reactcms-database="${escapeHtmlAttribute(String(databaseUrl).replace(/\/$/, ""))}"`,
+    '></script>'
+  ].join("");
+  const start = applicationScript.index;
+  const end = start + applicationScript[0].length;
+  const updated = `${content.slice(0, start)}${replacement}${content.slice(end)}`;
+
+  return {
+    content: updated,
+    changed: updated !== content,
+    applicationSource
+  };
+}
+
+export function routeDeletionBootstrapSource() {
+  return `const bootstrap = document.querySelector("script[data-reactcms-route-bootstrap]");
+const applicationSource = bootstrap?.dataset.reactcmsApp || "";
+const websiteId = bootstrap?.dataset.reactcmsWebsite || "";
+const databaseUrl = (bootstrap?.dataset.reactcmsDatabase || "").replace(/\\/$/, "");
+
+function routePageKey() {
+  try {
+    const queryPage = new URLSearchParams(location.search).get("page");
+    if (queryPage) return queryPage.replace(/^\\/+|\\/+$/g, "") || "home";
+  } catch {}
+  return decodeURIComponent(location.pathname).replace(/^\\/+|\\/+$/g, "") || "home";
+}
+
+function firebasePath(value) {
+  return String(value).split("/").map(encodeURIComponent).join("/");
+}
+
+function showDeletedPage() {
+  document.title = "404 - Page not found";
+  const root = document.getElementById("root") || document.body;
+  root.innerHTML = '<main style="min-height:100vh;display:grid;place-items:center;padding:32px;background:#f8fafc;color:#0f172a;font-family:Inter,system-ui,sans-serif;text-align:center"><div><div style="font-size:72px;font-weight:800;line-height:1;color:#ef4444">404</div><h1 style="margin:20px 0 10px;font-size:36px">Page not found</h1><p style="margin:0 0 28px;color:#64748b">This page has been removed and is no longer available.</p><a href="/" style="display:inline-block;padding:12px 20px;border-radius:10px;background:#2563eb;color:white;text-decoration:none;font-weight:700">Return home</a></div></main>';
+  root.setAttribute("data-reactcms-deleted-route", "true");
+}
+
+async function start() {
+  if (!applicationSource) throw new Error("The ReactCMS application module is missing.");
+  if (websiteId && databaseUrl) {
+    try {
+      const pageKey = routePageKey();
+      const response = await fetch(
+        databaseUrl + "/content/" + encodeURIComponent(websiteId)
+          + "/sync/published/pages/" + firebasePath(pageKey) + ".json",
+        { cache: "no-store" }
+      );
+      const page = response.ok ? await response.json() : null;
+      if (page?.deleted === true) {
+        showDeletedPage();
+        return;
+      }
+    } catch (error) {
+      console.warn("[ReactCMS] Deleted-route check failed; loading the website.", error);
+    }
+  }
+  await import(new URL(applicationSource, location.origin).href);
+}
+
+void start();
+`;
 }
 
 export function isVercelWebsite(website) {
@@ -558,39 +678,95 @@ export const sourceProviderService = {
     const result = usesVercelConfig
       ? ensureVercelSpaConfig(currentContent)
       : ensureSpaHtaccess(currentContent);
-    if (!result.changed) {
-      return {
-        changed: false,
-        configured: true,
-        deploymentPending: false,
-        provider,
-        path: configPath
-      };
+    let writeResult = null;
+    if (result.changed) {
+      writeResult = await this.writeFile(
+        website,
+        configPath,
+        result.content,
+        usesVercelConfig
+          ? "Configure Vercel SPA routing for ReactCMS"
+          : "Configure SPA routing for ReactCMS"
+      );
+      const remote = await this.readFile(website, configPath);
+      if (String(remote?.content ?? "") !== result.content) {
+        throw new Error(
+          `The hosting provider accepted ${configPath}, but SPA route verification did not match.`
+        );
+      }
     }
 
-    const writeResult = await this.writeFile(
-      website,
-      configPath,
-      result.content,
-      usesVercelConfig
-        ? "Configure Vercel SPA routing for ReactCMS"
-        : "Configure SPA routing for ReactCMS"
-    );
-    const remote = await this.readFile(website, configPath);
-    if (String(remote?.content ?? "") !== result.content) {
-      throw new Error(
-        `The hosting provider accepted ${configPath}, but SPA route verification did not match.`
-      );
-    }
+    const deletionGuard = usesHtaccess && website?.id
+      ? await this.ensureRouteDeletionGuard(website)
+      : { changed: false, configured: false };
 
     return {
-      changed: true,
+      changed: result.changed || deletionGuard.changed,
       configured: true,
       deploymentPending: usesVercelConfig,
       provider,
       path: configPath,
+      deletionGuardConfigured: deletionGuard.configured,
+      deletionGuardChanged: deletionGuard.changed,
       revision: writeResult?.revision || null,
       url: writeResult?.url || null
+    };
+  },
+
+  async ensureRouteDeletionGuard(website) {
+    if (!website?.id) {
+      return { changed: false, configured: false, reason: "website-id-unavailable" };
+    }
+
+    const indexFile = await this.readFile(website, "index.html");
+    const nextIndex = ensureRouteDeletionBootstrapHtml(
+      indexFile?.content,
+      website.id
+    );
+    const bootstrapContent = routeDeletionBootstrapSource();
+    let currentBootstrap = "";
+    try {
+      currentBootstrap = (await this.readFile(website, ROUTE_BOOTSTRAP_PATH))?.content || "";
+    } catch (error) {
+      if (!/not found|no such file|does not exist|could not find/i.test(error?.message || "")) {
+        throw error;
+      }
+    }
+
+    let changed = false;
+    if (currentBootstrap !== bootstrapContent) {
+      await this.writeFile(
+        website,
+        ROUTE_BOOTSTRAP_PATH,
+        bootstrapContent,
+        "Install ReactCMS deleted-route guard"
+      );
+      const remoteBootstrap = await this.readFile(website, ROUTE_BOOTSTRAP_PATH);
+      if (String(remoteBootstrap?.content ?? "") !== bootstrapContent) {
+        throw new Error("The deleted-route guard was uploaded but could not be verified.");
+      }
+      changed = true;
+    }
+
+    if (nextIndex.changed) {
+      await this.writeFile(
+        website,
+        "index.html",
+        nextIndex.content,
+        "Load the ReactCMS deleted-route guard"
+      );
+      const remoteIndex = await this.readFile(website, "index.html");
+      if (String(remoteIndex?.content ?? "") !== nextIndex.content) {
+        throw new Error("index.html was updated but the deleted-route guard could not be verified.");
+      }
+      changed = true;
+    }
+
+    return {
+      changed,
+      configured: true,
+      path: ROUTE_BOOTSTRAP_PATH,
+      applicationSource: nextIndex.applicationSource
     };
   },
 

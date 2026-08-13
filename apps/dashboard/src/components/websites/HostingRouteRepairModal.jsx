@@ -127,7 +127,7 @@ export function HostingRouteRepairModal({ isOpen, onClose, website, onRepaired }
           <div>
             <p className="text-sm font-semibold">Configure SPA fallback routing</p>
             <p className="mt-1 text-xs leading-5">
-              ReactCMS will create or update <code>.htaccess</code>, read it back, and confirm that the live server accepts a nested route. Credentials remain in this browser session only.
+              ReactCMS will configure <code>.htaccess</code>, install deleted-route handling, read the files back, and confirm that the live server accepts a nested route. Credentials remain in this browser session only.
             </p>
           </div>
         </div>

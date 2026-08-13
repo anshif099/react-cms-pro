@@ -304,6 +304,7 @@ export function ConnectWebsitePage() {
             ? data.cpanelAuthMethod
             : null,
           spaRoutingConfigured: spaRouting?.configured || false,
+          routeDeletionGuardConfigured: spaRouting?.deletionGuardConfigured || false,
           spaRoutingPath: spaRouting?.path || null,
           spaRoutingUpdatedAt: spaRouting?.configured ? Date.now() : null,
           writebackEnabled: (

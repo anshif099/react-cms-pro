@@ -175,6 +175,7 @@ export function WebsiteDetailsPage() {
       connection: {
         ...connection,
         spaRoutingConfigured: routing.configured,
+        routeDeletionGuardConfigured: routing.deletionGuardConfigured,
         spaRoutingPath: routing.path,
         spaRoutingUpdatedAt: Date.now()
       }
@@ -182,8 +183,8 @@ export function WebsiteDetailsPage() {
     setShowRouteRepair(false);
     toast.success(
       routing.changed
-        ? "Live SPA routing was installed and verified."
-        : "Live SPA routing is already configured and verified."
+        ? "Live routes and deleted-page handling were installed and verified."
+        : "Live routes and deleted-page handling are already configured and verified."
     );
   };
 
@@ -517,8 +518,8 @@ export function WebsiteDetailsPage() {
               {["cpanel", "sftp"].includes(selectedWebsite.connection?.provider) && (
                 <div className="flex justify-between items-center pt-2 border-t border-slate-100 dark:border-slate-800/80">
                   <span>Live SPA Routing</span>
-                  <Badge variant={selectedWebsite.connection?.spaRoutingConfigured ? "success" : "warning"}>
-                    {selectedWebsite.connection?.spaRoutingConfigured ? "verified" : "repair required"}
+                  <Badge variant={selectedWebsite.connection?.spaRoutingConfigured && selectedWebsite.connection?.routeDeletionGuardConfigured ? "success" : "warning"}>
+                    {selectedWebsite.connection?.spaRoutingConfigured && selectedWebsite.connection?.routeDeletionGuardConfigured ? "verified" : "repair required"}
                   </Badge>
                 </div>
               )}
