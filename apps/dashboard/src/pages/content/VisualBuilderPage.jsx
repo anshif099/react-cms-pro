@@ -2111,7 +2111,7 @@ export function VisualBuilderPage() {
     loadRevisions,
     restoreRevision
   } = useRevisions();
-  const { user, isSuperAdmin } = useAuth();
+  const { user } = useAuth();
   const toast = useToast();
 
   const [initialTree, setInitialTree] = useState(null);
@@ -2991,16 +2991,10 @@ export function VisualBuilderPage() {
         ? "Page published and live URL routing configured on the connected website."
         : "Page content published to the connected website.";
       if (routingRepairRequired) {
-        if (isSuperAdmin) {
-          setShowRouteRepair(true);
-          toast.warning(
-            "Page content was published. Complete the one-time hosting route repair in the dialog."
-          );
-        } else {
-          toast.warning(
-            "Page content was published, but the hosting route is not enabled yet. Ask the super administrator to run Repair Live Route once."
-          );
-        }
+        setShowRouteRepair(true);
+        toast.warning(
+          "Page content was published. Enter this website's hosting credentials once to enable live updates."
+        );
       } else {
         toast.success(publishMessage);
       }
@@ -3022,7 +3016,6 @@ export function VisualBuilderPage() {
   }, [
     pageId,
     pageKey,
-    isSuperAdmin,
     saveConnectedDraft,
     selectedPage?.routeId,
     setSelectedPage,
@@ -3033,8 +3026,7 @@ export function VisualBuilderPage() {
   ]);
 
   const canRepairLiveRoute = Boolean(
-    isSuperAdmin
-    && ["cpanel", "sftp"].includes(sourceWebsite?.connection?.provider)
+    ["cpanel", "sftp"].includes(sourceWebsite?.connection?.provider)
   );
 
   const handleLiveRouteRepaired = useCallback(async ({ routing, connection }) => {

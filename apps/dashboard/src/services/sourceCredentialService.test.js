@@ -4,6 +4,10 @@ import sourceCredentialService from "./sourceCredentialService";
 function createStorage() {
   const values = new Map();
   return {
+    get length() {
+      return values.size;
+    },
+    key: vi.fn((index) => Array.from(values.keys())[index] ?? null),
     getItem: vi.fn((key) => values.get(key) ?? null),
     setItem: vi.fn((key, value) => values.set(key, String(value))),
     removeItem: vi.fn((key) => values.delete(key))
@@ -60,6 +64,29 @@ describe("source credentials", () => {
 
     expect(localStorage.setItem).not.toHaveBeenCalled();
     expect(sourceCredentialService.get("site-2").provider).toBe("sftp");
+  });
+
+  it("clears hosting passwords when the signed-in dashboard session changes", () => {
+    sourceCredentialService.rememberSftp("site-sftp", {
+      host: "ftp.example.com",
+      username: "account",
+      credential: "password"
+    });
+    sourceCredentialService.rememberCPanel("site-cpanel", {
+      endpoint: "https://cpanel.example.com",
+      username: "account",
+      credential: "token"
+    });
+    sourceCredentialService.rememberGitHub("site-github", "github-token");
+
+    sourceCredentialService.clearHostingSession();
+
+    expect(sourceCredentialService.get("site-sftp")).toEqual({});
+    expect(sourceCredentialService.get("site-cpanel")).toEqual({});
+    expect(sourceCredentialService.get("site-github")).toEqual({
+      provider: "github",
+      token: "github-token"
+    });
   });
 
   it("clears both session and persistent GitHub credentials", () => {

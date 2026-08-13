@@ -1,6 +1,7 @@
 import React, { createContext, useState, useContext, useEffect } from "react";
 import authService from "../services/authService";
 import clientAdminService from "../services/clientAdminService";
+import sourceCredentialService from "../services/sourceCredentialService";
 import {
   SUPER_ADMIN_ROLE,
   isSuperAdminUser,
@@ -61,6 +62,7 @@ export function AuthProvider({ children }) {
           setLoading(false);
         });
       } else {
+        sourceCredentialService.clearHostingSession();
         setUser(null);
         setIsAuthenticated(false);
         setLoading(false);
@@ -120,6 +122,7 @@ export function AuthProvider({ children }) {
 
   const logout = async () => {
     sessionStorage.removeItem("reactcms_local_session");
+    sourceCredentialService.clearHostingSession();
     try {
       await authService.logout();
     } catch (e) {

@@ -49,6 +49,28 @@ function removeStoredValue(storageName, key) {
   }
 }
 
+function clearSessionHostingCredentials() {
+  const storage = getStorage("sessionStorage");
+  if (!storage) return;
+
+  try {
+    const keys = [];
+    for (let index = 0; index < storage.length; index += 1) {
+      const key = storage.key(index);
+      if (key?.startsWith(SESSION_PREFIX)) keys.push(key);
+    }
+
+    keys.forEach((key) => {
+      const value = parseStoredValue(storage.getItem(key));
+      if (["cpanel", "sftp"].includes(value.provider)) {
+        storage.removeItem(key);
+      }
+    });
+  } catch {
+    // Treat privacy-restricted session storage as already cleared.
+  }
+}
+
 function read(websiteId) {
   if (!websiteId) return {};
 
@@ -146,6 +168,10 @@ export const sourceCredentialService = {
 
   get(websiteId) {
     return read(websiteId);
+  },
+
+  clearHostingSession() {
+    clearSessionHostingCredentials();
   },
 
   clear(websiteId) {

@@ -159,9 +159,11 @@ export function HostingRouteRepairModal({ isOpen, onClose, website, onRepaired }
 
         <Input
           label={isSftp ? "SFTP Username" : "cPanel Username"}
+          name={`reactcms-${isSftp ? "sftp" : "cpanel"}-username`}
           value={username}
           onChange={(event) => setUsername(event.target.value)}
-          autoComplete="username"
+          autoComplete="off"
+          spellCheck={false}
         />
 
         <Input
@@ -190,9 +192,11 @@ export function HostingRouteRepairModal({ isOpen, onClose, website, onRepaired }
         <Input
           label={isSftp ? "SFTP Password" : authMethod === "password" ? "cPanel Password" : "cPanel API Token"}
           type="password"
+          name={`reactcms-${isSftp ? "sftp" : "cpanel"}-credential`}
           value={credential}
           onChange={(event) => setCredential(event.target.value)}
-          autoComplete="current-password"
+          autoComplete="new-password"
+          spellCheck={false}
         />
 
         <div className="flex justify-end gap-2 border-t border-admin-border pt-4 dark:border-slate-800">
