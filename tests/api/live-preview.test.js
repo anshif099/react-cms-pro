@@ -238,6 +238,27 @@ describe("live preview HTML rewriting", () => {
     expect(previewResult).not.toContain("data-rcms-canvas-reset");
   });
 
+  it("stabilizes animated connected sites only inside the edit canvas", () => {
+    const editResult = rewritePreviewHtml(
+      "<html><head></head><body><div class=\"custom-cursor-dot\"></div></body></html>",
+      "https://example.com/",
+      "/ad?rcms_edit=1"
+    );
+    const previewResult = rewritePreviewHtml(
+      "<html><head></head><body><div class=\"custom-cursor-dot\"></div></body></html>",
+      "https://example.com/",
+      "/ad?rcms_preview=1"
+    );
+
+    expect(editResult).toContain("animation-duration: 0.01ms !important");
+    expect(editResult).toContain("transition-duration: 0.01ms !important");
+    expect(editResult).toContain(".custom-cursor-dot");
+    expect(editResult).toContain("outline-style: solid !important");
+    expect(editResult).toContain("cursor: auto !important");
+    expect(previewResult).not.toContain("animation-duration: 0.01ms !important");
+    expect(previewResult).not.toContain("outline-style: solid !important");
+  });
+
   it("bridges section styles for connected sites using an older SDK", () => {
     const result = rewritePreviewHtml(
       "<html><head></head><body><div id=\"root\"></div></body></html>",

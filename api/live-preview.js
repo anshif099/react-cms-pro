@@ -678,6 +678,38 @@ function editorCanvasReset(route) {
 html[data-rcms-connected-canvas="edit"] body {
   overflow: auto !important;
 }
+html[data-rcms-connected-canvas="edit"],
+html[data-rcms-connected-canvas="edit"] body {
+  cursor: auto !important;
+  scroll-behavior: auto !important;
+}
+html[data-rcms-connected-canvas="edit"] a,
+html[data-rcms-connected-canvas="edit"] button,
+html[data-rcms-connected-canvas="edit"] [role="button"] {
+  cursor: pointer !important;
+}
+html[data-rcms-connected-canvas="edit"] *,
+html[data-rcms-connected-canvas="edit"] *::before,
+html[data-rcms-connected-canvas="edit"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-delay: 0s !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  transition-delay: 0s !important;
+  scroll-behavior: auto !important;
+  will-change: auto !important;
+}
+html[data-rcms-connected-canvas="edit"] .custom-cursor,
+html[data-rcms-connected-canvas="edit"] .custom-cursor-dot,
+html[data-rcms-connected-canvas="edit"] #custom-cursor,
+html[data-rcms-connected-canvas="edit"] [data-custom-cursor] {
+  display: none !important;
+  mix-blend-mode: normal !important;
+  pointer-events: none !important;
+}
+html[data-rcms-connected-canvas="edit"] [data-rcms-region] {
+  outline-style: solid !important;
+}
 html[data-rcms-connected-canvas="edit"] .preloader,
 html[data-rcms-connected-canvas="edit"] .preloader-overlay,
 html[data-rcms-connected-canvas="edit"] #preloader,
