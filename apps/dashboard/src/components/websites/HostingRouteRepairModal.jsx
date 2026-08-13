@@ -73,13 +73,20 @@ export function HostingRouteRepairModal({ isOpen, onClose, website, onRepaired }
 
     setLoading(true);
     try {
+      let resolvedRootDirectory = rootDirectory.trim() || (isSftp ? "." : "public_html");
       if (isSftp) {
-        sourceCredentialService.rememberSftp(website.id, {
+        const sftpCredentials = {
           host: endpoint,
           port,
           username,
           credential
-        });
+        };
+        sourceCredentialService.rememberSftp(website.id, sftpCredentials);
+        resolvedRootDirectory = await sourceProviderService.resolveSftpDocumentRoot(
+          sftpCredentials,
+          resolvedRootDirectory
+        );
+        setRootDirectory(resolvedRootDirectory);
       } else {
         sourceCredentialService.rememberCPanel(website.id, {
           endpoint,
@@ -94,7 +101,7 @@ export function HostingRouteRepairModal({ isOpen, onClose, website, onRepaired }
         endpoint: endpoint.trim(),
         port: isSftp ? Number(port) : website.connection?.port || null,
         username: username.trim(),
-        rootDirectory: rootDirectory.trim() || (isSftp ? "." : "public_html"),
+        rootDirectory: resolvedRootDirectory,
         ...(isSftp ? {} : { authMethod })
       };
       const routing = await sourceProviderService.ensureSpaRouting({
@@ -171,7 +178,9 @@ export function HostingRouteRepairModal({ isOpen, onClose, website, onRepaired }
           value={rootDirectory}
           onChange={(event) => setRootDirectory(event.target.value)}
           placeholder={isSftp ? "." : "public_html"}
-          helperText="Use the same directory that contains the live index.html file. StackCP package FTP accounts commonly use a dot (.) for the account root."
+          helperText={isSftp
+            ? "ReactCMS will automatically check this directory, public_html, and the FTP account root for the live index.html file."
+            : "Use the same directory that contains the live index.html file."}
           autoComplete="off"
         />
 

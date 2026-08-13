@@ -343,6 +343,53 @@ describe("connected source providers", () => {
     }));
   });
 
+  it("detects public_html when a client's StackCP account opens above the website root", async () => {
+    vi.spyOn(sourceProviderService, "listSftpFiles").mockImplementation(
+      async (_credentials, directory) => {
+        if (directory === ".") {
+          return [{ name: "public_html", type: "directory" }];
+        }
+        if (directory === "public_html") {
+          return [
+            { name: "index.html", type: "file" },
+            { name: "assets", type: "directory" }
+          ];
+        }
+        throw new Error("The selected StackCP project root was not found.");
+      }
+    );
+
+    await expect(sourceProviderService.resolveSftpDocumentRoot({
+      host: "ftp.stackcp.com",
+      username: "example.com",
+      credential: "ftp-password"
+    }, ".")).resolves.toBe("public_html");
+  });
+
+  it("keeps the StackCP account root when it contains the live index file", async () => {
+    const list = vi.spyOn(sourceProviderService, "listSftpFiles")
+      .mockResolvedValue([{ name: "index.html", type: "file" }]);
+
+    await expect(sourceProviderService.resolveSftpDocumentRoot({
+      host: "ftp.stackcp.com",
+      username: "example.com",
+      credential: "ftp-password"
+    }, ".")).resolves.toBe(".");
+    expect(list).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not hide StackCP authentication errors while detecting the document root", async () => {
+    vi.spyOn(sourceProviderService, "listSftpFiles").mockRejectedValue(
+      new Error("StackCP SFTP rejected the username or password.")
+    );
+
+    await expect(sourceProviderService.resolveSftpDocumentRoot({
+      host: "ftp.stackcp.com",
+      username: "example.com",
+      credential: "bad-password"
+    }, "public_html")).rejects.toThrow("rejected the username or password");
+  });
+
   it("generates SPA rewrite rules in .htaccess for cPanel/SFTP servers without duplicating", () => {
     const fresh = ensureSpaHtaccess("");
     expect(fresh.changed).toBe(true);

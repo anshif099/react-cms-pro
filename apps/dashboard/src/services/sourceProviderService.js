@@ -30,6 +30,12 @@ function providerPath(connection, filePath) {
   return root ? `${root}/${path}` : path;
 }
 
+function normalizeDocumentRoot(value, fallback = "public_html") {
+  return String(value || fallback)
+    .replaceAll("\\", "/")
+    .replace(/^\/+|\/+$/g, "") || fallback;
+}
+
 function githubHeaders(token, accept = "application/vnd.github+json") {
   return {
     Accept: accept,
@@ -799,6 +805,33 @@ export const sourceProviderService = {
 
   async listSftpFiles(credentials, directory) {
     return sftpRequest(credentials, "list", { directory });
+  },
+
+  async resolveSftpDocumentRoot(credentials, preferredRoot = "public_html") {
+    const candidates = Array.from(new Set([
+      normalizeDocumentRoot(preferredRoot),
+      "public_html",
+      "."
+    ]));
+
+    for (const candidate of candidates) {
+      try {
+        const entries = await this.listSftpFiles(credentials, candidate);
+        const hasIndex = entries.some((entry) => (
+          entry?.type === "file"
+          && String(entry.name || "").toLowerCase() === "index.html"
+        ));
+        if (hasIndex) return candidate;
+      } catch (error) {
+        if (!/not found|no such file|does not exist|could not find/i.test(error?.message || "")) {
+          throw error;
+        }
+      }
+    }
+
+    throw new Error(
+      "ReactCMS could not find index.html in the selected root, public_html, or the StackCP FTP account root. Enter the directory that contains the live index.html file."
+    );
   },
 
   async readSftpFile(credentials, filePath) {
