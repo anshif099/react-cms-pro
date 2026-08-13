@@ -1,1 +1,0 @@
-import{D as e}from"./index-BDH110yu.js";function t(){return e()}export{t};
