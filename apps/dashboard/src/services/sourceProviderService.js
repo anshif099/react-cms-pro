@@ -283,6 +283,13 @@ export async function verifyExistingLiveRouting(website) {
       "The nested live route works, but the ReactCMS deleted-route guard is not installed."
     );
   }
+  const publishedStyleBridgeConfigured = bootstrapSource
+    .includes("data-reactcms-published-section-styles");
+  if (!publishedStyleBridgeConfigured) {
+    throw new Error(
+      "The live route is working, but its ReactCMS published-style bridge is outdated."
+    );
+  }
 
   return {
     changed: false,
@@ -291,7 +298,8 @@ export async function verifyExistingLiveRouting(website) {
     verified: true,
     provider: website?.connection?.provider || null,
     path: website?.connection?.spaRoutingPath || ".htaccess",
-    deletionGuardConfigured
+    deletionGuardConfigured,
+    publishedStyleBridgeConfigured
   };
 }
 
@@ -374,6 +382,11 @@ export function routeDeletionBootstrapSource() {
 const applicationSource = bootstrap?.dataset.reactcmsApp || "";
 const websiteId = bootstrap?.dataset.reactcmsWebsite || "";
 const databaseUrl = (bootstrap?.dataset.reactcmsDatabase || "").replace(/\\/$/, "");
+const LIVE_STYLE_BRIDGE = "data-reactcms-published-section-styles";
+let activePageKey = "";
+let publishedSignature = "";
+let publishedRegions = {};
+const liveRegionElements = new Map();
 
 function routePageKey() {
   try {
@@ -387,6 +400,167 @@ function firebasePath(value) {
   return String(value).split("/").map(encodeURIComponent).join("/");
 }
 
+function decodeFirebaseKey(value) {
+  return String(value)
+    .replace(/~5D/g, "]")
+    .replace(/~5B/g, "[")
+    .replace(/~2F/g, "/")
+    .replace(/~24/g, "$")
+    .replace(/~23/g, "#")
+    .replace(/~2E/g, ".")
+    .replace(/~7E/g, "~");
+}
+
+function publishedPageUrl(pageKey) {
+  return databaseUrl + "/content/" + encodeURIComponent(websiteId)
+    + "/sync/published/pages/" + firebasePath(pageKey) + ".json";
+}
+
+async function fetchPublishedPage(pageKey) {
+  if (!websiteId || !databaseUrl) return null;
+  const response = await fetch(publishedPageUrl(pageKey), { cache: "no-store" });
+  return response.ok ? await response.json() : null;
+}
+
+function pageRegions(page) {
+  const raw = page?.regions && typeof page.regions === "object"
+    ? page.regions
+    : {};
+  return Object.fromEntries(
+    Object.entries(raw).map(([regionId, value]) => [decodeFirebaseKey(regionId), value])
+  );
+}
+
+function sectionStyleValue(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  return typeof value.background === "string"
+    || typeof value.paddingY === "number"
+    || value.layout === "flex"
+    || value.layout === "grid"
+    || value.layout === "full";
+}
+
+function applySectionStyle(element, value) {
+  if (!element?.isConnected || !sectionStyleValue(value)) return;
+  if (typeof value.background === "string") {
+    element.style.setProperty("background", value.background, "important");
+  }
+  if (typeof value.paddingY === "number") {
+    const padding = Math.max(0, value.paddingY) + "px";
+    element.style.setProperty("padding-top", padding, "important");
+    element.style.setProperty("padding-bottom", padding, "important");
+  }
+  if (value.layout === "flex" || value.layout === "grid") {
+    element.style.setProperty("display", value.layout, "important");
+  }
+  if (value.layout === "full") {
+    element.style.setProperty("width", "100%", "important");
+  }
+}
+
+function applyKnownSectionStyles() {
+  document.querySelectorAll("[data-reactcms-live-region]").forEach((element) => {
+    liveRegionElements.set(element.getAttribute("data-reactcms-live-region"), element);
+  });
+  Object.entries(publishedRegions).forEach(([regionId, value]) => {
+    const element = liveRegionElements.get(regionId);
+    if (!element?.isConnected) {
+      liveRegionElements.delete(regionId);
+      return;
+    }
+    applySectionStyle(element, value);
+  });
+}
+
+function sendRuntimeMessage(type, payload = {}) {
+  window.postMessage({
+    rcms: true,
+    version: "v1",
+    type,
+    websiteId,
+    payload,
+    timestamp: Date.now()
+  }, "*");
+}
+
+function broadcastPublishedRegions(pageKey, regions) {
+  Object.entries(regions).forEach(([regionId, value]) => {
+    sendRuntimeMessage("rcms/v1/field-update", { pageId: pageKey, regionId, value });
+  });
+}
+
+function wait(milliseconds) {
+  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+}
+
+async function discoverSectionElements(regions) {
+  const sectionIds = Object.entries(regions)
+    .filter(([, value]) => sectionStyleValue(value))
+    .map(([regionId]) => regionId);
+  if (!sectionIds.length) return;
+  if (sectionIds.every((regionId) => liveRegionElements.get(regionId)?.isConnected)) {
+    applyKnownSectionStyles();
+    return;
+  }
+
+  const suppression = document.createElement("style");
+  suppression.setAttribute(LIVE_STYLE_BRIDGE, "true");
+  suppression.textContent = "html[" + LIVE_STYLE_BRIDGE + "] .rcms-editable-region{outline:none!important;outline-offset:0!important;cursor:inherit!important;user-select:auto!important}";
+  document.head.appendChild(suppression);
+  document.documentElement.setAttribute(LIVE_STYLE_BRIDGE, "discovering");
+
+  try {
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      sendRuntimeMessage("rcms/v1/enter-edit-mode");
+      await wait(60);
+      document.querySelectorAll("[data-rcms-region]").forEach((element) => {
+        const regionId = element.getAttribute("data-rcms-region");
+        if (!sectionIds.includes(regionId)) return;
+        element.setAttribute("data-reactcms-live-region", regionId);
+        liveRegionElements.set(regionId, element);
+      });
+      if (sectionIds.every((regionId) => liveRegionElements.has(regionId))) break;
+    }
+  } finally {
+    sendRuntimeMessage("rcms/v1/exit-edit-mode");
+    await wait(80);
+    applyKnownSectionStyles();
+    document.documentElement.removeAttribute(LIVE_STYLE_BRIDGE);
+    suppression.remove();
+  }
+}
+
+async function hydratePublishedPage(pageKey, page) {
+  if (!page || page.deleted === true) return;
+  activePageKey = pageKey;
+  publishedRegions = pageRegions(page);
+  broadcastPublishedRegions(pageKey, publishedRegions);
+  await discoverSectionElements(publishedRegions);
+  applyKnownSectionStyles();
+}
+
+async function refreshPublishedPage() {
+  const pageKey = routePageKey();
+  try {
+    const page = await fetchPublishedPage(pageKey);
+    const nextSignature = pageKey + ":" + JSON.stringify(page?.regions || {});
+    if (nextSignature === publishedSignature) return;
+    publishedSignature = nextSignature;
+    if (pageKey !== activePageKey) liveRegionElements.clear();
+    await hydratePublishedPage(pageKey, page);
+  } catch (error) {
+    console.warn("[ReactCMS] Published content refresh failed.", error);
+  }
+}
+
+function watchPublishedPage() {
+  const observer = new MutationObserver(() => {
+    window.requestAnimationFrame(applyKnownSectionStyles);
+  });
+  if (document.body) observer.observe(document.body, { childList: true, subtree: true });
+  window.setInterval(refreshPublishedPage, 4000);
+}
+
 function showDeletedPage() {
   document.title = "404 - Page not found";
   const root = document.getElementById("root") || document.body;
@@ -396,15 +570,11 @@ function showDeletedPage() {
 
 async function start() {
   if (!applicationSource) throw new Error("The ReactCMS application module is missing.");
+  const pageKey = routePageKey();
+  let page = null;
   if (websiteId && databaseUrl) {
     try {
-      const pageKey = routePageKey();
-      const response = await fetch(
-        databaseUrl + "/content/" + encodeURIComponent(websiteId)
-          + "/sync/published/pages/" + firebasePath(pageKey) + ".json",
-        { cache: "no-store" }
-      );
-      const page = response.ok ? await response.json() : null;
+      page = await fetchPublishedPage(pageKey);
       if (page?.deleted === true) {
         showDeletedPage();
         return;
@@ -414,6 +584,11 @@ async function start() {
     }
   }
   await import(new URL(applicationSource, location.origin).href);
+  if (window.self === window.top && page) {
+    publishedSignature = pageKey + ":" + JSON.stringify(page?.regions || {});
+    await hydratePublishedPage(pageKey, page);
+    watchPublishedPage();
+  }
 }
 
 void start();
@@ -774,6 +949,7 @@ export const sourceProviderService = {
       path: configPath,
       deletionGuardConfigured: deletionGuard.configured,
       deletionGuardChanged: deletionGuard.changed,
+      publishedStyleBridgeConfigured: deletionGuard.configured,
       revision: writeResult?.revision || null,
       url: writeResult?.url || null
     };
@@ -810,11 +986,11 @@ export const sourceProviderService = {
         website,
         ROUTE_BOOTSTRAP_PATH,
         bootstrapContent,
-        "Install ReactCMS deleted-route guard"
+        "Install ReactCMS live content and deleted-route bridge"
       );
       const remoteBootstrap = await this.readFile(website, ROUTE_BOOTSTRAP_PATH);
       if (String(remoteBootstrap?.content ?? "") !== bootstrapContent) {
-        throw new Error("The deleted-route guard was uploaded but could not be verified.");
+        throw new Error("The ReactCMS live bridge was uploaded but could not be verified.");
       }
       changed = true;
     }
@@ -824,11 +1000,11 @@ export const sourceProviderService = {
         website,
         "index.html",
         nextIndex.content,
-        "Load the ReactCMS deleted-route guard"
+        "Load the ReactCMS live content and deleted-route bridge"
       );
       const remoteIndex = await this.readFile(website, "index.html");
       if (String(remoteIndex?.content ?? "") !== nextIndex.content) {
-        throw new Error("index.html was updated but the deleted-route guard could not be verified.");
+        throw new Error("index.html was updated but the ReactCMS live bridge could not be verified.");
       }
       changed = true;
     }

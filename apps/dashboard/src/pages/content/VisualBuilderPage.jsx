@@ -2917,6 +2917,7 @@ export function VisualBuilderPage() {
               ...sourceWebsite.connection,
               spaRoutingConfigured: verifiedRouting.configured,
               routeDeletionGuardConfigured: verifiedRouting.deletionGuardConfigured,
+              publishedStyleBridgeConfigured: verifiedRouting.publishedStyleBridgeConfigured,
               spaRoutingPath: verifiedRouting.path,
               spaRoutingUpdatedAt: Date.now()
             };
@@ -2934,6 +2935,11 @@ export function VisualBuilderPage() {
             }
           } catch (verificationError) {
             console.warn("Existing live routing could not be verified", verificationError);
+            spaRouting = {
+              ...spaRouting,
+              requiresRepair: true,
+              verificationError: verificationError?.message || "Live routing verification failed."
+            };
           }
         }
       }
@@ -2966,10 +2972,13 @@ export function VisualBuilderPage() {
         publishedAt
       } : current);
       const routingRepairRequired = Boolean(
-        spaRouting.skipped
-        && (
-          !sourceWebsite?.connection?.spaRoutingConfigured
-          || !sourceWebsite?.connection?.routeDeletionGuardConfigured
+        spaRouting.requiresRepair
+        || (
+          spaRouting.skipped
+          && (
+            !sourceWebsite?.connection?.spaRoutingConfigured
+            || !sourceWebsite?.connection?.routeDeletionGuardConfigured
+          )
         )
       );
       const publishMessage = gitPublish?.deploymentPending
@@ -3035,6 +3044,7 @@ export function VisualBuilderPage() {
         ...connection,
         spaRoutingConfigured: routing.configured,
         routeDeletionGuardConfigured: routing.deletionGuardConfigured,
+        publishedStyleBridgeConfigured: routing.publishedStyleBridgeConfigured,
         spaRoutingPath: routing.path,
         spaRoutingUpdatedAt: Date.now()
       }
@@ -3043,8 +3053,8 @@ export function VisualBuilderPage() {
     setShowRouteRepair(false);
     toast.success(
       routing.changed
-        ? "Live routes and deleted-page handling were installed and verified."
-        : "Live routes and deleted-page handling are configured and verified."
+        ? "Live routes, published styles, and deleted-page handling were installed and verified."
+        : "Live routes, published styles, and deleted-page handling are configured and verified."
     );
   }, [toast, websiteId]);
 

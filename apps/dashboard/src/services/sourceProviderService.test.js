@@ -104,8 +104,13 @@ describe("connected source providers", () => {
   it("builds a route guard that checks tombstones before importing the app", () => {
     const source = routeDeletionBootstrapSource();
 
+    expect(() => new Function(source)).not.toThrow();
     expect(source).toContain('page?.deleted === true');
     expect(source).toContain('data-reactcms-deleted-route');
+    expect(source).toContain('data-reactcms-published-section-styles');
+    expect(source).toContain('element.style.setProperty("background", value.background, "important")');
+    expect(source).toContain('sendRuntimeMessage("rcms/v1/enter-edit-mode")');
+    expect(source).toContain('window.self === window.top');
     expect(source).toContain('await import(new URL(applicationSource');
   });
 
@@ -454,7 +459,7 @@ describe("connected source providers", () => {
         url: "https://triosis.in/reactcms-route-check-test"
       }))
       .mockResolvedValueOnce(new Response(
-        'document.querySelector("script[data-reactcms-route-bootstrap]"); data-reactcms-deleted-route',
+        'document.querySelector("script[data-reactcms-route-bootstrap]"); data-reactcms-deleted-route data-reactcms-published-section-styles',
         { status: 200, headers: { "Content-Type": "text/javascript" } }
       ));
     vi.stubGlobal("fetch", fetchMock);
@@ -467,6 +472,7 @@ describe("connected source providers", () => {
     expect(result).toEqual(expect.objectContaining({
       configured: true,
       deletionGuardConfigured: true,
+      publishedStyleBridgeConfigured: true,
       verified: true,
       provider: "sftp",
       path: ".htaccess"
@@ -497,6 +503,21 @@ describe("connected source providers", () => {
       domain: "https://triosis.in",
       connection: { provider: "sftp" }
     })).rejects.toThrow("deleted-route guard is not installed");
+  });
+
+  it("requires a route repair when the published section-style bridge is outdated", async () => {
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ ok: true, status: 200 }))
+      .mockResolvedValueOnce(new Response(
+        'data-reactcms-route-bootstrap data-reactcms-deleted-route',
+        { status: 200 }
+      ))
+    );
+
+    await expect(verifyExistingLiveRouting({
+      domain: "https://triosis.in",
+      connection: { provider: "sftp" }
+    })).rejects.toThrow("published-style bridge is outdated");
   });
 
   it("commits and verifies SPA routing for a GitHub-connected Vercel site", async () => {
