@@ -176,6 +176,8 @@ function ConnectedSourceWorkspace({
   const iframeRef = useRef(null);
   const canvasViewportRef = useRef(null);
   const connectedDraftHydratedRef = useRef(false);
+  const connectedDraftHydrationRunRef = useRef(0);
+  const connectedDraftHydrationTimersRef = useRef([]);
   const [workspaceMode, setWorkspaceMode] = useState("visual");
   const [device, setDevice] = useState("desktop");
   const [customWidth, setCustomWidth] = useState(960);
@@ -424,6 +426,108 @@ function ConnectedSourceWorkspace({
     updateConnectedSelection([]);
   }, [updateConnectedSelection]);
 
+  const clearConnectedDraftHydrationTimers = useCallback(() => {
+    connectedDraftHydrationTimersRef.current.forEach((timer) => {
+      window.clearTimeout(timer);
+    });
+    connectedDraftHydrationTimersRef.current = [];
+  }, []);
+
+  const hydrateConnectedDraft = useCallback((readyRuntimeWebsiteId) => {
+    if (isPreview || !visualOnly || !websiteId || !pageKey) {
+      connectedDraftHydratedRef.current = true;
+      return;
+    }
+
+    const hydrationRun = connectedDraftHydrationRunRef.current + 1;
+    connectedDraftHydrationRunRef.current = hydrationRun;
+    clearConnectedDraftHydrationTimers();
+    connectedDraftHydratedRef.current = false;
+
+    void visualBuilderService.loadSavedDraftRegions(websiteId, pageKey, {
+      pageId,
+      routeId: page?.routeId,
+      slug: page?.slug,
+      route: page?.route
+    })
+      .then((draftRegions) => {
+        if (connectedDraftHydrationRunRef.current !== hydrationRun) return;
+        const entries = Object.entries(draftRegions || {}).filter(([, value]) => (
+          value !== null && value !== undefined
+        ));
+        const resolvedRuntimeWebsiteId = readyRuntimeWebsiteId || runtimeWebsiteIdFallback;
+
+        entries.forEach(([regionId, value]) => {
+          onVisualChange({
+            regionId,
+            pageId: canvasRuntimePageId,
+            runtimeWebsiteId: resolvedRuntimeWebsiteId,
+            runtimeWebsiteIds: [runtimeWebsiteIdFallback],
+            value
+          });
+        });
+
+        const draftValues = new Map(entries);
+        const hydratedSelection = selectedRegionsRef.current.map((region) => (
+          draftValues.has(region.regionId)
+            ? { ...region, value: draftValues.get(region.regionId) }
+            : region
+        ));
+        if (hydratedSelection.some((region, index) => (
+          region !== selectedRegionsRef.current[index]
+        ))) {
+          updateConnectedSelection(hydratedSelection);
+        }
+
+        const broadcastDraft = () => {
+          if (connectedDraftHydrationRunRef.current !== hydrationRun) return;
+          entries.forEach(([regionId, value]) => {
+            sendRuntimeMessage("rcms/v1/field-update", {
+              pageId: canvasRuntimePageId || pageKey,
+              regionId,
+              value
+            });
+          });
+        };
+        const scheduleBroadcast = (delay, complete = false) => {
+          const timer = window.setTimeout(() => {
+            if (connectedDraftHydrationRunRef.current !== hydrationRun) return;
+            broadcastDraft();
+            if (complete) connectedDraftHydratedRef.current = true;
+          }, delay);
+          connectedDraftHydrationTimersRef.current.push(timer);
+        };
+
+        // A cached iframe can emit runtime-ready before the dashboard listener
+        // is attached, while a fresh module load can register editable hooks
+        // just after the iframe load event. Replaying the same draft covers both
+        // orders without making the user toggle breakpoints to force a render.
+        broadcastDraft();
+        scheduleBroadcast(250);
+        scheduleBroadcast(900, true);
+      })
+      .catch((hydrationError) => {
+        if (connectedDraftHydrationRunRef.current !== hydrationRun) return;
+        console.error("Connected canvas draft could not be hydrated", hydrationError);
+        connectedDraftHydratedRef.current = true;
+      });
+  }, [
+    canvasRuntimePageId,
+    clearConnectedDraftHydrationTimers,
+    isPreview,
+    onVisualChange,
+    page?.route,
+    page?.routeId,
+    page?.slug,
+    pageId,
+    pageKey,
+    runtimeWebsiteIdFallback,
+    sendRuntimeMessage,
+    updateConnectedSelection,
+    visualOnly,
+    websiteId
+  ]);
+
   const recordConnectedHistory = useCallback((region, before, after) => {
     if (JSON.stringify(before) === JSON.stringify(after)) return;
     connectedUndoRef.current = [...connectedUndoRef.current.slice(-99), {
@@ -514,6 +618,8 @@ function ConnectedSourceWorkspace({
   }, [applyVisualValue]);
 
   useEffect(() => {
+    connectedDraftHydrationRunRef.current += 1;
+    clearConnectedDraftHydrationTimers();
     setWorkspaceMode("visual");
     clearConnectedSelection();
     setRuntimeWebsiteId(runtimeWebsiteIdFallback);
@@ -523,7 +629,18 @@ function ConnectedSourceWorkspace({
     connectedDraftHydratedRef.current = false;
     setVisualError("");
     setFrameLoading(true);
-  }, [clearConnectedSelection, page?.id, isPreview, runtimeWebsiteIdFallback]);
+  }, [
+    clearConnectedDraftHydrationTimers,
+    clearConnectedSelection,
+    page?.id,
+    isPreview,
+    runtimeWebsiteIdFallback
+  ]);
+
+  useEffect(() => () => {
+    connectedDraftHydrationRunRef.current += 1;
+    clearConnectedDraftHydrationTimers();
+  }, [clearConnectedDraftHydrationTimers]);
 
   useEffect(() => {
     if (!livePageUrl) return undefined;
@@ -576,7 +693,6 @@ function ConnectedSourceWorkspace({
       ) return;
 
       if (message.type === "rcms/v1/runtime-ready") {
-        connectedDraftHydratedRef.current = false;
         setFrameLoading(false);
         setLiveRouteError("");
         setRuntimeConnected(true);
@@ -591,48 +707,7 @@ function ConnectedSourceWorkspace({
             if (active) requestCanvasSEOScan();
           }, 500);
         }
-        if (!isPreview && visualOnly && websiteId && pageKey) {
-          void visualBuilderService.loadSavedDraftRegions(websiteId, pageKey, {
-            pageId,
-            routeId: page?.routeId,
-            slug: page?.slug,
-            route: page?.route
-          })
-            .then((draftRegions) => {
-              if (!active) return;
-              const entries = Object.entries(draftRegions || {}).filter(([, value]) => (
-                value !== null && value !== undefined
-              ));
-              entries.forEach(([regionId, value]) => {
-                onVisualChange({
-                  regionId,
-                  pageId: canvasRuntimePageId,
-                  runtimeWebsiteId: readyRuntimeWebsiteId,
-                  runtimeWebsiteIds: [runtimeWebsiteIdFallback],
-                  value
-                });
-              });
-              const broadcastDraft = () => entries.forEach(([regionId, value]) => {
-                if (!active) return;
-                if (value === null || value === undefined) return;
-                sendRuntimeMessage("rcms/v1/field-update", {
-                  pageId: canvasRuntimePageId || pageKey,
-                  regionId,
-                  value
-                });
-              });
-              broadcastDraft();
-              window.setTimeout(broadcastDraft, 250);
-              window.setTimeout(() => {
-                broadcastDraft();
-                if (active) connectedDraftHydratedRef.current = true;
-              }, 900);
-            })
-            .catch((hydrationError) => {
-              console.error("Connected canvas draft could not be hydrated", hydrationError);
-              connectedDraftHydratedRef.current = true;
-            });
-        }
+        hydrateConnectedDraft(readyRuntimeWebsiteId);
         return;
       }
 
@@ -705,6 +780,7 @@ function ConnectedSourceWorkspace({
     };
   }, [
     applyVisualValue,
+    hydrateConnectedDraft,
     isPreview,
     liveOrigin,
     livePageUrl,
@@ -724,7 +800,6 @@ function ConnectedSourceWorkspace({
   ]);
 
   const handleFrameLoad = () => {
-    connectedDraftHydratedRef.current = false;
     setFrameLoading(false);
     setLiveRouteError("");
     setRuntimeConnected(false);
@@ -732,6 +807,7 @@ function ConnectedSourceWorkspace({
     sendRuntimeMessage(
       isPreview ? "rcms/v1/exit-edit-mode" : "rcms/v1/enter-edit-mode"
     );
+    hydrateConnectedDraft(runtimeWebsiteIdFallback);
   };
 
   const handleFrameError = () => {
