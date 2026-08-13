@@ -3,6 +3,7 @@ import React, {
   Suspense,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState
@@ -341,14 +342,20 @@ function ConnectedSourceWorkspace({
     };
   }, [fallbackLivePageUrl, isPreview, requestedLivePageUrl]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const viewport = canvasViewportRef.current;
     if (!viewport || (workspaceMode !== "visual" && !isPreview)) return undefined;
 
+    let measurementFrame = 0;
+    let settlingFrame = 0;
     const updateViewportSize = () => {
+      const bounds = viewport.getBoundingClientRect();
       const nextSize = {
-        width: viewport.clientWidth,
-        height: viewport.clientHeight
+        // Border-box measurements remain stable when macOS overlay scrollbars
+        // appear. clientWidth can alternate and feed the canvas scale back into
+        // ResizeObserver, which makes the connected page visibly shiver.
+        width: Math.max(0, Math.floor(bounds.width)),
+        height: Math.max(0, Math.floor(bounds.height))
       };
       setCanvasViewportSize((currentSize) => (
         currentSize.width === nextSize.width
@@ -357,17 +364,39 @@ function ConnectedSourceWorkspace({
           : nextSize
       ));
     };
+    const scheduleViewportUpdate = () => {
+      window.cancelAnimationFrame(measurementFrame);
+      measurementFrame = window.requestAnimationFrame(updateViewportSize);
+    };
     updateViewportSize();
+    settlingFrame = window.requestAnimationFrame(() => {
+      updateViewportSize();
+      settlingFrame = window.requestAnimationFrame(updateViewportSize);
+    });
 
     if (typeof ResizeObserver === "undefined") {
-      window.addEventListener("resize", updateViewportSize);
-      return () => window.removeEventListener("resize", updateViewportSize);
+      window.addEventListener("resize", scheduleViewportUpdate);
+      return () => {
+        window.cancelAnimationFrame(measurementFrame);
+        window.cancelAnimationFrame(settlingFrame);
+        window.removeEventListener("resize", scheduleViewportUpdate);
+      };
     }
 
-    const observer = new ResizeObserver(updateViewportSize);
-    observer.observe(viewport);
-    return () => observer.disconnect();
-  }, [isPreview, workspaceMode]);
+    const observer = new ResizeObserver(scheduleViewportUpdate);
+    try {
+      observer.observe(viewport, { box: "border-box" });
+    } catch {
+      observer.observe(viewport);
+    }
+    window.addEventListener("resize", scheduleViewportUpdate);
+    return () => {
+      observer.disconnect();
+      window.cancelAnimationFrame(measurementFrame);
+      window.cancelAnimationFrame(settlingFrame);
+      window.removeEventListener("resize", scheduleViewportUpdate);
+    };
+  }, [aiOpen, isPreview, workspaceMode]);
 
   const sendRuntimeMessage = useCallback((type, payload = {}) => {
     iframeRef.current?.contentWindow?.postMessage(
@@ -1570,7 +1599,7 @@ function ConnectedSourceWorkspace({
             )}
           </main>
           {!isPreview && aiOpen && (
-            <Suspense fallback={<aside className="w-[400px] border-l border-slate-800 bg-[#0b1120]" />}>
+            <Suspense fallback={<aside className="h-full w-[400px] flex-shrink-0 border-l border-slate-800 bg-[#0b1120] 2xl:w-[440px]" />}>
               <AIWorkspace
                 websiteId={websiteId}
                 pageId={pageId}
@@ -1636,7 +1665,7 @@ function ConnectedSourceWorkspace({
             )}
           </main>
           {aiOpen && (
-            <Suspense fallback={<aside className="w-[400px] border-l border-slate-800 bg-[#0b1120]" />}>
+            <Suspense fallback={<aside className="h-full w-[400px] flex-shrink-0 border-l border-slate-800 bg-[#0b1120] 2xl:w-[440px]" />}>
               <AIWorkspace
                 websiteId={websiteId}
                 pageId={pageId}
