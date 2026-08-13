@@ -1,1 +1,0 @@
-import{D as e}from"./index-Bn_C2us5.js";function t(){return e()}export{t};
