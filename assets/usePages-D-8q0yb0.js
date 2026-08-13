@@ -1,1 +1,0 @@
-import{D as e}from"./index-BIZ_jO2s.js";function t(){return e()}export{t};
