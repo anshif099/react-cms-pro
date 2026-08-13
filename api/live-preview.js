@@ -171,6 +171,18 @@ function rewriteResourceTags(html, baseUrl, proxyOrigin) {
       if (["script", "img", "source", "video", "audio", "track", "input"].includes(name)) {
         rewritten = rewriteAttribute(rewritten, "src", baseUrl, proxyOrigin);
       }
+      // The deleted-route bootstrap dynamically imports the original Vite
+      // entry stored in this data attribute. Inside the sandboxed preview,
+      // location.origin is the dashboard rather than the connected website,
+      // so proxy this module URL just like an ordinary script source.
+      if (name === "script") {
+        rewritten = rewriteAttribute(
+          rewritten,
+          "data-reactcms-app",
+          baseUrl,
+          proxyOrigin
+        );
+      }
       if (["img", "source"].includes(name)) {
         rewritten = rewriteSrcsetAttribute(rewritten, baseUrl, proxyOrigin);
       }

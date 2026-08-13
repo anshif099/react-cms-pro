@@ -46,6 +46,23 @@ describe("live preview HTML rewriting", () => {
     expect(result.indexOf("previewRoute")).toBeLessThan(result.indexOf('type="module"'));
   });
 
+  it("keeps the deleted-route bootstrap app import on the connected origin", () => {
+    const result = rewritePreviewHtml(
+      '<html><head></head><body><script type="module" src="/reactcms-route-bootstrap.js?rcms=1" data-reactcms-route-bootstrap="true" data-reactcms-app="/assets/app.js?rcms=2"></script></body></html>',
+      "https://triosis.in/ad",
+      "/best-ads-company?rcms_edit=1",
+      previewOrigin
+    );
+
+    expect(result).toContain(
+      `src="${previewOrigin}${previewAssetUrl("/reactcms-route-bootstrap.js?rcms=1", "https://triosis.in/")}"`
+    );
+    expect(result).toContain(
+      `data-reactcms-app="${previewOrigin}${previewAssetUrl("/assets/app.js?rcms=2", "https://triosis.in/")}"`
+    );
+    expect(result).not.toContain('data-reactcms-app="/assets/app.js');
+  });
+
   it("rewrites root-relative stylesheets, images, and responsive images", () => {
     const result = rewritePreviewHtml(
       '<link href="/assets/app.css"><img src="/hero.png" srcset="/small.png 1x, /large.png 2x">',
