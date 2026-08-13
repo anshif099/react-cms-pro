@@ -1,1 +1,0 @@
-import{D as e}from"./index-CZm4Z0Dy.js";function t(){return e()}export{t};
