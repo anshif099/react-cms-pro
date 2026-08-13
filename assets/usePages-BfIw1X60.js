@@ -1,0 +1,1 @@
+import{D as e}from"./index-CCb0dxBi.js";function t(){return e()}export{t};
