@@ -1,1 +1,0 @@
-import{D as e}from"./index-CJVucavw.js";function t(){return e()}export{t};
