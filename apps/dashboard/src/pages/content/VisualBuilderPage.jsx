@@ -81,6 +81,7 @@ import {
 import VisualBuilderToolbar from "../../components/content/VisualBuilderToolbar";
 import NativeLayersPanel from "../../components/content/NativeLayersPanel";
 import ImagePicker from "../../components/ui/ImagePicker";
+import HostingRouteRepairModal from "../../components/websites/HostingRouteRepairModal";
 
 const NativeInspector = lazy(() => import("../../components/content/NativeInspector"));
 const AIWorkspace = lazy(() => import("../../components/content/AIWorkspace"));
@@ -164,6 +165,7 @@ function ConnectedSourceWorkspace({
   onAIDraftSave,
   onSave,
   onPublish,
+  onRepairLiveRoute,
   visualOnly = false
 }) {
   const isPreview = mode === "preview";
@@ -1358,6 +1360,7 @@ function ConnectedSourceWorkspace({
         onRedo={redoConnectedEdit}
         onSave={onSave}
         onPublish={publishConnectedSource}
+        onRepairLiveRoute={onRepairLiveRoute}
         onSettings={() => {}}
         onAIToggle={() => setAIOpen((value) => !value)}
         aiOpen={aiOpen}
@@ -2062,7 +2065,7 @@ export function VisualBuilderPage() {
     loadRevisions,
     restoreRevision
   } = useRevisions();
-  const { user } = useAuth();
+  const { user, isSuperAdmin } = useAuth();
   const toast = useToast();
 
   const [initialTree, setInitialTree] = useState(null);
@@ -2095,6 +2098,7 @@ export function VisualBuilderPage() {
   const [connectedSaveStatus, setConnectedSaveStatus] = useState("saved");
   const [connectedSaving, setConnectedSaving] = useState(false);
   const [connectedPublishing, setConnectedPublishing] = useState(false);
+  const [showRouteRepair, setShowRouteRepair] = useState(false);
 
   const treeRef = useRef(null);
   const pageRef = useRef(null);
@@ -2895,9 +2899,16 @@ export function VisualBuilderPage() {
         ? "Page published and live URL routing configured on the connected website."
         : "Page content published to the connected website.";
       if (routingRepairRequired) {
-        toast.warning(
-          "Page content was published, but live nested URLs require the super administrator to run Repair Live Route once."
-        );
+        if (isSuperAdmin) {
+          setShowRouteRepair(true);
+          toast.warning(
+            "Page content was published. Complete the one-time hosting route repair in the dialog."
+          );
+        } else {
+          toast.warning(
+            "Page content was published, but the hosting route is not enabled yet. Ask the super administrator to run Repair Live Route once."
+          );
+        }
       } else {
         toast.success(publishMessage);
       }
@@ -2919,6 +2930,7 @@ export function VisualBuilderPage() {
   }, [
     pageId,
     pageKey,
+    isSuperAdmin,
     saveConnectedDraft,
     selectedPage?.routeId,
     setSelectedPage,
@@ -2927,6 +2939,30 @@ export function VisualBuilderPage() {
     toast,
     websiteId
   ]);
+
+  const canRepairLiveRoute = Boolean(
+    isSuperAdmin
+    && ["cpanel", "sftp"].includes(sourceWebsite?.connection?.provider)
+  );
+
+  const handleLiveRouteRepaired = useCallback(async ({ routing, connection }) => {
+    const updatedWebsite = await websiteService.update(websiteId, {
+      connectionHealth: "healthy",
+      connection: {
+        ...connection,
+        spaRoutingConfigured: routing.configured,
+        spaRoutingPath: routing.path,
+        spaRoutingUpdatedAt: Date.now()
+      }
+    });
+    setSourceWebsite(updatedWebsite);
+    setShowRouteRepair(false);
+    toast.success(
+      routing.changed
+        ? "Live nested URLs were enabled and verified."
+        : "Live nested URL routing is configured and verified."
+    );
+  }, [toast, websiteId]);
 
   const getAISourceFiles = useCallback(() => sourceFilesRef.current, []);
 
@@ -3059,37 +3095,48 @@ export function VisualBuilderPage() {
 
   if (isConnectedCmsPage) {
     return (
-      <ConnectedSourceWorkspace
-        mode={mode}
-        websiteId={websiteId}
-        pageId={pageId}
-        pageKey={pageKey}
-        locale={activeLocale}
-        page={selectedPage}
-        website={sourceWebsite}
-        theme={themeTokens}
-        pageSettings={pageSettings}
-        content=""
-        loading={pageLoading}
-        error=""
-        saveStatus={connectedSaveStatus}
-        saving={connectedSaving}
-        publishing={connectedPublishing}
-        writeToken={sourceWriteToken}
-        onWriteTokenChange={handleSourceWriteTokenChange}
-        onBack={() => navigate(`/content/${websiteId}/pages`)}
-        onChange={() => {}}
-        onVisualChange={persistConnectedRegion}
-        getSourceFiles={() => ({})}
-        onSourceFilesChange={() => {}}
-        onThemeChange={saveAITheme}
-        onPageSettingsChange={applyPageSettings}
-        onSaveSEO={savePageSEOSettings}
-        onAIDraftSave={saveConnectedAIChanges}
-        onSave={saveConnectedDraft}
-        onPublish={publishConnectedPage}
-        visualOnly
-      />
+      <>
+        <ConnectedSourceWorkspace
+          mode={mode}
+          websiteId={websiteId}
+          pageId={pageId}
+          pageKey={pageKey}
+          locale={activeLocale}
+          page={selectedPage}
+          website={sourceWebsite}
+          theme={themeTokens}
+          pageSettings={pageSettings}
+          content=""
+          loading={pageLoading}
+          error=""
+          saveStatus={connectedSaveStatus}
+          saving={connectedSaving}
+          publishing={connectedPublishing}
+          writeToken={sourceWriteToken}
+          onWriteTokenChange={handleSourceWriteTokenChange}
+          onBack={() => navigate(`/content/${websiteId}/pages`)}
+          onChange={() => {}}
+          onVisualChange={persistConnectedRegion}
+          getSourceFiles={() => ({})}
+          onSourceFilesChange={() => {}}
+          onThemeChange={saveAITheme}
+          onPageSettingsChange={applyPageSettings}
+          onSaveSEO={savePageSEOSettings}
+          onAIDraftSave={saveConnectedAIChanges}
+          onSave={saveConnectedDraft}
+          onPublish={publishConnectedPage}
+          onRepairLiveRoute={canRepairLiveRoute ? () => setShowRouteRepair(true) : undefined}
+          visualOnly
+        />
+        {canRepairLiveRoute && (
+          <HostingRouteRepairModal
+            isOpen={showRouteRepair}
+            onClose={() => setShowRouteRepair(false)}
+            website={sourceWebsite}
+            onRepaired={handleLiveRouteRepaired}
+          />
+        )}
+      </>
     );
   }
 

@@ -8,6 +8,7 @@ import {
   Monitor,
   PanelTop,
   Redo2,
+  Route,
   Ruler,
   Save,
   Settings,
@@ -59,6 +60,7 @@ export function VisualBuilderToolbar({
   onRedo,
   onSave,
   onPublish,
+  onRepairLiveRoute,
   onSettings,
   onAIToggle,
   aiOpen = true,
@@ -154,6 +156,18 @@ export function VisualBuilderToolbar({
           </button>
 
           <SaveState status={saveStatus} />
+
+          {onRepairLiveRoute && (
+            <button
+              type="button"
+              onClick={onRepairLiveRoute}
+              className="hidden xl:flex h-9 items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 text-[11px] font-semibold text-amber-200 hover:bg-amber-500/15 cursor-pointer"
+              title="Install or verify live nested URL routing"
+            >
+              <Route className="w-3.5 h-3.5" />
+              Repair Route
+            </button>
+          )}
 
           {showSettings && (
             <button
