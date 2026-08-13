@@ -1,1 +1,0 @@
-import{E as e}from"./index-BiQuoNx9.js";function t(){return e()}export{t};
