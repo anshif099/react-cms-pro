@@ -1,1 +1,0 @@
-import{E as e}from"./index-B5CB_fzB.js";function t(){return e()}export{t};
