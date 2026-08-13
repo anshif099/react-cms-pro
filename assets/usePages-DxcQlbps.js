@@ -1,1 +1,0 @@
-import{D as e}from"./index-DSCb3leI.js";function t(){return e()}export{t};
