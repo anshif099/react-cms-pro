@@ -2899,9 +2899,23 @@ export function VisualBuilderPage() {
         // SFTP/cPanel credentials are deliberately session-only and normally
         // unavailable in a client's browser, so do not block content publish
         // merely because the already-configured routing file cannot be checked.
-        spaRouting = await sourceProviderService.ensureSpaRouting(sourceWebsite, {
-          skipIfCredentialsUnavailable: true
-        });
+        try {
+          spaRouting = await sourceProviderService.ensureSpaRouting(sourceWebsite, {
+            skipIfCredentialsUnavailable: true
+          });
+        } catch (routingError) {
+          // Hosting repair is independent from the Firebase content publish.
+          // Keep the content update, then let this assigned user repair the
+          // saved credentials/root in the dialog instead of aborting Publish.
+          console.warn("Live hosting route needs repair", routingError);
+          spaRouting = {
+            changed: false,
+            configured: false,
+            deploymentPending: false,
+            requiresRepair: true,
+            verificationError: routingError?.message || "Live routing repair is required."
+          };
+        }
         if (spaRouting.skipped) {
           try {
             const verifiedRouting = await sourceProviderService

@@ -30,7 +30,34 @@ export function repairSerializedRegionValues(regions = {}, definitions = {}) {
 
   Object.entries(regions || {}).forEach(([regionId, value]) => {
     if (!isSerializedRegionPlaceholder(value)) {
-      repaired[regionId] = value;
+      const definition = definitions?.[regionId];
+      const defaultValue = defaults[regionId];
+      const hasBlankImageSource = definition?.type === "image" && (
+        value === ""
+        || (
+          value
+          && typeof value === "object"
+          && !Array.isArray(value)
+          && typeof value.src === "string"
+          && !value.src.trim()
+        )
+      );
+      const defaultImageSource = defaultValue
+        && typeof defaultValue === "object"
+        && !Array.isArray(defaultValue)
+        && typeof defaultValue.src === "string"
+        && defaultValue.src.trim();
+
+      if (hasBlankImageSource && defaultImageSource) {
+        repaired[regionId] = {
+          ...defaultValue,
+          ...(value && typeof value === "object" && !Array.isArray(value) ? value : {}),
+          src: defaultImageSource
+        };
+        changed = true;
+      } else {
+        repaired[regionId] = value;
+      }
       return;
     }
 
