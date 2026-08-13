@@ -82,6 +82,7 @@ import VisualBuilderToolbar from "../../components/content/VisualBuilderToolbar"
 import NativeLayersPanel from "../../components/content/NativeLayersPanel";
 import ImagePicker from "../../components/ui/ImagePicker";
 import HostingRouteRepairModal from "../../components/websites/HostingRouteRepairModal";
+import { calculateConnectedCanvasSizing } from "../../utils/connectedCanvasSizing";
 
 const NativeInspector = lazy(() => import("../../components/content/NativeInspector"));
 const AIWorkspace = lazy(() => import("../../components/content/AIWorkspace"));
@@ -268,15 +269,16 @@ function ConnectedSourceWorkspace({
   const canvasWidth = device === "custom"
     ? customWidth
     : CANVAS_DEVICE_WIDTHS[device] || 1440;
-  const availableCanvasWidth = Math.max(0, canvasViewportSize.width - 32);
-  const availableCanvasHeight = Math.max(0, canvasViewportSize.height - 32);
-  const canvasScale = availableCanvasWidth > 0
-    ? Math.min(1, availableCanvasWidth / canvasWidth)
-    : 1;
-  const canvasFrameHeight = Math.max(
-    700,
-    canvasScale > 0 ? availableCanvasHeight / canvasScale : 700
-  );
+  const {
+    scale: canvasScale,
+    frameHeight: canvasFrameHeight,
+    layoutWidth: canvasLayoutWidth,
+    layoutHeight: canvasLayoutHeight
+  } = calculateConnectedCanvasSizing({
+    viewportWidth: canvasViewportSize.width,
+    viewportHeight: canvasViewportSize.height,
+    canvasWidth
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -344,10 +346,16 @@ function ConnectedSourceWorkspace({
     if (!viewport || (workspaceMode !== "visual" && !isPreview)) return undefined;
 
     const updateViewportSize = () => {
-      setCanvasViewportSize({
+      const nextSize = {
         width: viewport.clientWidth,
         height: viewport.clientHeight
-      });
+      };
+      setCanvasViewportSize((currentSize) => (
+        currentSize.width === nextSize.width
+          && currentSize.height === nextSize.height
+          ? currentSize
+          : nextSize
+      ));
     };
     updateViewportSize();
 
@@ -1494,14 +1502,22 @@ function ConnectedSourceWorkspace({
               </div>
             ) : (
               <div
-                className="relative mx-auto h-full min-h-[560px] overflow-hidden rounded-xl border border-slate-700 bg-white shadow-2xl shadow-black/40"
+                className="relative mx-auto shrink-0"
                 style={{
-                  width: `${canvasWidth}px`,
-                  height: `${canvasFrameHeight}px`,
-                  maxWidth: "none",
-                  zoom: canvasScale
+                  width: `${canvasLayoutWidth}px`,
+                  height: `${canvasLayoutHeight}px`
                 }}
               >
+                <div
+                  className="relative min-h-[560px] overflow-hidden rounded-xl border border-slate-700 bg-white shadow-2xl shadow-black/40"
+                  style={{
+                    width: `${canvasWidth}px`,
+                    height: `${canvasFrameHeight}px`,
+                    maxWidth: "none",
+                    transform: `scale(${canvasScale})`,
+                    transformOrigin: "top left"
+                  }}
+                >
                 {frameLoading && (
                   <div className="absolute inset-0 z-10 grid place-items-center bg-white">
                     <div className="text-center">
@@ -1549,6 +1565,7 @@ function ConnectedSourceWorkspace({
                     : "allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"}
                   allow="clipboard-read; clipboard-write"
                 />
+                </div>
               </div>
             )}
           </main>
