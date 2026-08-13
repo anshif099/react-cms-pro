@@ -258,7 +258,8 @@ function decodeHtmlAttribute(value) {
 export function ensureRouteDeletionBootstrapHtml(
   existingContent,
   websiteId,
-  databaseUrl = DEFAULT_FIREBASE_DATABASE_URL
+  databaseUrl = DEFAULT_FIREBASE_DATABASE_URL,
+  bootstrapVersion = ""
 ) {
   const content = String(existingContent || "");
   const modulePattern = /<script\b(?=[^>]*\btype=["']module["'])(?=[^>]*\bsrc=["'][^"']+["'])[^>]*>\s*<\/script>/gi;
@@ -283,10 +284,16 @@ export function ensureRouteDeletionBootstrapHtml(
   if (!applicationSource || /reactcms-route-bootstrap\.js/i.test(applicationSource)) {
     throw new Error("ReactCMS could not identify the original website application module.");
   }
+  const currentBootstrapSource = existingBootstrap?.[0]
+    .match(/\bsrc=["']([^"']+)["']/i)?.[1];
+  const version = String(bootstrapVersion || "").trim();
+  const bootstrapSource = version
+    ? `/${ROUTE_BOOTSTRAP_PATH}?rcms=${encodeURIComponent(version)}`
+    : decodeHtmlAttribute(currentBootstrapSource) || `/${ROUTE_BOOTSTRAP_PATH}`;
 
   const replacement = [
     '<script type="module"',
-    ` src="/${ROUTE_BOOTSTRAP_PATH}"`,
+    ` src="${escapeHtmlAttribute(bootstrapSource)}"`,
     ' data-reactcms-route-bootstrap="true"',
     ` data-reactcms-app="${escapeHtmlAttribute(applicationSource)}"`,
     ` data-reactcms-website="${escapeHtmlAttribute(websiteId)}"`,
@@ -300,7 +307,8 @@ export function ensureRouteDeletionBootstrapHtml(
   return {
     content: updated,
     changed: updated !== content,
-    applicationSource
+    applicationSource,
+    bootstrapSource
   };
 }
 
@@ -719,10 +727,6 @@ export const sourceProviderService = {
     }
 
     const indexFile = await this.readFile(website, "index.html");
-    const nextIndex = ensureRouteDeletionBootstrapHtml(
-      indexFile?.content,
-      website.id
-    );
     const bootstrapContent = routeDeletionBootstrapSource();
     let currentBootstrap = "";
     try {
@@ -732,9 +736,18 @@ export const sourceProviderService = {
         throw error;
       }
     }
+    const bootstrapChanged = currentBootstrap !== bootstrapContent;
+    const hasVersionedBootstrap = /<script\b(?=[^>]*\bdata-reactcms-route-bootstrap(?:\s|=|>))(?=[^>]*\bsrc=["'][^"']*[?&]rcms=)[^>]*>/i
+      .test(String(indexFile?.content || ""));
+    const nextIndex = ensureRouteDeletionBootstrapHtml(
+      indexFile?.content,
+      website.id,
+      DEFAULT_FIREBASE_DATABASE_URL,
+      bootstrapChanged || !hasVersionedBootstrap ? Date.now() : ""
+    );
 
     let changed = false;
-    if (currentBootstrap !== bootstrapContent) {
+    if (bootstrapChanged) {
       await this.writeFile(
         website,
         ROUTE_BOOTSTRAP_PATH,

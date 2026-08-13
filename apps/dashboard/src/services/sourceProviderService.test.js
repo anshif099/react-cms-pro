@@ -90,11 +90,11 @@ describe("connected source providers", () => {
 
   it("replaces the deployed application module with a deleted-route bootstrap", () => {
     const html = '<div id="root"></div><script type="module" crossorigin src="/assets/index.js?theme=dark&amp;rcms=1"></script>';
-    const result = ensureRouteDeletionBootstrapHtml(html, "website-1");
+    const result = ensureRouteDeletionBootstrapHtml(html, "website-1", undefined, 12345);
 
     expect(result.changed).toBe(true);
     expect(result.applicationSource).toBe("/assets/index.js?theme=dark&rcms=1");
-    expect(result.content).toContain('src="/reactcms-route-bootstrap.js"');
+    expect(result.content).toContain('src="/reactcms-route-bootstrap.js?rcms=12345"');
     expect(result.content).toContain('data-reactcms-app="/assets/index.js?theme=dark&amp;rcms=1"');
     expect(result.content).toContain('data-reactcms-website="website-1"');
     expect(ensureRouteDeletionBootstrapHtml(result.content, "website-1").changed).toBe(false);
@@ -171,6 +171,9 @@ describe("connected source providers", () => {
     expect(remoteFiles.get("assets/index.js")).not.toContain(previousId);
     expect(remoteFiles.get("index.html")).toMatch(
       /data-reactcms-app="\/assets\/index\.js\?rcms=\d+"/
+    );
+    expect(remoteFiles.get("index.html")).toMatch(
+      /src="\/reactcms-route-bootstrap\.js\?rcms=\d+"/
     );
     expect(remoteFiles.get("reactcms-route-bootstrap.js"))
       .toContain("page?.deleted === true");
