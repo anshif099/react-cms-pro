@@ -18,6 +18,7 @@ import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import sourceImportService from "../../services/sourceImportService";
 import sourceCredentialService from "../../services/sourceCredentialService";
+import sourceProviderService from "../../services/sourceProviderService";
 
 const connectSchema = zod.object({
   name: zod.string().min(2, "Website name must be at least 2 characters"),
@@ -262,6 +263,12 @@ export function ConnectWebsitePage() {
         });
       }
 
+      let spaRouting = null;
+      if (["cpanel", "sftp"].includes(data.connectionProvider)) {
+        setProgress("Configuring and verifying live website routes...");
+        spaRouting = await sourceProviderService.ensureSpaRouting(createdWebsite);
+      }
+
       setProgress(`Importing ${imported.routes.length} discovered pages...`);
       await importRoutes(
         createdWebsite.id,
@@ -288,6 +295,17 @@ export function ConnectWebsitePage() {
           port,
           sourceMode: "provider",
           sourceStorage: data.connectionProvider,
+          username: data.connectionProvider === "cpanel"
+            ? data.cpanelUsername
+            : data.connectionProvider === "sftp"
+              ? data.sftpUsername
+              : null,
+          authMethod: data.connectionProvider === "cpanel"
+            ? data.cpanelAuthMethod
+            : null,
+          spaRoutingConfigured: spaRouting?.configured || false,
+          spaRoutingPath: spaRouting?.path || null,
+          spaRoutingUpdatedAt: spaRouting?.configured ? Date.now() : null,
           writebackEnabled: (
             data.connectionProvider === "cpanel"
             || data.connectionProvider === "sftp"

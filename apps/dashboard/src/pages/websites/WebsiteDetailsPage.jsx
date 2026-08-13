@@ -13,7 +13,8 @@ import {
   Clock, 
   LayoutDashboard,
   RefreshCw,
-  Download
+  Download,
+  Route
 } from "lucide-react";
 import { useWebsites } from "../../hooks/useWebsites";
 import { useToast } from "../../hooks/useToast";
@@ -28,6 +29,7 @@ import { registryService } from "../../services/registryService";
 import sourceImportService from "../../services/sourceImportService";
 import { ManualRouteImportModal } from "../../components/websites/ManualRouteImportModal";
 import { useAuth } from "../../hooks/useAuth";
+import { HostingRouteRepairModal } from "../../components/websites/HostingRouteRepairModal";
 
 export function WebsiteDetailsPage() {
   const { id } = useParams();
@@ -40,7 +42,8 @@ export function WebsiteDetailsPage() {
     deleteWebsite, 
     regenerateApiKey, 
     regenerateSecretKey, 
-    updateStatus 
+    updateStatus,
+    updateWebsite
   } = useWebsites();
 
   const [copiedId, setCopiedId] = useState(false);
@@ -52,6 +55,7 @@ export function WebsiteDetailsPage() {
   const [showRegenApiKey, setShowRegenApiKey] = useState(false);
   const [showRegenSecretKey, setShowRegenSecretKey] = useState(false);
   const [showManualSync, setShowManualSync] = useState(false);
+  const [showRouteRepair, setShowRouteRepair] = useState(false);
 
   const { 
     sync, 
@@ -165,6 +169,24 @@ export function WebsiteDetailsPage() {
     }
   };
 
+  const handleRouteRepaired = async ({ routing, connection }) => {
+    await updateWebsite(selectedWebsite.id, {
+      connectionHealth: "healthy",
+      connection: {
+        ...connection,
+        spaRoutingConfigured: routing.configured,
+        spaRoutingPath: routing.path,
+        spaRoutingUpdatedAt: Date.now()
+      }
+    });
+    setShowRouteRepair(false);
+    toast.success(
+      routing.changed
+        ? "Live SPA routing was installed and verified."
+        : "Live SPA routing is already configured and verified."
+    );
+  };
+
   return (
     <div className="space-y-6 text-left max-w-5xl mx-auto">
       {/* Back button link */}
@@ -199,6 +221,17 @@ export function WebsiteDetailsPage() {
 
         {/* Verification and connection CTAs */}
         <div className="flex gap-2">
+          {isSuperAdmin && ["cpanel", "sftp"].includes(selectedWebsite.connection?.provider) && (
+            <Button
+              onClick={() => setShowRouteRepair(true)}
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+            >
+              <Route className="w-4 h-4" />
+              Repair Live Route
+            </Button>
+          )}
           {isSuperAdmin && selectedWebsite.verificationStatus !== "verified" && (
             <Button 
               onClick={() => navigate(`/websites/${selectedWebsite.id}/verify`)}
@@ -481,6 +514,14 @@ export function WebsiteDetailsPage() {
                 <span>Connection Health</span>
                 <Badge>{selectedWebsite.connectionHealth}</Badge>
               </div>
+              {["cpanel", "sftp"].includes(selectedWebsite.connection?.provider) && (
+                <div className="flex justify-between items-center pt-2 border-t border-slate-100 dark:border-slate-800/80">
+                  <span>Live SPA Routing</span>
+                  <Badge variant={selectedWebsite.connection?.spaRoutingConfigured ? "success" : "warning"}>
+                    {selectedWebsite.connection?.spaRoutingConfigured ? "verified" : "repair required"}
+                  </Badge>
+                </div>
+              )}
               <div className="flex justify-between items-center pt-2 border-t border-slate-100 dark:border-slate-800/80">
                 <span>Last Sync Pulse</span>
                 <span className="font-bold text-admin-text">{selectedWebsite.lastSync || "Never"}</span>
@@ -558,6 +599,13 @@ export function WebsiteDetailsPage() {
         onClose={() => setShowManualSync(false)}
         onImport={importManual}
         loading={syncLoading}
+      />
+
+      <HostingRouteRepairModal
+        isOpen={showRouteRepair}
+        onClose={() => setShowRouteRepair(false)}
+        website={selectedWebsite}
+        onRepaired={handleRouteRepaired}
       />
     </div>
   );

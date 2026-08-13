@@ -2881,21 +2881,31 @@ export function VisualBuilderPage() {
         status: "published",
         publishedAt
       } : current);
-      toast.success(
-        gitPublish?.deploymentPending
-          ? "Page content committed to GitHub. Vercel is rebuilding the live site."
-          : gitPublish
-          ? "Page content committed to the connected Git repository."
-          : spaRouting.deploymentPending
-          ? "Page published and Vercel routing committed. The live deployment is rebuilding."
-          : spaRouting.changed
-          ? "Page published and live URL routing configured on the connected website."
-          : "Page content published to the connected website."
+      const routingRepairRequired = Boolean(
+        spaRouting.skipped
+        && !sourceWebsite?.connection?.spaRoutingConfigured
       );
+      const publishMessage = gitPublish?.deploymentPending
+        ? "Page content committed to GitHub. Vercel is rebuilding the live site."
+        : gitPublish
+        ? "Page content committed to the connected Git repository."
+        : spaRouting.deploymentPending
+        ? "Page published and Vercel routing committed. The live deployment is rebuilding."
+        : spaRouting.changed
+        ? "Page published and live URL routing configured on the connected website."
+        : "Page content published to the connected website.";
+      if (routingRepairRequired) {
+        toast.warning(
+          "Page content was published, but live nested URLs require the super administrator to run Repair Live Route once."
+        );
+      } else {
+        toast.success(publishMessage);
+      }
       return {
         verified: true,
         deploymentPending: gitPublish?.deploymentPending || spaRouting.deploymentPending,
         spaRoutingConfigured: spaRouting.configured,
+        routingRepairRequired,
         sourceRevision: gitPublish?.revision || null
       };
     } catch (error) {
