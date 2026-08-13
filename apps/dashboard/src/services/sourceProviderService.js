@@ -129,6 +129,14 @@ function hasSftpCredentials(credentials) {
   );
 }
 
+function hasCpanelCredentials(credentials) {
+  return Boolean(
+    credentials?.endpoint
+    && credentials?.username
+    && (credentials?.credential ?? credentials?.token)
+  );
+}
+
 const FIREBASE_PUSH_ID_PATTERN = "-[A-Za-z0-9_-]{19}";
 
 export function bindRuntimeWebsiteId(content, websiteId) {
@@ -457,11 +465,7 @@ export const sourceProviderService = {
       return this.readGitHubFile(connection, filePath, credentials.token || "");
     }
     if (connection.provider === "cpanel") {
-      if (
-        !credentials.endpoint
-        || !credentials.username
-        || !(credentials.credential ?? credentials.token)
-      ) {
+      if (!hasCpanelCredentials(credentials)) {
         throw new Error("Reconnect the cPanel session before reading source files.");
       }
       const path = providerPath(connection, filePath);
@@ -492,11 +496,7 @@ export const sourceProviderService = {
       );
     }
     if (connection.provider === "cpanel") {
-      if (
-        !credentials.endpoint
-        || !credentials.username
-        || !(credentials.credential ?? credentials.token)
-      ) {
+      if (!hasCpanelCredentials(credentials)) {
         throw new Error("Reconnect the cPanel session before publishing.");
       }
       return this.writeCPanelFile(
@@ -518,7 +518,7 @@ export const sourceProviderService = {
     throw new Error("This website is not connected to a writable source provider.");
   },
 
-  async ensureSpaRouting(website) {
+  async ensureSpaRouting(website, options = {}) {
     const provider = website?.connection?.provider;
     const usesHtaccess = provider === "cpanel" || provider === "sftp";
     const usesVercelConfig = provider === "github" && isVercelWebsite(website);
@@ -527,6 +527,24 @@ export const sourceProviderService = {
     }
 
     const configPath = usesVercelConfig ? "vercel.json" : ".htaccess";
+    if (usesHtaccess && options.skipIfCredentialsUnavailable) {
+      const credentials = sourceCredentialService.get(website?.id);
+      const hasCredentials = provider === "sftp"
+        ? hasSftpCredentials(credentials)
+        : hasCpanelCredentials(credentials);
+      if (!hasCredentials) {
+        return {
+          changed: false,
+          configured: false,
+          deploymentPending: false,
+          skipped: true,
+          reason: "credentials-unavailable",
+          provider,
+          path: configPath
+        };
+      }
+    }
+
     let currentContent = "";
     try {
       const file = await this.readFile(website, configPath);

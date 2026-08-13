@@ -393,6 +393,29 @@ describe("connected source providers", () => {
     expect(write).not.toHaveBeenCalled();
   });
 
+  it("skips the visual-only routing check when StackCP credentials are unavailable", async () => {
+    const read = vi.spyOn(sourceProviderService, "readFile");
+    const write = vi.spyOn(sourceProviderService, "writeFile");
+
+    const result = await sourceProviderService.ensureSpaRouting({
+      id: "client-site",
+      connection: { provider: "sftp" }
+    }, {
+      skipIfCredentialsUnavailable: true
+    });
+
+    expect(result).toEqual(expect.objectContaining({
+      changed: false,
+      configured: false,
+      skipped: true,
+      reason: "credentials-unavailable",
+      provider: "sftp",
+      path: ".htaccess"
+    }));
+    expect(read).not.toHaveBeenCalled();
+    expect(write).not.toHaveBeenCalled();
+  });
+
   it("commits and verifies SPA routing for a GitHub-connected Vercel site", async () => {
     let remoteContent = null;
     vi.spyOn(sourceProviderService, "readFile").mockImplementation(

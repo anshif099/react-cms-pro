@@ -2106,6 +2106,7 @@ export function VisualBuilderPage() {
   const sourceDirtyPathsRef = useRef(new Set());
   const connectedWritesRef = useRef(new Set());
   const connectedPublishTargetsRef = useRef(new Map());
+  const connectedPublishingRef = useRef(false);
 
   const pageKey = useMemo(
     () => visualBuilderService.resolvePageKey(selectedPage),
@@ -2796,6 +2797,8 @@ export function VisualBuilderPage() {
   }, [toast]);
 
   const publishConnectedPage = useCallback(async () => {
+    if (connectedPublishingRef.current) return null;
+    connectedPublishingRef.current = true;
     setConnectedPublishing(true);
     try {
       const saved = await saveConnectedDraft(false);
@@ -2842,7 +2845,13 @@ export function VisualBuilderPage() {
           deploymentPending: gitPublish.deploymentPending
         };
       } else if (sourceWebsite) {
-        spaRouting = await sourceProviderService.ensureSpaRouting(sourceWebsite);
+        // Visual-only client publishing writes editable content to Firebase.
+        // SFTP/cPanel credentials are deliberately session-only and normally
+        // unavailable in a client's browser, so do not block content publish
+        // merely because the already-configured routing file cannot be checked.
+        spaRouting = await sourceProviderService.ensureSpaRouting(sourceWebsite, {
+          skipIfCredentialsUnavailable: true
+        });
       }
 
       // Firebase remains the source for page SEO even when editable content is
@@ -2894,6 +2903,7 @@ export function VisualBuilderPage() {
       toast.error(error.message || "The connected page could not be published.");
       return null;
     } finally {
+      connectedPublishingRef.current = false;
       setConnectedPublishing(false);
     }
   }, [
