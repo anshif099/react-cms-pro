@@ -27,7 +27,7 @@ import { useWebsites } from "../../hooks/useWebsites";
 import { cn } from "../../utils/cn";
 
 export function Sidebar({ mobileOpen, setMobileOpen }) {
-  const { logout } = useAuth();
+  const { logout, isSuperAdmin } = useAuth();
   const { websites, selectedWebsite } = useWebsites();
   const location = useLocation();
   const [websitesMenuOpen, setWebsitesMenuOpen] = useState(
@@ -125,30 +125,36 @@ export function Sidebar({ mobileOpen, setMobileOpen }) {
                 </NavLink>
 
                 {/* Add Website */}
-                <NavLink to="/websites/add" onClick={() => setMobileOpen(false)} className={subNavItemClass}>
-                  <PlusCircle className="w-3.5 h-3.5" />
-                  <span>Add Website</span>
-                </NavLink>
+                {isSuperAdmin && (
+                  <NavLink to="/websites/add" onClick={() => setMobileOpen(false)} className={subNavItemClass}>
+                    <PlusCircle className="w-3.5 h-3.5" />
+                    <span>Add Website</span>
+                  </NavLink>
+                )}
 
                 {/* Verification (Contextual to active website) */}
-                <NavLink
-                  to={activeWebsiteId ? `/websites/${activeWebsiteId}/verify` : "/websites"}
-                  onClick={() => setMobileOpen(false)}
-                  className={subNavItemClass}
-                >
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  <span>Verification</span>
-                </NavLink>
+                {isSuperAdmin && (
+                  <NavLink
+                    to={activeWebsiteId ? `/websites/${activeWebsiteId}/verify` : "/websites"}
+                    onClick={() => setMobileOpen(false)}
+                    className={subNavItemClass}
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    <span>Verification</span>
+                  </NavLink>
+                )}
 
                 {/* SDK (Contextual to active website) */}
-                <NavLink
-                  to={activeWebsiteId ? `/websites/${activeWebsiteId}/sdk` : "/websites"}
-                  onClick={() => setMobileOpen(false)}
-                  className={subNavItemClass}
-                >
-                  <Terminal className="w-3.5 h-3.5" />
-                  <span>SDK Guide</span>
-                </NavLink>
+                {isSuperAdmin && (
+                  <NavLink
+                    to={activeWebsiteId ? `/websites/${activeWebsiteId}/sdk` : "/websites"}
+                    onClick={() => setMobileOpen(false)}
+                    className={subNavItemClass}
+                  >
+                    <Terminal className="w-3.5 h-3.5" />
+                    <span>SDK Guide</span>
+                  </NavLink>
+                )}
               </div>
             )}
           </div>

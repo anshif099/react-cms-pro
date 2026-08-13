@@ -1,10 +1,19 @@
 import React, { createContext, useState, useContext, useEffect, useCallback } from "react";
 import websiteService from "../services/websiteService";
 import sourceCredentialService from "../services/sourceCredentialService";
+import { useAuth } from "./AuthContext";
+import { getAccessibleWebsiteIds } from "../utils/authAccess";
 
 const WebsiteContext = createContext(null);
 
 export function WebsiteProvider({ children }) {
+  const {
+    user,
+    isAuthenticated,
+    isSuperAdmin,
+    loading: authLoading,
+    canAccessWebsite
+  } = useAuth();
   const [websites, setWebsites] = useState([]);
   const [selectedWebsite, setSelectedWebsite] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -12,22 +21,41 @@ export function WebsiteProvider({ children }) {
 
   // Sync state from service
   const refreshWebsites = useCallback(async () => {
+    if (authLoading) return;
+    if (!isAuthenticated || !user) {
+      setWebsites([]);
+      setSelectedWebsite(null);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     try {
-      const data = await websiteService.getAll();
+      const data = isSuperAdmin
+        ? await websiteService.getAll()
+        : (await Promise.all(
+          getAccessibleWebsiteIds(user).map((id) => websiteService.getById(id))
+        )).filter(Boolean);
       setWebsites(data);
+      setSelectedWebsite((current) => (
+        current && data.some((website) => website.id === current.id) ? current : null
+      ));
     } catch (e) {
       console.error("Failed to load websites", e);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [authLoading, isAuthenticated, isSuperAdmin, user]);
 
   useEffect(() => {
     refreshWebsites();
   }, [refreshWebsites]);
 
   const selectWebsite = useCallback(async (id) => {
+    if (!canAccessWebsite(id)) {
+      setSelectedWebsite(null);
+      return null;
+    }
     setLoading(true);
     try {
       const found = await websiteService.getById(id);
@@ -39,9 +67,10 @@ export function WebsiteProvider({ children }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [canAccessWebsite]);
 
   const createWebsite = useCallback(async (data) => {
+    if (!isSuperAdmin) throw new Error("Only a super administrator can connect websites.");
     try {
       const created = await websiteService.create(data);
       await refreshWebsites();
@@ -50,9 +79,10 @@ export function WebsiteProvider({ children }) {
       console.error("Failed to create website", e);
       throw e;
     }
-  }, [refreshWebsites]);
+  }, [isSuperAdmin, refreshWebsites]);
 
   const updateWebsite = useCallback(async (id, data) => {
+    if (!canAccessWebsite(id)) throw new Error("You do not have access to this website.");
     try {
       const updated = await websiteService.update(id, data);
       await refreshWebsites();
@@ -67,9 +97,10 @@ export function WebsiteProvider({ children }) {
       console.error("Failed to update website", e);
       throw e;
     }
-  }, [refreshWebsites]);
+  }, [canAccessWebsite, refreshWebsites]);
 
   const deleteWebsite = useCallback(async (id) => {
+    if (!isSuperAdmin) throw new Error("Only a super administrator can delete websites.");
     try {
       await websiteService.delete(id);
       sourceCredentialService.clear(id);
@@ -84,9 +115,10 @@ export function WebsiteProvider({ children }) {
       console.error("Failed to delete website", e);
       throw e;
     }
-  }, [refreshWebsites]);
+  }, [isSuperAdmin, refreshWebsites]);
 
   const regenerateApiKey = useCallback(async (id) => {
+    if (!isSuperAdmin) throw new Error("Only a super administrator can regenerate API keys.");
     try {
       const updated = await websiteService.regenerateApiKey(id);
       await refreshWebsites();
@@ -101,9 +133,10 @@ export function WebsiteProvider({ children }) {
       console.error("Failed to regenerate API Key", e);
       throw e;
     }
-  }, [refreshWebsites]);
+  }, [isSuperAdmin, refreshWebsites]);
 
   const regenerateSecretKey = useCallback(async (id) => {
+    if (!isSuperAdmin) throw new Error("Only a super administrator can regenerate secret keys.");
     try {
       const updated = await websiteService.regenerateSecretKey(id);
       await refreshWebsites();
@@ -118,9 +151,10 @@ export function WebsiteProvider({ children }) {
       console.error("Failed to regenerate Secret Key", e);
       throw e;
     }
-  }, [refreshWebsites]);
+  }, [isSuperAdmin, refreshWebsites]);
 
   const updateStatus = useCallback(async (id, status) => {
+    if (!isSuperAdmin) throw new Error("Only a super administrator can change connection status.");
     try {
       const updated = await websiteService.updateStatus(id, status);
       await refreshWebsites();
@@ -135,9 +169,10 @@ export function WebsiteProvider({ children }) {
       console.error("Failed to update status", e);
       throw e;
     }
-  }, [refreshWebsites]);
+  }, [isSuperAdmin, refreshWebsites]);
 
   const syncWebsite = useCallback(async (id) => {
+    if (!canAccessWebsite(id)) throw new Error("You do not have access to this website.");
     setSyncLoading(true);
     try {
       const result = await websiteService.syncWebsite(id);
@@ -147,9 +182,10 @@ export function WebsiteProvider({ children }) {
     } finally {
       setSyncLoading(false);
     }
-  }, [selectWebsite, refreshWebsites]);
+  }, [canAccessWebsite, selectWebsite, refreshWebsites]);
 
   const importRoutes = useCallback(async (id, routes, userId) => {
+    if (!canAccessWebsite(id)) throw new Error("You do not have access to this website.");
     setSyncLoading(true);
     try {
       const result = await websiteService.importRoutes(id, routes, userId);
@@ -159,7 +195,7 @@ export function WebsiteProvider({ children }) {
     } finally {
       setSyncLoading(false);
     }
-  }, [selectWebsite, refreshWebsites]);
+  }, [canAccessWebsite, selectWebsite, refreshWebsites]);
 
   return (
     <WebsiteContext.Provider value={{

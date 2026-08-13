@@ -27,11 +27,13 @@ import { SyncStatusCard } from "../../components/websites/SyncStatusCard";
 import { registryService } from "../../services/registryService";
 import sourceImportService from "../../services/sourceImportService";
 import { ManualRouteImportModal } from "../../components/websites/ManualRouteImportModal";
+import { useAuth } from "../../hooks/useAuth";
 
 export function WebsiteDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
+  const { isSuperAdmin } = useAuth();
   const { 
     selectWebsite, 
     selectedWebsite, 
@@ -197,7 +199,7 @@ export function WebsiteDetailsPage() {
 
         {/* Verification and connection CTAs */}
         <div className="flex gap-2">
-          {selectedWebsite.verificationStatus !== "verified" && (
+          {isSuperAdmin && selectedWebsite.verificationStatus !== "verified" && (
             <Button 
               onClick={() => navigate(`/websites/${selectedWebsite.id}/verify`)}
               variant="outline" 
@@ -208,7 +210,17 @@ export function WebsiteDetailsPage() {
               Verify Domain
             </Button>
           )}
-          {selectedWebsite.sourceConnected ? (
+          {!isSuperAdmin ? (
+            <Button
+              onClick={() => navigate(`/content/${selectedWebsite.id}/pages`)}
+              variant="primary"
+              size="sm"
+              className="gap-1.5"
+            >
+              <LayoutDashboard className="w-4 h-4" />
+              Open Pages
+            </Button>
+          ) : selectedWebsite.sourceConnected ? (
             <Button
               onClick={() => navigate(`/content/${selectedWebsite.id}/pages`)}
               variant="primary"
@@ -347,7 +359,7 @@ export function WebsiteDetailsPage() {
                 </div>
               </div>
             </Card>
-          ) : (
+          ) : isSuperAdmin ? (
           <Card title="API Credentials" subtitle="Access key pairs used by SDK clients">
             <div className="space-y-4">
               {/* API Public Key */}
@@ -400,7 +412,7 @@ export function WebsiteDetailsPage() {
               </div>
             </div>
           </Card>
-          )}
+          ) : null}
 
           <SyncStatusCard
             syncStats={syncStats}
@@ -477,7 +489,7 @@ export function WebsiteDetailsPage() {
           </Card>
 
           {/* Danger Zone */}
-          <Card title="Danger Zone" className="border-red-200 dark:border-red-950/40">
+          {isSuperAdmin && <Card title="Danger Zone" className="border-red-200 dark:border-red-950/40">
             <div className="space-y-4">
               <p className="text-xs text-admin-secondary leading-relaxed text-left">
                 Disconnecting stops future source synchronization. Deleting permanently removes all ReactCMS pages, content, media, revisions, and imported source artifacts.
@@ -504,7 +516,7 @@ export function WebsiteDetailsPage() {
                 </Button>
               </div>
             </div>
-          </Card>
+          </Card>}
         </div>
       </div>
 

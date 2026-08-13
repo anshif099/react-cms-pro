@@ -30,10 +30,11 @@ export const activityLogService = {
     }
   },
 
-  async getRecentLogs(limitCount = 10) {
+  async getRecentLogs(limitCount = 10, websiteIds = null) {
     try {
       const logsRef = ref(database, "activity_logs");
-      const q = query(logsRef, limitToLast(limitCount));
+      const scopedIds = Array.isArray(websiteIds) ? new Set(websiteIds.map(String)) : null;
+      const q = scopedIds ? logsRef : query(logsRef, limitToLast(limitCount));
       const snapshot = await get(q);
       
       if (snapshot.exists()) {
@@ -48,9 +49,11 @@ export const activityLogService = {
             formattedTime: formatTimeAgo(dateObj)
           };
         });
-        // Realtime Database returns limitToLast sorted chronological, reverse for newest first
-        list.reverse();
-        return list;
+        const scopedList = scopedIds
+          ? list.filter((entry) => entry.websiteId && scopedIds.has(String(entry.websiteId)))
+          : list;
+        scopedList.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+        return scopedList.slice(0, limitCount);
       }
       return [];
     } catch (error) {
@@ -59,12 +62,15 @@ export const activityLogService = {
     }
   },
 
-  async getTotalLogsCount() {
+  async getTotalLogsCount(websiteIds = null) {
     try {
       const logsRef = ref(database, "activity_logs");
       const snapshot = await get(logsRef);
       if (snapshot.exists()) {
-        return Object.keys(snapshot.val()).length;
+        const logs = Object.values(snapshot.val());
+        if (!Array.isArray(websiteIds)) return logs.length;
+        const scopedIds = new Set(websiteIds.map(String));
+        return logs.filter((entry) => entry.websiteId && scopedIds.has(String(entry.websiteId))).length;
       }
       return 0;
     } catch (error) {

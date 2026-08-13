@@ -65,13 +65,13 @@ export function LoginPage() {
           <h2 className="text-2xl font-black text-admin-text tracking-tight">
             ReactCMS <span className="text-primary font-black uppercase text-xs bg-primary/10 px-2 py-0.5 rounded-full ml-1">Pro</span>
           </h2>
-          <p className="text-sm text-admin-secondary mt-1">Enterprise dashboard for React websites</p>
+          <p className="text-sm text-admin-secondary mt-1">Super-admin and website client access</p>
         </div>
 
         <Card className="shadow-xl">
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
             <h3 className="text-lg font-bold text-admin-text text-left border-b border-admin-border dark:border-slate-800 pb-3">
-              Administrator Login
+              ReactCMS Login
             </h3>
 
             {errorMsg && (
@@ -83,11 +83,12 @@ export function LoginPage() {
 
             {/* Email input */}
             <Input
-              label="Admin Email"
+              label="Email"
               type="email"
               icon={Mail}
-              placeholder="e.g. admin@reactcms.local"
+              placeholder="Enter your login email"
               error={errors.email?.message}
+              autoComplete="email"
               {...register("email")}
             />
 
@@ -98,6 +99,7 @@ export function LoginPage() {
               icon={Lock}
               placeholder="••••••••••••"
               error={errors.password?.message}
+              autoComplete="current-password"
               {...register("password")}
             />
 

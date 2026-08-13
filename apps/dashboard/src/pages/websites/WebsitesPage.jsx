@@ -9,6 +9,7 @@ import {
   ShieldCheck, 
   Terminal, 
   Key, 
+  UserCog,
   Trash2, 
   Unlink 
 } from "lucide-react";
@@ -20,6 +21,8 @@ import { Badge } from "../../components/ui/Badge";
 import { Dropdown } from "../../components/ui/Dropdown";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { ClientAdminModal } from "../../components/websites/ClientAdminModal";
+import { useAuth } from "../../hooks/useAuth";
 import { motion, AnimatePresence } from "framer-motion";
 
 export function WebsitesPage() {
@@ -29,8 +32,10 @@ export function WebsitesPage() {
     regenerateApiKey, 
     regenerateSecretKey, 
     updateStatus,
-    selectWebsite
+    selectWebsite,
+    refreshWebsites
   } = useWebsites();
+  const { isSuperAdmin } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
 
@@ -45,6 +50,7 @@ export function WebsitesPage() {
   const [disconnectId, setDisconnectId] = useState(null);
   const [regenerateId, setRegenerateId] = useState(null);
   const [regenerateType, setRegenerateType] = useState(null); // 'api' | 'secret'
+  const [clientAdminWebsite, setClientAdminWebsite] = useState(null);
 
   const handleSelectWebsite = (id, pathSuffix = "") => {
     selectWebsite(id);
@@ -115,6 +121,13 @@ export function WebsitesPage() {
       icon: Eye,
       onClick: () => handleSelectWebsite(web.id)
     }];
+    if (!isSuperAdmin) return items;
+
+    items.push({
+      label: web.clientAdmin?.uid ? "Manage Client Login" : "Create Client Login",
+      icon: UserCog,
+      onClick: () => setClientAdminWebsite(web)
+    });
     if (!web.sourceConnected) {
       items.push({
       label: "Verify Domain",
@@ -155,10 +168,12 @@ export function WebsitesPage() {
           <h2 className="text-2xl font-bold text-admin-text tracking-tight">My Websites</h2>
           <p className="text-sm text-admin-secondary">Configure and audit all connected domains</p>
         </div>
-        <Button onClick={() => navigate("/websites/add")} variant="primary" className="gap-2 self-start sm:self-auto">
-          <PlusCircle className="w-4 h-4" />
-          Connect Website
-        </Button>
+        {isSuperAdmin && (
+          <Button onClick={() => navigate("/websites/add")} variant="primary" className="gap-2 self-start sm:self-auto">
+            <PlusCircle className="w-4 h-4" />
+            Connect Website
+          </Button>
+        )}
       </div>
 
       {/* Filter Toolbar */}
@@ -229,9 +244,11 @@ export function WebsitesPage() {
         {filteredWebsites.length === 0 ? (
           <EmptyState
             title="No websites match the criteria"
-            description="Clear your filters or connect a new website to get started."
-            actionLabel="Connect Website"
-            onActionClick={() => navigate("/websites/add")}
+            description={isSuperAdmin
+              ? "Clear your filters or connect a new website to get started."
+              : "No website has been assigned to this client login."}
+            actionLabel={isSuperAdmin ? "Connect Website" : undefined}
+            onActionClick={isSuperAdmin ? () => navigate("/websites/add") : undefined}
           />
         ) : (
           <motion.div
@@ -348,6 +365,13 @@ export function WebsitesPage() {
         onConfirm={handleRegenerateKeys}
         title="Regenerate Credentials"
         message={`Are you sure you want to regenerate this website's ${regenerateType === "api" ? "API Key" : "Secret Key"}? Any existing SDK code referencing the old key will stop working instantly.`}
+      />
+
+      <ClientAdminModal
+        isOpen={clientAdminWebsite !== null}
+        website={clientAdminWebsite}
+        onClose={() => setClientAdminWebsite(null)}
+        onCreated={() => refreshWebsites()}
       />
     </div>
   );

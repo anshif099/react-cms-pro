@@ -2,6 +2,8 @@ import React, { Suspense, lazy } from "react";
 import { Navigate } from "react-router-dom";
 import ProtectedRoute from "./ProtectedRoute";
 import PublicRoute from "./PublicRoute";
+import SuperAdminRoute from "./SuperAdminRoute";
+import WebsiteAccessRoute from "./WebsiteAccessRoute";
 import DashboardLayout from "../components/layouts/DashboardLayout";
 import LoadingSkeleton from "../components/ui/LoadingSkeleton";
 
@@ -83,7 +85,9 @@ export const routesConfig = [
     errorElement: <RouteErrorBoundary />,
     element: (
       <ProtectedRoute>
-        {lazyLoad(VisualBuilderPage)}
+        <WebsiteAccessRoute>
+          {lazyLoad(VisualBuilderPage)}
+        </WebsiteAccessRoute>
       </ProtectedRoute>
     )
   },
@@ -115,24 +119,41 @@ export const routesConfig = [
           },
           {
             path: "add",
-            element: <ConnectWebsitePage />
+            element: (
+              <SuperAdminRoute>
+                <ConnectWebsitePage />
+              </SuperAdminRoute>
+            )
           },
           {
             path: ":id",
-            element: <WebsiteDetailsPage />
+            element: (
+              <WebsiteAccessRoute>
+                <WebsiteDetailsPage />
+              </WebsiteAccessRoute>
+            )
           },
           {
             path: ":id/verify",
-            element: <VerificationPage />
+            element: (
+              <SuperAdminRoute>
+                <VerificationPage />
+              </SuperAdminRoute>
+            )
           },
           {
             path: ":id/sdk",
-            element: <SDKInstallPage />
+            element: (
+              <SuperAdminRoute>
+                <SDKInstallPage />
+              </SuperAdminRoute>
+            )
           }
         ]
       },
       {
         path: "content/:websiteId",
+        element: <WebsiteAccessRoute />,
         children: [
           {
             path: "pages",

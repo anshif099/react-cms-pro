@@ -25,6 +25,7 @@ import { Table, TableRow, TableCell } from "../../components/ui/Table";
 import { motion } from "framer-motion";
 import { cn } from "../../utils/cn";
 import activityLogService from "../../services/activityLogService";
+import { getAccessibleWebsiteIds } from "../../utils/authAccess";
 
 const getActivityIcon = (type) => {
   switch (type) {
@@ -37,6 +38,7 @@ const getActivityIcon = (type) => {
       return { icon: Settings, color: "text-orange-500 bg-orange-50 dark:bg-orange-950/20" };
     case "profile_updated":
     case "settings_updated":
+    case "client_admin_created":
       return { icon: User, color: "text-purple-500 bg-purple-50 dark:bg-purple-950/20" };
     case "website_deleted":
       return { icon: Clock, color: "text-red-500 bg-red-50 dark:bg-red-950/20" };
@@ -58,7 +60,7 @@ const getActivityIcon = (type) => {
 };
 
 export function DashboardPage() {
-  const { user } = useAuth();
+  const { user, isSuperAdmin } = useAuth();
   const { websites } = useWebsites();
   const navigate = useNavigate();
 
@@ -68,16 +70,17 @@ export function DashboardPage() {
   useEffect(() => {
     async function fetchActivityData() {
       try {
-        const logs = await activityLogService.getRecentLogs(4);
+        const websiteScope = isSuperAdmin ? null : getAccessibleWebsiteIds(user);
+        const logs = await activityLogService.getRecentLogs(4, websiteScope);
         setRecentActivity(logs);
-        const count = await activityLogService.getTotalLogsCount();
+        const count = await activityLogService.getTotalLogsCount(websiteScope);
         setTotalActivityCount(count);
       } catch (error) {
         console.error("Error fetching dashboard activity data:", error);
       }
     }
     fetchActivityData();
-  }, []);
+  }, [isSuperAdmin, user]);
 
   // Metrics
   const connectedCount = websites.filter(w => w.status === "connected").length;
@@ -128,10 +131,12 @@ export function DashboardPage() {
           </p>
         </div>
         <div className="flex gap-3">
-          <Button onClick={() => navigate("/websites/add")} variant="primary" className="gap-2">
-            <PlusCircle className="w-4 h-4" />
-            Connect Website
-          </Button>
+          {isSuperAdmin && (
+            <Button onClick={() => navigate("/websites/add")} variant="primary" className="gap-2">
+              <PlusCircle className="w-4 h-4" />
+              Connect Website
+            </Button>
+          )}
         </div>
       </motion.div>
 
@@ -227,23 +232,29 @@ export function DashboardPage() {
           {/* Quick Actions */}
           <Card title="Quick Actions">
             <div className="grid grid-cols-2 gap-3">
+              {isSuperAdmin && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigate("/websites/add")}
+                  className="flex-col gap-2 p-4 h-auto text-center"
+                >
+                  <PlusCircle className="w-5 h-5" />
+                  <span>Connect Domain</span>
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => navigate("/websites/add")}
-                className="flex-col gap-2 p-4 h-auto text-center"
-              >
-                <PlusCircle className="w-5 h-5" />
-                <span>Connect Domain</span>
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => navigate(websites[0] ? `/websites/${websites[0].id}/sdk` : "/websites")}
+                onClick={() => navigate(websites[0]
+                  ? isSuperAdmin
+                    ? `/websites/${websites[0].id}/sdk`
+                    : `/content/${websites[0].id}/pages`
+                  : "/websites")}
                 className="flex-col gap-2 p-4 h-auto text-center"
               >
                 <Terminal className="w-5 h-5" />
-                <span>Install SDK</span>
+                <span>{isSuperAdmin ? "Install SDK" : "Open Pages"}</span>
               </Button>
               <Button
                 variant="outline"

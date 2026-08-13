@@ -8,7 +8,7 @@ import { cn } from "../../utils/cn";
 import notificationService from "../../services/notificationService";
 
 export function TopBar({ setMobileOpen }) {
-  const { user, logout } = useAuth();
+  const { user, logout, isSuperAdmin } = useAuth();
   const { theme, toggleTheme, isDarkMode } = useTheme();
   const navigate = useNavigate();
   const [showNotifications, setShowNotifications] = useState(false);
@@ -16,6 +16,11 @@ export function TopBar({ setMobileOpen }) {
   const [unreadCount, setUnreadCount] = useState(0);
 
   const fetchNotifications = async () => {
+    if (!isSuperAdmin) {
+      setNotifications([]);
+      setUnreadCount(0);
+      return;
+    }
     try {
       const list = await notificationService.getAll();
       setNotifications(list);
@@ -27,7 +32,7 @@ export function TopBar({ setMobileOpen }) {
 
   useEffect(() => {
     fetchNotifications();
-  }, [user]);
+  }, [user, isSuperAdmin]);
 
   const handleLogout = () => {
     if (window.confirm("Are you sure you want to log out?")) {

@@ -1,5 +1,11 @@
 import React, { createContext, useState, useContext, useEffect } from "react";
 import authService from "../services/authService";
+import clientAdminService from "../services/clientAdminService";
+import {
+  SUPER_ADMIN_ROLE,
+  isSuperAdminUser,
+  userCanAccessWebsite
+} from "../utils/authAccess";
 
 const AuthContext = createContext(null);
 
@@ -16,7 +22,8 @@ export function AuthProvider({ children }) {
         uid: "admin_local",
         email: "admin@reactcms.local",
         name: "Admin User",
-        role: "Administrator",
+        role: SUPER_ADMIN_ROLE,
+        isSuperAdmin: true,
         company: "ReactCMS Ltd.",
         phone: "+1 (555) 019-2834"
       });
@@ -25,44 +32,45 @@ export function AuthProvider({ children }) {
       return;
     }
 
-    // Listen to Firebase Auth state changes
-    const unsubscribe = authService.onAuthChange(async (firebaseUser) => {
+    // Listen to Firebase Auth and the assigned profile. Watching the profile
+    // makes replacement client logins take effect in already-open sessions.
+    let unsubscribeProfile = null;
+    const unsubscribe = authService.onAuthChange((firebaseUser) => {
+      if (unsubscribeProfile) {
+        unsubscribeProfile();
+        unsubscribeProfile = null;
+      }
       setLoading(true);
       if (firebaseUser) {
-        try {
-          // Attempt to retrieve profile from Firestore
-          let profile = await authService.getUserProfile(firebaseUser.uid);
-          if (!profile) {
-            // First time login bootstrap: create the profile document
-            profile = await authService.createUserProfile(firebaseUser.uid, {
-              email: firebaseUser.email,
-              name: "Admin User",
-              role: "Administrator",
-              company: "ReactCMS Ltd.",
-              phone: "+1 (555) 019-2834"
-            });
+        unsubscribeProfile = authService.onUserProfileChange(firebaseUser.uid, async (profile, error) => {
+          if (error) {
+            console.error("Failed to load user profile", error);
+            setUser(null);
+            setIsAuthenticated(false);
+            setLoading(false);
+            return;
           }
-          setUser(profile);
-          setIsAuthenticated(true);
-        } catch (e) {
-          console.error("Failed to load user profile", e);
-          // Fallback to basic auth info if firestore fails temporarily
-          setUser({
-            uid: firebaseUser.uid,
-            email: firebaseUser.email,
-            name: "Admin User",
-            role: "Administrator"
-          });
-          setIsAuthenticated(true);
-        }
+          if (!profile || profile.disabled) {
+            await authService.logout();
+            setUser(null);
+            setIsAuthenticated(false);
+          } else {
+            setUser(profile);
+            setIsAuthenticated(true);
+          }
+          setLoading(false);
+        });
       } else {
         setUser(null);
         setIsAuthenticated(false);
+        setLoading(false);
       }
-      setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      if (unsubscribeProfile) unsubscribeProfile();
+      unsubscribe();
+    };
   }, []);
 
   const login = async (email, password) => {
@@ -74,7 +82,8 @@ export function AuthProvider({ children }) {
         uid: "admin_local",
         email: "admin@reactcms.local",
         name: "Admin User",
-        role: "Administrator",
+        role: SUPER_ADMIN_ROLE,
+        isSuperAdmin: true,
         company: "ReactCMS Ltd.",
         phone: "+1 (555) 019-2834"
       };
@@ -85,7 +94,9 @@ export function AuthProvider({ children }) {
 
     try {
       const result = await authService.login(email, password);
-      return { success: true, user: result.user };
+      setUser(result.profile);
+      setIsAuthenticated(true);
+      return { success: true, user: result.profile };
     } catch (error) {
       console.warn("Firebase Auth login failed, checking local credentials fallback:", error);
       
@@ -97,7 +108,9 @@ export function AuthProvider({ children }) {
       } else if (error.code === "auth/network-request-failed") {
         message = "Network error. Please check your connection.";
       } else if (error.code === "auth/user-disabled") {
-        message = "This account has been disabled.";
+        message = error.message || "This account has been disabled.";
+      } else if (error.code === "auth/profile-not-found") {
+        message = error.message;
       } else if (error.code === "auth/configuration-not-found") {
         message = "Authentication provider not enabled. Contact administrator.";
       }
@@ -120,7 +133,10 @@ export function AuthProvider({ children }) {
     if (!user || !user.uid) return { success: false, message: "No active user session." };
     try {
       const updatedData = { name, phone, company };
-      await authService.updateUserProfile(user.uid, updatedData);
+      await authService.updateUserProfile(user.uid, {
+        ...updatedData,
+        ...(user.companyId ? { companyId: user.companyId } : {})
+      });
       setUser(prev => prev ? { ...prev, ...updatedData } : null);
       return { success: true, user: { ...user, ...updatedData } };
     } catch (e) {
@@ -130,6 +146,12 @@ export function AuthProvider({ children }) {
   };
 
   const changePassword = async (currentPassword, newPassword) => {
+    if (user?.uid === "admin_local") {
+      return {
+        success: false,
+        message: "The built-in super-admin password is configured by the application and cannot be changed here."
+      };
+    }
     try {
       await authService.changePassword(currentPassword, newPassword);
       return { success: true };
@@ -147,8 +169,53 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const createClientAdmin = async (website, credentials) => {
+    if (!isSuperAdminUser(user)) {
+      return { success: false, message: "Only a super administrator can create client logins." };
+    }
+
+    try {
+      const account = await clientAdminService.create({
+        website,
+        ...credentials,
+        actorUid: user.uid
+      });
+      return { success: true, account };
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  };
+
+  const sendClientPasswordReset = async (email) => {
+    if (!isSuperAdminUser(user)) {
+      return { success: false, message: "Only a super administrator can reset client logins." };
+    }
+
+    try {
+      await clientAdminService.sendPasswordReset(email);
+      return { success: true };
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  };
+
+  const isSuperAdmin = isSuperAdminUser(user);
+  const canAccessWebsite = (websiteId) => userCanAccessWebsite(user, websiteId);
+
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated, loading, login, logout, updateProfile, changePassword }}>
+    <AuthContext.Provider value={{
+      user,
+      isAuthenticated,
+      isSuperAdmin,
+      loading,
+      login,
+      logout,
+      updateProfile,
+      changePassword,
+      createClientAdmin,
+      sendClientPasswordReset,
+      canAccessWebsite
+    }}>
       {children}
     </AuthContext.Provider>
   );

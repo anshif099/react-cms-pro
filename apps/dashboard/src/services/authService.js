@@ -7,13 +7,26 @@ import {
   reauthenticateWithCredential,
   EmailAuthProvider
 } from "firebase/auth";
-import { ref, get, set, update, serverTimestamp } from "firebase/database";
+import { ref, get, set, update, serverTimestamp, onValue } from "firebase/database";
 
 export const authService = {
   async login(email, password) {
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      return { success: true, user: userCredential.user };
+      const profile = await this.getUserProfile(userCredential.user.uid);
+      if (!profile) {
+        await signOut(auth);
+        const error = new Error("This account has not been assigned to ReactCMS.");
+        error.code = "auth/profile-not-found";
+        throw error;
+      }
+      if (profile.disabled) {
+        await signOut(auth);
+        const error = new Error("This client login has been replaced or disabled.");
+        error.code = "auth/user-disabled";
+        throw error;
+      }
+      return { success: true, user: userCredential.user, profile };
     } catch (error) {
       console.error("Login error", error);
       throw error;
@@ -43,13 +56,20 @@ export const authService = {
     return null;
   },
 
+  onUserProfileChange(uid, callback) {
+    const userRef = ref(database, `users/${uid}`);
+    return onValue(userRef, (snapshot) => {
+      callback(snapshot.exists() ? snapshot.val() : null);
+    }, (error) => callback(null, error));
+  },
+
   async createUserProfile(uid, data) {
     const userRef = ref(database, `users/${uid}`);
     const profileData = {
       uid,
       email: data.email,
       name: data.name || "Admin User",
-      role: data.role || "Administrator",
+      role: data.role || "Client Administrator",
       phone: data.phone || "",
       company: data.company || "",
       companyId: data.companyId || "default_company",
