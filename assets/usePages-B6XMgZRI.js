@@ -1,1 +1,0 @@
-import{E as e}from"./index-BoNov6hq.js";function t(){return e()}export{t};
