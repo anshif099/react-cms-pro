@@ -238,6 +238,63 @@ export function ensureSpaHtaccess(existingContent = "") {
 export const ROUTE_BOOTSTRAP_PATH = "reactcms-route-bootstrap.js";
 const DEFAULT_FIREBASE_DATABASE_URL = "https://react-cms-pro-default-rtdb.firebaseio.com";
 
+function normalizedLiveOrigin(domain) {
+  const value = String(domain || "").trim();
+  const url = new URL(value.includes("://") ? value : `https://${value}`);
+  if (url.protocol !== "https:") {
+    throw new Error("The connected website must use HTTPS before its live routes can be verified.");
+  }
+  return url.origin;
+}
+
+export async function verifyExistingLiveRouting(website) {
+  const origin = normalizedLiveOrigin(website?.domain);
+  const verificationId = Date.now().toString(36);
+  const nestedRoute = new URL(`/reactcms-route-check-${verificationId}`, origin);
+  nestedRoute.searchParams.set("rcms_route_check", verificationId);
+  const routeResponse = await fetch(
+    `/api/live-preview?probe=${encodeURIComponent(nestedRoute.toString())}`,
+    { method: "GET", cache: "no-store" }
+  );
+  const routeResult = await routeResponse.json().catch(() => null);
+  if (!routeResponse.ok || !routeResult?.ok) {
+    throw new Error(
+      routeResult?.error
+      || `The live server returned HTTP ${routeResult?.status || routeResponse.status || "unknown"} for a nested route.`
+    );
+  }
+
+  const bootstrapUrl = new URL(`/${ROUTE_BOOTSTRAP_PATH}`, origin);
+  bootstrapUrl.searchParams.set("rcms_verify", verificationId);
+  const bootstrapResponse = await fetch(
+    `/api/live-preview?asset=${encodeURIComponent(bootstrapUrl.toString())}`,
+    { method: "GET", cache: "no-store" }
+  );
+  const bootstrapSource = bootstrapResponse.ok
+    ? await bootstrapResponse.text()
+    : "";
+  const deletionGuardConfigured = Boolean(
+    bootstrapResponse.ok
+    && bootstrapSource.includes("data-reactcms-route-bootstrap")
+    && bootstrapSource.includes("data-reactcms-deleted-route")
+  );
+  if (!deletionGuardConfigured) {
+    throw new Error(
+      "The nested live route works, but the ReactCMS deleted-route guard is not installed."
+    );
+  }
+
+  return {
+    changed: false,
+    configured: true,
+    deploymentPending: false,
+    verified: true,
+    provider: website?.connection?.provider || null,
+    path: website?.connection?.spaRoutingPath || ".htaccess",
+    deletionGuardConfigured
+  };
+}
+
 function escapeHtmlAttribute(value) {
   return String(value || "")
     .replaceAll("&", "&amp;")
@@ -487,6 +544,7 @@ export function ensureReactCmsContentLoader(existingHtml = "") {
 }
 
 export const sourceProviderService = {
+  verifyExistingLiveRouting,
   async readGitHubFile(connection, filePath, token = "") {
     const repository = normalizeRepository(connection?.repository);
     const branch = connection?.branch || "main";

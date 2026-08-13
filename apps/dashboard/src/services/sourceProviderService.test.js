@@ -8,6 +8,7 @@ import sourceProviderService, {
   mergeReactCmsGitContent,
   parseReactCmsGitContent,
   routeDeletionBootstrapSource,
+  verifyExistingLiveRouting,
   versionLocalBuildAssets
 } from "./sourceProviderService";
 
@@ -443,6 +444,59 @@ describe("connected source providers", () => {
     }));
     expect(read).not.toHaveBeenCalled();
     expect(write).not.toHaveBeenCalled();
+  });
+
+  it("verifies existing customer routes without exposing hosting credentials", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({
+        ok: true,
+        status: 200,
+        url: "https://triosis.in/reactcms-route-check-test"
+      }))
+      .mockResolvedValueOnce(new Response(
+        'document.querySelector("script[data-reactcms-route-bootstrap]"); data-reactcms-deleted-route',
+        { status: 200, headers: { "Content-Type": "text/javascript" } }
+      ));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await verifyExistingLiveRouting({
+      domain: "https://triosis.in",
+      connection: { provider: "sftp", spaRoutingPath: ".htaccess" }
+    });
+
+    expect(result).toEqual(expect.objectContaining({
+      configured: true,
+      deletionGuardConfigured: true,
+      verified: true,
+      provider: "sftp",
+      path: ".htaccess"
+    }));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0][0]).toContain("%2Freactcms-route-check-");
+    expect(fetchMock.mock.calls[1][0]).toContain("reactcms-route-bootstrap.js");
+  });
+
+  it("does not trust a failed nested route probe", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(
+      jsonResponse({ ok: false, status: 404, url: "https://triosis.in/missing" })
+    ));
+
+    await expect(verifyExistingLiveRouting({
+      domain: "https://triosis.in",
+      connection: { provider: "sftp" }
+    })).rejects.toThrow("HTTP 404");
+  });
+
+  it("does not mark customer routing complete when the deletion guard is absent", async () => {
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ ok: true, status: 200 }))
+      .mockResolvedValueOnce(new Response("console.log('site asset')", { status: 200 }))
+    );
+
+    await expect(verifyExistingLiveRouting({
+      domain: "https://triosis.in",
+      connection: { provider: "sftp" }
+    })).rejects.toThrow("deleted-route guard is not installed");
   });
 
   it("commits and verifies SPA routing for a GitHub-connected Vercel site", async () => {

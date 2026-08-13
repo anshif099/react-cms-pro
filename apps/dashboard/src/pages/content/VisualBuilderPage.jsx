@@ -756,7 +756,7 @@ function ConnectedSourceWorkspace({
 
   const publishConnectedSource = async () => {
     const result = await onPublish();
-    if (result?.verified && !result?.deploymentPending) {
+    if (result?.verified && !result?.deploymentPending && !visualOnly) {
       setFrameLoading(true);
       setFrameVersion((current) => current + 1);
     }
@@ -2902,6 +2902,40 @@ export function VisualBuilderPage() {
         spaRouting = await sourceProviderService.ensureSpaRouting(sourceWebsite, {
           skipIfCredentialsUnavailable: true
         });
+        if (spaRouting.skipped) {
+          try {
+            const verifiedRouting = await sourceProviderService
+              .verifyExistingLiveRouting(sourceWebsite);
+            spaRouting = {
+              ...spaRouting,
+              ...verifiedRouting,
+              skipped: false,
+              reason: null
+            };
+
+            const nextConnection = {
+              ...sourceWebsite.connection,
+              spaRoutingConfigured: verifiedRouting.configured,
+              routeDeletionGuardConfigured: verifiedRouting.deletionGuardConfigured,
+              spaRoutingPath: verifiedRouting.path,
+              spaRoutingUpdatedAt: Date.now()
+            };
+            try {
+              const updatedWebsite = await websiteService.update(websiteId, {
+                connectionHealth: "healthy",
+                connection: nextConnection
+              });
+              setSourceWebsite(updatedWebsite);
+            } catch (statusError) {
+              // Publishing is still safe after a successful live verification.
+              // A status write failure should not force the customer to reload
+              // the working canvas or enter hosting credentials.
+              console.warn("Live routing status could not be saved", statusError);
+            }
+          } catch (verificationError) {
+            console.warn("Existing live routing could not be verified", verificationError);
+          }
+        }
       }
 
       // Firebase remains the source for page SEO even when editable content is
