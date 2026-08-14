@@ -243,7 +243,15 @@ function runtimeBootstrap(baseUrl, route, proxyOrigin) {
   var bridgeWebsiteId = "";
   var liveRegionValues = Object.create(null);
   var bridgedElementStyles = typeof WeakMap === "function" ? new WeakMap() : null;
-  try { history.replaceState(null, "", previewRoute); } catch (_) {}
+  // The upstream <base> is injected before this bootstrap so its assets keep
+  // resolving against the connected site. Resolve the virtual page route from
+  // the iframe URL explicitly; otherwise "/" follows that cross-origin base,
+  // replaceState is rejected, and the SPA renders the proxy's
+  // /api/live-preview pathname instead of the requested page.
+  try {
+    var previewHistoryUrl = new URL(previewRoute, window.location.href);
+    history.replaceState(null, "", previewHistoryUrl.toString());
+  } catch (_) {}
 
   function originalElementStyles(element) {
     if (!bridgedElementStyles) return null;

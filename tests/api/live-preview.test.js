@@ -41,6 +41,13 @@ describe("live preview HTML rewriting", () => {
     expect(result).toContain('<base href="https://triosis.vercel.app/">');
     expect(result).toContain('var previewRoute = "/contact?rcms_preview=1"');
     expect(result).toContain(
+      "var previewHistoryUrl = new URL(previewRoute, window.location.href)"
+    );
+    expect(result).toContain(
+      'history.replaceState(null, "", previewHistoryUrl.toString())'
+    );
+    expect(result).not.toContain('history.replaceState(null, "", previewRoute)');
+    expect(result).toContain(
       `src="${previewOrigin}${previewAssetUrl("/assets/app.js", "https://triosis.vercel.app/")}"`
     );
     expect(result.indexOf("previewRoute")).toBeLessThan(result.indexOf('type="module"'));
