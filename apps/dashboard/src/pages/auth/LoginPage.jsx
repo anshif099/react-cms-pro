@@ -59,19 +59,18 @@ export function LoginPage() {
       >
         {/* Brand */}
         <div className="flex flex-col items-center mb-8 text-center select-none">
-          <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-primary text-white font-black text-xl mb-3 shadow-md shadow-primary/30">
-            RC
-          </div>
-          <h2 className="text-2xl font-black text-admin-text tracking-tight">
-            ReactCMS <span className="text-primary font-black uppercase text-xs bg-primary/10 px-2 py-0.5 rounded-full ml-1">Pro</span>
-          </h2>
+          <img
+            src="/logo.png"
+            alt="Rocket Kit - Content Infrastructure for React"
+            className="mb-4 w-full max-w-xs rounded-2xl bg-white shadow-xl shadow-slate-950/10"
+          />
           <p className="text-sm text-admin-secondary mt-1">Super-admin and website client access</p>
         </div>
 
         <Card className="shadow-xl">
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
             <h3 className="text-lg font-bold text-admin-text text-left border-b border-admin-border dark:border-slate-800 pb-3">
-              ReactCMS Login
+              Rocket Kit Login
             </h3>
 
             {errorMsg && (

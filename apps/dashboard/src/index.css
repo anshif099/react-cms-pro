@@ -1,20 +1,72 @@
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 @import "tailwindcss";
 
 @theme {
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
-  
-  --color-primary: #2271B1;
-  --color-primary-hover: #135E96;
-  --color-sidebar: #1D2327;
-  --color-admin-bg: #F6F7F7;
+
+  /* Rocket Kit brand palette, sampled from public/logo.png. */
+  --color-brand-coral: #EF493D;
+  --color-brand-navy: #091832;
+  --color-brand-charcoal: #3A3A3C;
+
+  --color-primary: #EF493D;
+  --color-primary-hover: #D83B31;
+  --color-sidebar: #091832;
+  --color-admin-bg: #F7F8FA;
   --color-admin-card: #FFFFFF;
-  --color-admin-border: #DCDCDE;
-  --color-admin-text: #1E1E1E;
-  --color-admin-secondary: #50575E;
-  --color-admin-success: #00A32A;
-  --color-admin-warning: #DBA617;
-  --color-admin-danger: #D63638;
+  --color-admin-border: #DCE2E9;
+  --color-admin-text: #091832;
+  --color-admin-secondary: #526077;
+  --color-admin-success: #168A5B;
+  --color-admin-warning: #C17A10;
+  --color-admin-danger: #C9342B;
+
+  /* Navy neutrals replace the previous blue-slate interface surfaces. */
+  --color-slate-50: #F7F9FC;
+  --color-slate-100: #EEF2F7;
+  --color-slate-200: #DCE3EC;
+  --color-slate-300: #BCC8D8;
+  --color-slate-350: #A5B3C5;
+  --color-slate-400: #8493A8;
+  --color-slate-500: #627188;
+  --color-slate-600: #46556C;
+  --color-slate-650: #38475E;
+  --color-slate-700: #293950;
+  --color-slate-800: #152642;
+  --color-slate-805: #13233D;
+  --color-slate-850: #0E1E37;
+  --color-slate-900: #091832;
+  --color-slate-950: #050D1C;
+
+  /* Existing blue/purple utility accents now follow the coral brand family. */
+  --color-blue-50: #FFF4F2;
+  --color-blue-200: #FBCBC6;
+  --color-blue-300: #F7AAA3;
+  --color-blue-400: #F36C61;
+  --color-blue-500: #EF493D;
+  --color-blue-600: #D83B31;
+  --color-blue-700: #B82E27;
+  --color-blue-800: #952720;
+  --color-blue-900: #7B2621;
+  --color-blue-950: #43100D;
+  --color-indigo-400: #F36C61;
+  --color-indigo-500: #EF493D;
+  --color-indigo-950: #43100D;
+  --color-violet-100: #FFF0EE;
+  --color-violet-200: #FBCBC6;
+  --color-violet-300: #F7AAA3;
+  --color-violet-400: #F36C61;
+  --color-violet-500: #EF493D;
+  --color-violet-600: #D83B31;
+  --color-violet-950: #43100D;
+  --color-purple-50: #FFF4F2;
+  --color-purple-400: #F36C61;
+  --color-purple-500: #EF493D;
+  --color-purple-950: #43100D;
+  --color-cyan-200: #FBCBC6;
+  --color-cyan-400: #F36C61;
+  --color-cyan-500: #EF493D;
+  --color-sky-300: #F7AAA3;
 }
 
 @layer base {
@@ -33,26 +85,26 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #C4C4C6;
+  background: #BCC8D8;
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #A0A0A2;
+  background: #8493A8;
 }
 
 /* Dark mode custom overrides */
 .dark {
-  --color-admin-bg: #0F172A;
-  --color-admin-card: #1E293B;
-  --color-admin-border: #334155;
-  --color-admin-text: #F8FAFC;
-  --color-admin-secondary: #94A3B8;
-  --color-sidebar: #0F172A;
+  --color-admin-bg: #050D1C;
+  --color-admin-card: #091832;
+  --color-admin-border: #293950;
+  --color-admin-text: #F7F9FC;
+  --color-admin-secondary: #A5B3C5;
+  --color-sidebar: #050D1C;
   
   ::-webkit-scrollbar-thumb {
-    background: #475569;
+    background: #38475E;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: #64748B;
+    background: #627188;
   }
 }

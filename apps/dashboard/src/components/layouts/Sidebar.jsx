@@ -78,14 +78,13 @@ export function Sidebar({ mobileOpen, setMobileOpen }) {
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        {/* Brand Logo */}
-        <div className="flex items-center gap-3.5 h-16 px-6 border-b border-slate-800">
-          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary text-white font-black text-sm select-none">
-            RC
-          </div>
-          <div>
-            <h1 className="font-extrabold text-base tracking-tight select-none">ReactCMS <span className="text-primary text-[10px] font-black uppercase bg-primary/20 px-1.5 py-0.5 rounded-full ml-1.5">Pro</span></h1>
-          </div>
+        {/* Rocket Kit brand */}
+        <div className="flex h-24 items-center justify-center border-b border-slate-800 px-5 py-2">
+          <img
+            src="/logo.png"
+            alt="Rocket Kit - Content Infrastructure for React"
+            className="max-h-20 w-full rounded-xl bg-white object-contain shadow-lg shadow-slate-950/30"
+          />
         </div>
 
         {/* Navigation Items */}
