@@ -1,0 +1,1 @@
+import{D as e}from"./index-CqpNLUXD.js";function t(){return e()}export{t};

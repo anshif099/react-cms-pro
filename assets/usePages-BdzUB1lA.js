@@ -1,1 +1,0 @@
-import{D as e}from"./index-B2IOyVgn.js";function t(){return e()}export{t};
