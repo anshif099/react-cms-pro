@@ -17,6 +17,7 @@ export type {
   ComponentNode,
   ComponentRegistry,
   DropPosition,
+  InsertContentData,
   PageComponentTree,
   RegisteredRendererComponent,
   RendererComponentProps,

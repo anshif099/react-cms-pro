@@ -27,6 +27,7 @@ import {
 import type {
   ComponentNode,
   DropPosition,
+  InsertContentData,
   PageComponentTree,
   RendererMutation,
 } from '@anshif.rainhopes/reactcms-renderer';
@@ -214,6 +215,7 @@ function makeRuntimeNode(
   type: string,
   locale: string,
   placement: RuntimePlacement = { position: 'footer' },
+  content?: InsertContentData,
 ): ComponentNode {
   const safeType = type || 'section';
   const id = `${safeType.replace(/[^a-zA-Z0-9_-]/g, '_')}_${Date.now().toString(36)}`;
@@ -223,10 +225,14 @@ function makeRuntimeNode(
     type: safeType,
     label: safeType.split('-').map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`).join(' '),
     props: {
+      ...(content?.props || {}),
       locales: {
-        [locale]: field
+        [locale]: {
+          ...(field
           ? { label: 'New field', placeholder: 'Enter a value' }
-          : { title: 'New section', text: 'Double-click this text to edit it.' },
+          : { title: 'New section', text: 'Double-click this text to edit it.' }),
+          ...(content?.localized || {}),
+        },
       },
       design: {},
     },
@@ -325,8 +331,8 @@ function RuntimeAdditionsPortal({
     });
   }, [onTreeChange, pageId, websiteId]);
 
-  const addNode = useCallback((componentType = 'section', targetId = '', position: DropPosition = 'after') => {
-    const addition = makeRuntimeNode(componentType, locale, placement);
+  const addNode = useCallback((componentType = 'section', targetId = '', position: DropPosition = 'after', content?: InsertContentData) => {
+    const addition = makeRuntimeNode(componentType, locale, placement, content);
     const children = targetId
       ? insertNode(tree.children, targetId, position, addition)
       : [...tree.children, addition];

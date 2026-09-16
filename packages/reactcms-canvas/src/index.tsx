@@ -9,6 +9,7 @@ import {
 } from '@anshif.rainhopes/reactcms-renderer';
 import type {
   DropPosition,
+  InsertContentData,
   RendererMutation,
   ResponsiveMode,
   RuntimeRendererProps,
@@ -46,7 +47,12 @@ export interface NativeCanvasProps {
   onHover?: RuntimeRendererProps['onHover'];
   onMutation?: (mutation: RendererMutation) => void;
   onMove?: RuntimeRendererProps['onMove'];
-  onInsert?: (componentType: string, targetId: string | null, position: DropPosition) => void;
+  onInsert?: (
+    componentType: string,
+    targetId: string | null,
+    position: DropPosition,
+    content?: InsertContentData,
+  ) => void;
   onCommand?: RuntimeRendererProps['onCommand'];
   emptyState?: React.ReactNode;
   className?: string;
@@ -271,7 +277,7 @@ export const NativeCanvas = forwardRef<NativeCanvasHandle, NativeCanvasProps>(fu
             onHover={onHover}
             onMutation={onMutation}
             onMove={onMove}
-            onInsert={(type, targetId, position) => onInsert?.(type, targetId, position)}
+            onInsert={(type, targetId, position, content) => onInsert?.(type, targetId, position, content)}
             onCommand={onCommand}
           />
 

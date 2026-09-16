@@ -51,6 +51,11 @@ export interface RendererMutation {
   value: unknown;
 }
 
+export interface InsertContentData {
+  props?: Record<string, any>;
+  localized?: Record<string, any>;
+}
+
 export interface RendererComponentProps {
   node: ComponentNode;
   locale: string;
@@ -81,7 +86,12 @@ export interface RuntimeRendererProps {
   onHover?: (nodeId: string | null) => void;
   onMutation?: (mutation: RendererMutation) => void;
   onMove?: (nodeId: string, targetId: string, position: DropPosition) => void;
-  onInsert?: (componentType: string, targetId: string, position: DropPosition) => void;
+  onInsert?: (
+    componentType: string,
+    targetId: string,
+    position: DropPosition,
+    content?: InsertContentData,
+  ) => void;
   onCommand?: (command: string, nodeId: string) => void;
 }
 

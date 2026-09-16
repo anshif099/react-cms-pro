@@ -572,6 +572,11 @@ function NodeFrame({
   responsiveMode: ResponsiveMode;
   children: React.ReactNode;
 }) {
+  const [insertPosition, setInsertPosition] = useState<DropPosition | null>(null);
+  const [insertType, setInsertType] = useState<'paragraph' | 'image' | 'video'>('paragraph');
+  const [insertText, setInsertText] = useState('');
+  const [insertUrl, setInsertUrl] = useState('');
+  const [insertAlt, setInsertAlt] = useState('');
   const [dropPosition, setDropPosition] = useState<DropPosition | null>(null);
   if (node.hidden && mode !== 'edit') return null;
 
@@ -699,7 +704,7 @@ function NodeFrame({
               onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
-                onInsert('section', node.id, position);
+                setInsertPosition(position);
               }}
               style={{
                 position: 'absolute',
@@ -722,6 +727,112 @@ function NodeFrame({
             </button>
           ))}
         </>
+      )}
+
+      {insertPosition && editable && onInsert && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Add content"
+          onClick={(event) => event.stopPropagation()}
+          style={{
+            position: 'fixed',
+            zIndex: 5000,
+            inset: 0,
+            display: 'grid',
+            placeItems: 'center',
+            padding: '20px',
+            background: 'rgba(2,6,23,.72)',
+            backdropFilter: 'blur(5px)',
+          }}
+        >
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              const url = insertUrl.trim();
+              const value = insertText.trim();
+              if (insertType === 'paragraph' && !value) return;
+              if (insertType !== 'paragraph' && !url) return;
+              onInsert(
+                insertType,
+                node.id,
+                insertPosition,
+                insertType === 'paragraph'
+                  ? { localized: { text: `<p>${value.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br />')}</p>` } }
+                  : insertType === 'image'
+                    ? { props: { src: url, width: '100%', height: 'auto', objectFit: 'cover' }, localized: { alt: insertAlt.trim() } }
+                    : { props: { url, controls: true }, localized: { caption: insertAlt.trim() } },
+              );
+              setInsertPosition(null);
+              setInsertText('');
+              setInsertUrl('');
+              setInsertAlt('');
+            }}
+            style={{
+              width: 'min(520px, 100%)',
+              padding: '22px',
+              border: '1px solid #334155',
+              borderRadius: '18px',
+              background: '#0f172a',
+              color: '#f8fafc',
+              boxShadow: '0 28px 80px rgba(0,0,0,.5)',
+              font: '500 14px Inter,system-ui,sans-serif',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
+              <div>
+                <div style={{ fontSize: '18px', fontWeight: 800 }}>Add content</div>
+                <div style={{ marginTop: '4px', color: '#94a3b8', fontSize: '12px' }}>It will be inserted {insertPosition} this section.</div>
+              </div>
+              <button type="button" aria-label="Close" onClick={() => setInsertPosition(null)} style={{ width: '32px', height: '32px', border: 0, borderRadius: '8px', background: '#1e293b', color: '#cbd5e1', cursor: 'pointer', fontSize: '18px' }}>×</button>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', margin: '20px 0' }}>
+              {(['paragraph', 'image', 'video'] as const).map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => setInsertType(type)}
+                  style={{
+                    height: '42px',
+                    border: `1px solid ${insertType === type ? '#60a5fa' : '#334155'}`,
+                    borderRadius: '10px',
+                    background: insertType === type ? '#1d4ed8' : '#111827',
+                    color: '#fff',
+                    cursor: 'pointer',
+                    fontWeight: 700,
+                    textTransform: 'capitalize',
+                  }}
+                >
+                  {type === 'paragraph' ? 'Text' : type}
+                </button>
+              ))}
+            </div>
+
+            {insertType === 'paragraph' ? (
+              <label style={{ display: 'grid', gap: '7px', color: '#cbd5e1', fontWeight: 700 }}>
+                Text
+                <textarea autoFocus required rows={6} value={insertText} onChange={(event) => setInsertText(event.target.value)} placeholder="Write the text to add to this page…" style={{ padding: '12px 14px', border: '1px solid #334155', borderRadius: '10px', background: '#020617', color: '#f8fafc', font: 'inherit', lineHeight: 1.6, resize: 'vertical' }} />
+              </label>
+            ) : (
+              <div style={{ display: 'grid', gap: '14px' }}>
+                <label style={{ display: 'grid', gap: '7px', color: '#cbd5e1', fontWeight: 700 }}>
+                  {insertType === 'image' ? 'Image URL' : 'Video URL'}
+                  <input autoFocus required type="url" value={insertUrl} onChange={(event) => setInsertUrl(event.target.value)} placeholder={`https://example.com/${insertType === 'image' ? 'image.jpg' : 'video.mp4'}`} style={{ height: '44px', padding: '0 13px', border: '1px solid #334155', borderRadius: '10px', background: '#020617', color: '#f8fafc', font: 'inherit' }} />
+                </label>
+                <label style={{ display: 'grid', gap: '7px', color: '#cbd5e1', fontWeight: 700 }}>
+                  {insertType === 'image' ? 'Alt text' : 'Caption'} <span style={{ color: '#64748b', fontWeight: 500 }}>(optional)</span>
+                  <input value={insertAlt} onChange={(event) => setInsertAlt(event.target.value)} style={{ height: '44px', padding: '0 13px', border: '1px solid #334155', borderRadius: '10px', background: '#020617', color: '#f8fafc', font: 'inherit' }} />
+                </label>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '9px', marginTop: '22px' }}>
+              <button type="button" onClick={() => setInsertPosition(null)} style={{ height: '40px', padding: '0 16px', border: '1px solid #334155', borderRadius: '10px', background: 'transparent', color: '#cbd5e1', cursor: 'pointer', fontWeight: 700 }}>Cancel</button>
+              <button type="submit" style={{ height: '40px', padding: '0 18px', border: 0, borderRadius: '10px', background: '#2563eb', color: '#fff', cursor: 'pointer', fontWeight: 800 }}>Add to page</button>
+            </div>
+          </form>
+        </div>
       )}
 
       {selected && editable && (

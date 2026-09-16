@@ -1881,9 +1881,22 @@ function NativeBuilderWorkspace({
     </div>
   ) : null;
 
-  const addNode = useCallback((type, targetId = null, position = "after") => {
+  const addNode = useCallback((type, targetId = null, position = "after", content) => {
     const node = createVisualNode(type, locale);
     if (!node) return;
+    if (content?.props) node.props = { ...(node.props || {}), ...content.props };
+    if (content?.localized) {
+      node.props = {
+        ...(node.props || {}),
+        locales: {
+          ...(node.props?.locales || {}),
+          [locale]: {
+            ...(node.props?.locales?.[locale] || {}),
+            ...content.localized
+          }
+        }
+      };
+    }
     editor.insert(node, targetId, position, `Add ${type}`);
   }, [editor, locale]);
 
