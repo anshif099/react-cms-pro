@@ -162,6 +162,15 @@ function updateTreeNode(nodes = [], nodeId, updater) {
     : { ...node, children: updateTreeNode(node.children || [], nodeId, updater) });
 }
 
+function lastTreeNode(nodes = []) {
+  for (let index = nodes.length - 1; index >= 0; index -= 1) {
+    const nested = lastTreeNode(nodes[index]?.children || []);
+    if (nested) return nested;
+    if (nodes[index]) return nodes[index];
+  }
+  return null;
+}
+
 function ConnectedInsertContentModal({ locale, clipboard, onCancel, onSubmit }) {
   const [type, setType] = useState("paragraph");
   const [text, setText] = useState("");
@@ -1021,7 +1030,12 @@ function ConnectedSourceWorkspace({
     const textColor = textStyleValue.color || selectedComputedStyle.color || "#0f172a";
     const safeTextColor = /^#[0-9a-f]{6}$/i.test(textColor) ? textColor : "#0f172a";
     const copySelectedComponent = () => {
-      const copied = selectedRegion.type === "image"
+      const runtimeNode = isPageComponentTree(value)
+        ? (selectedRegion.componentId ? findNode(value, selectedRegion.componentId) : lastTreeNode(value.children))
+        : null;
+      const copied = runtimeNode
+        ? { ...structuredClone(runtimeNode), id: undefined, metadata: undefined, children: structuredClone(runtimeNode.children || []) }
+        : selectedRegion.type === "image"
         ? { type: "image", props: typeof value === "object" ? structuredClone(value) : { src: String(value || "") } }
         : selectedRegion.type === "video"
           ? { type: "video", props: typeof value === "object" ? structuredClone(value) : { url: String(value || ""), controls: true } }
@@ -1030,12 +1044,19 @@ function ConnectedSourceWorkspace({
       localStorage.setItem(clipboardKey, JSON.stringify(copied));
     };
     const addBelowSelected = () => {
-      const tree = runtimeAdditionsRef.current;
+      const selectedTree = isPageComponentTree(value) ? value : null;
+      const tree = selectedTree || runtimeAdditionsRef.current;
+      if (selectedTree) runtimeAdditionsRef.current = selectedTree;
       const nodeId = `section_${Date.now().toString(36)}`;
+      const selectedRuntimeNode = selectedTree
+        ? (selectedRegion.componentId ? findNode(selectedTree, selectedRegion.componentId) : lastTreeNode(selectedTree.children))
+        : null;
       const placeholder = {
         id: nodeId, type: "section", label: "Section",
         props: { locales: { [locale]: { title: "New section" } } }, children: [],
-        metadata: { runtimePlacement: { anchorRegionId: selectedRegion.regionId, position: "after" } }
+        metadata: selectedRuntimeNode?.metadata
+          ? structuredClone(selectedRuntimeNode.metadata)
+          : { runtimePlacement: { anchorRegionId: selectedRegion.regionId, position: "after" } }
       };
       const nextTree = { ...tree, children: [...tree.children, placeholder] };
       setPendingRuntimeInsert({ tree: nextTree, nodeId, payload: { regionId: RUNTIME_ADDITIONS_REGION, pageId: canvasRuntimePageId, value: nextTree } });
