@@ -1027,6 +1027,20 @@ function ConnectedSourceWorkspace({
       || selectedComputedStyle.fontSize
       || "";
     const numericFontSize = String(inheritedFontSize).match(/[\d.]+/)?.[0] || "";
+    const lineHeightField = device === "mobile"
+      ? "lineHeightMobile"
+      : device === "tablet"
+        ? "lineHeightTablet"
+        : "lineHeight";
+    const configuredLineHeight = textStyleValue[lineHeightField]
+      || textStyleValue.lineHeight;
+    const computedLineHeight = Number.parseFloat(selectedComputedStyle.lineHeight);
+    const computedFontSize = Number.parseFloat(selectedComputedStyle.fontSize);
+    const numericLineHeight = configuredLineHeight
+      ? String(configuredLineHeight).match(/[\d.]+/)?.[0] || ""
+      : Number.isFinite(computedLineHeight) && Number.isFinite(computedFontSize) && computedFontSize > 0
+        ? (computedLineHeight / computedFontSize).toFixed(2)
+        : "1.2";
     const letterSpacingField = device === "mobile"
       ? "letterSpacingMobile"
       : device === "tablet"
@@ -1128,6 +1142,39 @@ function ConnectedSourceWorkspace({
                         className="h-9 min-w-0 flex-1 rounded-lg border border-slate-800 bg-[#070b14] px-3 font-mono text-xs text-slate-200 outline-none focus:border-blue-500"
                       />
                     </div>
+                  </label>
+
+                  <label className="block">
+                    <span className="flex items-center justify-between text-[10px] font-semibold text-slate-500">
+                      Line height
+                      <span className="text-[9px] font-normal text-blue-400">
+                        {device === "mobile" ? "Mobile" : device === "tablet" ? "Tablet" : "Desktop"}
+                      </span>
+                    </span>
+                    <div className="mt-1.5 flex items-center gap-2">
+                      <input
+                        type="number"
+                        min="0.8"
+                        max="3"
+                        step="0.05"
+                        value={numericLineHeight}
+                        onChange={(event) => updateSelectedField(
+                          lineHeightField,
+                          event.target.value || ""
+                        )}
+                        className="h-9 min-w-0 flex-1 rounded-lg border border-slate-800 bg-[#070b14] px-3 text-xs text-slate-200 outline-none focus:border-blue-500"
+                      />
+                      <span className="text-[10px] font-bold text-slate-600">×</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0.8"
+                      max="3"
+                      step="0.05"
+                      value={Math.min(3, Math.max(0.8, Number(numericLineHeight) || 1.2))}
+                      onChange={(event) => updateSelectedField(lineHeightField, event.target.value)}
+                      className="mt-2 h-1.5 w-full cursor-pointer accent-blue-500"
+                    />
                   </label>
 
                   <label className="block">

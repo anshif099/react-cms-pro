@@ -73,6 +73,12 @@ export function EditableText({
 
     if (value.fontWeight) textStyle.fontWeight = value.fontWeight;
     if (value.color) textStyle.color = value.color;
+    const resolvedLineHeight = vw < 768
+      ? value.lineHeightMobile || value.lineHeightTablet || value.lineHeight
+      : vw < 1024
+        ? value.lineHeightTablet || value.lineHeight
+        : value.lineHeight;
+    if (resolvedLineHeight) textStyle.lineHeight = resolvedLineHeight;
     const resolvedLetterSpacing = vw < 768
       ? value.letterSpacingMobile || value.letterSpacingTablet || value.letterSpacing
       : vw < 1024
