@@ -557,6 +557,32 @@ export function BuilderSections({
   }, [apiKey, editMode, locale, pageId, websiteId]);
 
   useEffect(() => MessageBus.subscribe((message) => {
+    if (message.type === 'rcms/v1/insert-content') {
+      const payload = message.payload as {
+        pageId?: string;
+        anchorRegionId?: string;
+        position?: DropPosition;
+        componentType?: string;
+        content?: InsertContentData;
+      };
+      if (!payload?.anchorRegionId || (payload.pageId && payload.pageId !== pageId)) return;
+      setRuntimeAdditions((current) => {
+        const base = current || createRuntimeAdditionsTree(pageId, locale);
+        const placement: RuntimePlacement = {
+          anchorRegionId: payload.anchorRegionId,
+          position: payload.position || 'after',
+        };
+        const addition = makeRuntimeNode(payload.componentType || 'paragraph', locale, placement, payload.content);
+        const next = { ...base, children: [...base.children, addition] };
+        queueMicrotask(() => MessageBus.send('rcms/v1/field-update', websiteId, {
+          pageId,
+          regionId: RUNTIME_ADDITIONS_REGION,
+          value: next,
+        }));
+        return next;
+      });
+      return;
+    }
     if (message.type !== 'rcms/v1/field-update') return;
     const payload = message.payload as {
       pageId?: string;
@@ -570,7 +596,7 @@ export function BuilderSections({
     ) {
       setRuntimeAdditions(payload.value);
     }
-  }), [pageId]);
+  }), [locale, pageId, websiteId]);
 
   const additionsTree = runtimeAdditions || createRuntimeAdditionsTree(pageId, locale);
   const additionGroups = useMemo(() => {

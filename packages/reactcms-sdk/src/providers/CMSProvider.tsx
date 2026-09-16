@@ -6,6 +6,7 @@ import { NavigationContext } from '../context/NavigationContext';
 import { SEOContext } from '../context/SEOContext';
 import { Page, ThemeTokens, NavMenu, PageSEO } from '@anshif.rainhopes/shared';
 import { MessageBus } from '../messaging/MessageBus';
+import { InsertContentOverlay } from '../components/InsertContentOverlay';
 
 export interface CMSProviderProps {
   websiteId: string;
@@ -105,6 +106,7 @@ export function CMSProvider({
           <NavigationContext.Provider value={{ menus, setMenus }}>
             <SEOContext.Provider value={{ seo, setSEO }}>
               {children}
+              <InsertContentOverlay websiteId={websiteId} enabled={editMode} />
             </SEOContext.Provider>
           </NavigationContext.Provider>
         </ThemeContext.Provider>
