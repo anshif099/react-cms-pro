@@ -1,1 +1,0 @@
-import{D as e}from"./index-CeByyUtP.js";function t(){return e()}export{t};

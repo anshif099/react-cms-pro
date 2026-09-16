@@ -1,0 +1,1 @@
+import{D as e}from"./index-BhMKB4wL.js";function t(){return e()}export{t};
