@@ -1,11 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { MessageBus } from '../messaging/MessageBus';
 
-type Selection = { regionId: string; pageId: string; type?: string; value?: any; label?: string };
+type Selection = { regionId: string; pageId: string; type?: string; value?: any; label?: string; html?: string };
 type InsertType = 'paragraph' | 'image' | 'video';
 
 function selectionContent(selection: Selection) {
   const value = selection.value;
+  if (selection.type === 'section' && selection.html) {
+    const cleanMarkup = selection.html
+      .replace(/\sdata-rcms-(?:region|type|label)="[^"]*"/g, '')
+      .replace(/\srcms-editable-[\w-]+/g, '')
+      .replace(/\sstyle="([^"]*)outline:[^;\"]*;?([^\"]*)"/g, ' style="$1$2"');
+    return { componentType: 'html', content: { props: { code: cleanMarkup } } };
+  }
   if (selection.type === 'image') {
     const props = typeof value === 'object' ? value : { src: String(value || '') };
     return { componentType: 'image', content: { props } };
@@ -30,7 +37,17 @@ export function InsertContentOverlay({ websiteId, enabled }: { websiteId: string
   const [text, setText] = useState('');
   const [url, setUrl] = useState('');
   const [description, setDescription] = useState('');
-  const [clipboard, setClipboard] = useState<ReturnType<typeof selectionContent> | null>(null);
+  const clipboardKey = `reactcms_component_clipboard:${websiteId}`;
+  const [clipboard, setClipboard] = useState<ReturnType<typeof selectionContent> | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try { return JSON.parse(window.localStorage.getItem(clipboardKey) || 'null'); } catch { return null; }
+  });
+
+  const copySelection = () => {
+    const copied = selectionContent(selection!);
+    setClipboard(copied);
+    try { window.localStorage.setItem(clipboardKey, JSON.stringify(copied)); } catch { /* Browser storage may be unavailable. */ }
+  };
 
   useEffect(() => MessageBus.subscribe((message) => {
     if (message.type !== 'rcms/v1/region-selected') return;
@@ -71,7 +88,7 @@ export function InsertContentOverlay({ websiteId, enabled }: { websiteId: string
   return (
     <>
       <div style={{ position: 'fixed', zIndex: 2147483000, left: position.left, top: position.top, transform: 'translate(-50%, -50%)', display: 'flex', gap: '6px' }}>
-        <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setClipboard(selectionContent(selection)); }} style={{ height: '28px', padding: '0 10px', border: '1px solid #475569', borderRadius: '999px', background: '#0f172a', color: '#fff', boxShadow: '0 6px 20px rgba(15,23,42,.35)', cursor: 'pointer', font: '700 10px Inter,system-ui,sans-serif', whiteSpace: 'nowrap' }}>{clipboard ? '✓ Copied' : 'Copy'}</button>
+        <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); copySelection(); }} style={{ height: '28px', padding: '0 10px', border: '1px solid #475569', borderRadius: '999px', background: '#0f172a', color: '#fff', boxShadow: '0 6px 20px rgba(15,23,42,.35)', cursor: 'pointer', font: '700 10px Inter,system-ui,sans-serif', whiteSpace: 'nowrap' }}>{clipboard ? '✓ Copied' : 'Copy'}</button>
         <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setOpen(true); }} style={{ height: '28px', padding: '0 12px', border: '1px solid #93c5fd', borderRadius: '999px', background: '#2563eb', color: '#fff', boxShadow: '0 6px 20px rgba(37,99,235,.4)', cursor: 'pointer', font: '700 10px Inter,system-ui,sans-serif', whiteSpace: 'nowrap' }}>+ Add below</button>
       </div>
 

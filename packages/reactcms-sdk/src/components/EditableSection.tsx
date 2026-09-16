@@ -53,6 +53,8 @@ export function EditableSection({
         type: 'section',
         pageId,
         value,
+        html: (e.currentTarget as HTMLElement).outerHTML,
+        label,
         additive: e.metaKey || e.ctrlKey || e.shiftKey,
       });
       MessageBus.send('rcms/v1/open-inspector', cms.websiteId, {
