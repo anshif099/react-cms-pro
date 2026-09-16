@@ -1027,6 +1027,16 @@ function ConnectedSourceWorkspace({
       || selectedComputedStyle.fontSize
       || "";
     const numericFontSize = String(inheritedFontSize).match(/[\d.]+/)?.[0] || "";
+    const letterSpacingField = device === "mobile"
+      ? "letterSpacingMobile"
+      : device === "tablet"
+        ? "letterSpacingTablet"
+        : "letterSpacing";
+    const inheritedLetterSpacing = textStyleValue[letterSpacingField]
+      || textStyleValue.letterSpacing
+      || selectedComputedStyle.letterSpacing
+      || "";
+    const numericLetterSpacing = String(inheritedLetterSpacing).match(/-?[\d.]+/)?.[0] || "";
     const textColor = textStyleValue.color || selectedComputedStyle.color || "#0f172a";
     const safeTextColor = /^#[0-9a-f]{6}$/i.test(textColor) ? textColor : "#0f172a";
     const copySelectedComponent = () => {
@@ -1149,6 +1159,39 @@ function ConnectedSourceWorkspace({
                       step="1"
                       value={Math.min(120, Math.max(8, Number(numericFontSize) || 16))}
                       onChange={(event) => updateSelectedField(fontSizeField, `${event.target.value}px`)}
+                      className="mt-2 h-1.5 w-full cursor-pointer accent-blue-500"
+                    />
+                  </label>
+
+                  <label className="block">
+                    <span className="flex items-center justify-between text-[10px] font-semibold text-slate-500">
+                      Letter spacing
+                      <span className="text-[9px] font-normal text-blue-400">
+                        {device === "mobile" ? "Mobile" : device === "tablet" ? "Tablet" : "Desktop"}
+                      </span>
+                    </span>
+                    <div className="mt-1.5 flex items-center gap-2">
+                      <input
+                        type="number"
+                        min="-10"
+                        max="30"
+                        step="0.1"
+                        value={numericLetterSpacing}
+                        onChange={(event) => updateSelectedField(
+                          letterSpacingField,
+                          event.target.value ? `${event.target.value}px` : ""
+                        )}
+                        className="h-9 min-w-0 flex-1 rounded-lg border border-slate-800 bg-[#070b14] px-3 text-xs text-slate-200 outline-none focus:border-blue-500"
+                      />
+                      <span className="text-[10px] font-bold text-slate-600">px</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="-10"
+                      max="30"
+                      step="0.1"
+                      value={Math.min(30, Math.max(-10, Number(numericLetterSpacing) || 0))}
+                      onChange={(event) => updateSelectedField(letterSpacingField, `${event.target.value}px`)}
                       className="mt-2 h-1.5 w-full cursor-pointer accent-blue-500"
                     />
                   </label>

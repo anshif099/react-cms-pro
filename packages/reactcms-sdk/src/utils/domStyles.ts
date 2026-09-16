@@ -7,6 +7,7 @@ export interface ElementComputedStyle {
   maxWidth?: string;
   whiteSpace?: string;
   lineHeight?: string;
+  letterSpacing?: string;
 }
 
 export function rgbToHex(colorStr: string): string | null {
@@ -34,6 +35,7 @@ export function getElementComputedStyle(el: HTMLElement | null): ElementComputed
       maxWidth: cs.maxWidth,
       whiteSpace: cs.whiteSpace,
       lineHeight: cs.lineHeight,
+      letterSpacing: cs.letterSpacing,
     };
   } catch {
     return {};

@@ -311,6 +311,12 @@ function runtimeBootstrap(baseUrl, route, proxyOrigin) {
         : value.fontSize;
     var hasFontSize = typeof responsiveFontSize === "string" && responsiveFontSize.length > 0;
     var hasFontWeight = typeof value.fontWeight === "string" || typeof value.fontWeight === "number";
+    var responsiveLetterSpacing = window.innerWidth < 768
+      ? value.letterSpacingMobile || value.letterSpacingTablet || value.letterSpacing
+      : window.innerWidth < 1024
+        ? value.letterSpacingTablet || value.letterSpacing
+        : value.letterSpacing;
+    var hasLetterSpacing = typeof responsiveLetterSpacing === "string" && responsiveLetterSpacing.length > 0;
     var responsiveAlign = window.innerWidth < 768
       ? value.alignMobile || value.alignTablet || value.align
       : window.innerWidth < 1024
@@ -326,6 +332,7 @@ function runtimeBootstrap(baseUrl, route, proxyOrigin) {
     setBridgedStyle(element, "color", value.color, hasColor);
     setBridgedStyle(element, "font-size", responsiveFontSize, hasFontSize);
     setBridgedStyle(element, "font-weight", value.fontWeight, hasFontWeight);
+    setBridgedStyle(element, "letter-spacing", responsiveLetterSpacing, hasLetterSpacing);
     setBridgedStyle(element, "text-align", responsiveAlign, hasTextAlign);
   }
 
