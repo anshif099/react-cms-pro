@@ -3,7 +3,6 @@ import React, {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from 'react';
 import { createPortal } from 'react-dom';
@@ -34,6 +33,7 @@ import type {
 
 export const BUILDER_BLOCKS_REGION = '__rcms_builder_blocks__';
 export const NATIVE_PAGE_TREE_FIELD = 'tree';
+let runtimeComponentClipboard: ComponentNode | null = null;
 
 function resolvePageId(): string {
   if (typeof window === 'undefined') return 'home';
@@ -267,7 +267,6 @@ function RuntimeAdditionsPortal({
   const [host, setHost] = useState<HTMLElement | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
-  const clipboard = useRef<ComponentNode | null>(null);
 
   useEffect(() => {
     if (typeof document === 'undefined') return undefined;
@@ -377,11 +376,11 @@ function RuntimeAdditionsPortal({
     const node = findNode(tree.children, nodeId);
     if (!node) return;
     if (command === 'copy') {
-      clipboard.current = structuredClone(node);
+      runtimeComponentClipboard = structuredClone(node);
       return;
     }
-    if (command === 'paste' && clipboard.current) {
-      const addition = refreshNodeIds(structuredClone(clipboard.current), `copy_${Date.now().toString(36)}`);
+    if (command === 'paste' && runtimeComponentClipboard) {
+      const addition = refreshNodeIds(structuredClone(runtimeComponentClipboard), `copy_${Date.now().toString(36)}`);
       commit({ ...tree, children: insertNode(tree.children, nodeId, 'after', addition) });
       setSelectedIds([addition.id]);
       return;

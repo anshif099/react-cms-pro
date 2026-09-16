@@ -155,6 +155,12 @@ function replaceTreeNode(nodes = [], nodeId, replacement) {
   });
 }
 
+function updateTreeNode(nodes = [], nodeId, updater) {
+  return nodes.map((node) => node.id === nodeId
+    ? updater(node)
+    : { ...node, children: updateTreeNode(node.children || [], nodeId, updater) });
+}
+
 function ConnectedInsertContentModal({ locale, onCancel, onSubmit }) {
   const [type, setType] = useState("paragraph");
   const [text, setText] = useState("");
@@ -961,6 +967,34 @@ function ConnectedSourceWorkspace({
     }
 
     const value = selectedRegion.value;
+
+    if (
+      selectedRegion.type === "runtime-component"
+      && selectedRegion.componentId
+      && isPageComponentTree(value)
+    ) {
+      const runtimeNode = findNode(value, selectedRegion.componentId);
+      if (runtimeNode) {
+        return (
+          <Suspense fallback={<aside className="w-full p-4 text-xs text-slate-500">Loading component editor…</aside>}>
+            <NativeInspector
+              embedded={embedded}
+              node={runtimeNode}
+              locale={locale}
+              responsiveMode={device}
+              onUpdate={(updatedNode) => {
+                const nextTree = {
+                  ...value,
+                  children: updateTreeNode(value.children, updatedNode.id, () => updatedNode)
+                };
+                applyVisualValue(selectedRegion, nextTree);
+              }}
+              onClose={clearConnectedSelection}
+            />
+          </Suspense>
+        );
+      }
+    }
     const textValue = typeof value === "object" && value !== null
       ? value.text || ""
       : value || "";
