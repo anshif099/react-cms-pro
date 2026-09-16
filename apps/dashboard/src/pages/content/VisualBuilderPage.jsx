@@ -31,6 +31,7 @@ import {
 import { findNode } from "@anshif.rainhopes/reactcms-layout-engine";
 import {
   blocksToPageTree,
+  createRuntimeAdditionsTree,
   isPageComponentTree,
   pageTreeToBlocks,
   RUNTIME_ADDITIONS_REGION,
@@ -161,7 +162,7 @@ function updateTreeNode(nodes = [], nodeId, updater) {
     : { ...node, children: updateTreeNode(node.children || [], nodeId, updater) });
 }
 
-function ConnectedInsertContentModal({ locale, onCancel, onSubmit }) {
+function ConnectedInsertContentModal({ locale, clipboard, onCancel, onSubmit }) {
   const [type, setType] = useState("paragraph");
   const [text, setText] = useState("");
   const [url, setUrl] = useState("");
@@ -195,6 +196,7 @@ function ConnectedInsertContentModal({ locale, onCancel, onSubmit }) {
         <div className="my-5 grid grid-cols-3 gap-2">
           {["paragraph", "image", "video"].map((item) => <button key={item} type="button" onClick={() => setType(item)} className={`h-10 rounded-lg border text-xs font-bold capitalize cursor-pointer ${type === item ? "border-blue-400 bg-blue-600 text-white" : "border-slate-700 bg-slate-950 text-slate-300"}`}>{item === "paragraph" ? "Text" : item}</button>)}
         </div>
+        {clipboard && <button type="button" onClick={() => onSubmit(structuredClone(clipboard))} className="mb-4 h-11 w-full rounded-xl border border-violet-400 bg-violet-900 text-xs font-extrabold text-white cursor-pointer">Paste copied component here</button>}
         {type === "paragraph" ? (
           <label className="grid gap-2 text-xs font-bold text-slate-300">Text<textarea autoFocus required rows={6} value={text} onChange={(event) => setText(event.target.value)} className="rounded-xl border border-slate-700 bg-slate-950 p-3 text-sm font-normal leading-6 text-white outline-none focus:border-blue-500" placeholder="Write the text to add…" /></label>
         ) : (
@@ -275,6 +277,11 @@ function ConnectedSourceWorkspace({
   const [aiOpen, setAIOpen] = useState(true);
   const [canvasSEOScan, setCanvasSEOScan] = useState(null);
   const [pendingRuntimeInsert, setPendingRuntimeInsert] = useState(null);
+  const runtimeAdditionsRef = useRef(createRuntimeAdditionsTree(pageKey || pageId, locale));
+  const clipboardKey = `reactcms_component_clipboard:${websiteId}`;
+  const [connectedClipboard, setConnectedClipboard] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(clipboardKey) || "null"); } catch { return null; }
+  });
 
   const requestedLivePageUrl = useMemo(
     () => buildConnectedPageUrl(website, page, isPreview ? "preview" : "edit"),
@@ -835,6 +842,7 @@ function ConnectedSourceWorkspace({
         const payload = message.payload || {};
         if (!payload.regionId) return;
         if (payload.regionId === RUNTIME_ADDITIONS_REGION && isPageComponentTree(payload.value)) {
+          runtimeAdditionsRef.current = payload.value;
           const blankSection = findBlankInsertedSection(payload.value.children);
           if (blankSection) {
             setPendingRuntimeInsert({ tree: payload.value, nodeId: blankSection.id, payload });
@@ -1012,6 +1020,26 @@ function ConnectedSourceWorkspace({
     const numericFontSize = String(inheritedFontSize).match(/[\d.]+/)?.[0] || "";
     const textColor = textStyleValue.color || selectedComputedStyle.color || "#0f172a";
     const safeTextColor = /^#[0-9a-f]{6}$/i.test(textColor) ? textColor : "#0f172a";
+    const copySelectedComponent = () => {
+      const copied = selectedRegion.type === "image"
+        ? { type: "image", props: typeof value === "object" ? structuredClone(value) : { src: String(value || "") } }
+        : selectedRegion.type === "video"
+          ? { type: "video", props: typeof value === "object" ? structuredClone(value) : { url: String(value || ""), controls: true } }
+          : { type: "paragraph", props: { locales: { [locale]: { text: `<p>${String(textValue)}</p>` } } } };
+      setConnectedClipboard(copied);
+      localStorage.setItem(clipboardKey, JSON.stringify(copied));
+    };
+    const addBelowSelected = () => {
+      const tree = runtimeAdditionsRef.current;
+      const nodeId = `section_${Date.now().toString(36)}`;
+      const placeholder = {
+        id: nodeId, type: "section", label: "Section",
+        props: { locales: { [locale]: { title: "New section" } } }, children: [],
+        metadata: { runtimePlacement: { anchorRegionId: selectedRegion.regionId, position: "after" } }
+      };
+      const nextTree = { ...tree, children: [...tree.children, placeholder] };
+      setPendingRuntimeInsert({ tree: nextTree, nodeId, payload: { regionId: RUNTIME_ADDITIONS_REGION, pageId: canvasRuntimePageId, value: nextTree } });
+    };
 
     return (
       <aside className={embedded
@@ -1029,6 +1057,10 @@ function ConnectedSourceWorkspace({
           </div>
         </div>
         <div className="p-4 space-y-4">
+          <div className="grid grid-cols-2 gap-2">
+            <button type="button" onClick={copySelectedComponent} className="h-9 rounded-lg border border-slate-700 bg-slate-900 text-[10px] font-bold text-slate-200 cursor-pointer">Copy</button>
+            <button type="button" onClick={addBelowSelected} className="h-9 rounded-lg bg-blue-600 text-[10px] font-extrabold text-white cursor-pointer">+ Add below</button>
+          </div>
           {selectedRegion.type === "text" && (
             <>
               <label className="block">
@@ -1894,6 +1926,7 @@ function ConnectedSourceWorkspace({
       {pendingRuntimeInsert && (
         <ConnectedInsertContentModal
           locale={locale}
+          clipboard={connectedClipboard}
           onCancel={() => {
             const nextTree = {
               ...pendingRuntimeInsert.tree,
