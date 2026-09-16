@@ -138,6 +138,71 @@ async function loadConnectedSourceGraph(website, entryPath, entryContent) {
   return files;
 }
 
+function findBlankInsertedSection(nodes = []) {
+  for (let index = nodes.length - 1; index >= 0; index -= 1) {
+    const node = nodes[index];
+    if (node?.type === "section" && !(node.children || []).length) return node;
+    const nested = findBlankInsertedSection(node?.children || []);
+    if (nested) return nested;
+  }
+  return null;
+}
+
+function replaceTreeNode(nodes = [], nodeId, replacement) {
+  return nodes.flatMap((node) => {
+    if (node.id === nodeId) return replacement ? [replacement] : [];
+    return [{ ...node, children: replaceTreeNode(node.children || [], nodeId, replacement) }];
+  });
+}
+
+function ConnectedInsertContentModal({ locale, onCancel, onSubmit }) {
+  const [type, setType] = useState("paragraph");
+  const [text, setText] = useState("");
+  const [url, setUrl] = useState("");
+  const [description, setDescription] = useState("");
+
+  return (
+    <div className="fixed inset-0 z-[9999] grid place-items-center bg-slate-950/80 p-5 backdrop-blur-sm">
+      <form
+        className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const cleanText = text.trim();
+          const cleanUrl = url.trim();
+          if (type === "paragraph" ? !cleanText : !cleanUrl) return;
+          onSubmit(type === "paragraph" ? {
+            type,
+            props: { locales: { [locale]: { text: `<p>${cleanText.replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll("\n", "<br />")}</p>` } } }
+          } : type === "image" ? {
+            type,
+            props: { src: cleanUrl, width: "100%", height: "auto", objectFit: "cover", locales: { [locale]: { alt: description.trim() } } }
+          } : {
+            type,
+            props: { url: cleanUrl, controls: true, locales: { [locale]: { caption: description.trim() } } }
+          });
+        }}
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div><h2 className="text-lg font-extrabold text-white">Add content</h2><p className="mt-1 text-xs text-slate-400">This content will replace the new empty section.</p></div>
+          <button type="button" onClick={onCancel} className="h-8 w-8 rounded-lg bg-slate-800 text-lg text-slate-300 cursor-pointer">×</button>
+        </div>
+        <div className="my-5 grid grid-cols-3 gap-2">
+          {["paragraph", "image", "video"].map((item) => <button key={item} type="button" onClick={() => setType(item)} className={`h-10 rounded-lg border text-xs font-bold capitalize cursor-pointer ${type === item ? "border-blue-400 bg-blue-600 text-white" : "border-slate-700 bg-slate-950 text-slate-300"}`}>{item === "paragraph" ? "Text" : item}</button>)}
+        </div>
+        {type === "paragraph" ? (
+          <label className="grid gap-2 text-xs font-bold text-slate-300">Text<textarea autoFocus required rows={6} value={text} onChange={(event) => setText(event.target.value)} className="rounded-xl border border-slate-700 bg-slate-950 p-3 text-sm font-normal leading-6 text-white outline-none focus:border-blue-500" placeholder="Write the text to add…" /></label>
+        ) : (
+          <div className="grid gap-4">
+            <label className="grid gap-2 text-xs font-bold text-slate-300">{type === "image" ? "Image URL" : "Video URL"}<input autoFocus required type="url" value={url} onChange={(event) => setUrl(event.target.value)} className="h-11 rounded-xl border border-slate-700 bg-slate-950 px-3 text-sm font-normal text-white outline-none focus:border-blue-500" placeholder={`https://example.com/${type === "image" ? "image.jpg" : "video.mp4"}`} /></label>
+            <label className="grid gap-2 text-xs font-bold text-slate-300">{type === "image" ? "Alt text" : "Caption"} (optional)<input value={description} onChange={(event) => setDescription(event.target.value)} className="h-11 rounded-xl border border-slate-700 bg-slate-950 px-3 text-sm font-normal text-white outline-none focus:border-blue-500" /></label>
+          </div>
+        )}
+        <div className="mt-6 flex justify-end gap-2"><button type="button" onClick={onCancel} className="h-10 rounded-lg border border-slate-700 px-4 text-xs font-bold text-slate-300 cursor-pointer">Cancel</button><button type="submit" className="h-10 rounded-lg bg-blue-600 px-5 text-xs font-extrabold text-white cursor-pointer">Add to page</button></div>
+      </form>
+    </div>
+  );
+}
+
 function ConnectedSourceWorkspace({
   mode,
   websiteId,
@@ -203,6 +268,7 @@ function ConnectedSourceWorkspace({
   const [liveRouteError, setLiveRouteError] = useState("");
   const [aiOpen, setAIOpen] = useState(true);
   const [canvasSEOScan, setCanvasSEOScan] = useState(null);
+  const [pendingRuntimeInsert, setPendingRuntimeInsert] = useState(null);
 
   const requestedLivePageUrl = useMemo(
     () => buildConnectedPageUrl(website, page, isPreview ? "preview" : "edit"),
@@ -762,6 +828,13 @@ function ConnectedSourceWorkspace({
         if (visualOnly && !connectedDraftHydratedRef.current) return;
         const payload = message.payload || {};
         if (!payload.regionId) return;
+        if (payload.regionId === RUNTIME_ADDITIONS_REGION && isPageComponentTree(payload.value)) {
+          const blankSection = findBlankInsertedSection(payload.value.children);
+          if (blankSection) {
+            setPendingRuntimeInsert({ tree: payload.value, nodeId: blankSection.id, payload });
+            return;
+          }
+        }
         const currentRegion = selectedRegionsRef.current.find((region) => (
           region.regionId === payload.regionId
         ));
@@ -1783,6 +1856,35 @@ function ConnectedSourceWorkspace({
           )}
         </div>
       )}
+
+      {pendingRuntimeInsert && (
+        <ConnectedInsertContentModal
+          locale={locale}
+          onCancel={() => {
+            const nextTree = {
+              ...pendingRuntimeInsert.tree,
+              children: replaceTreeNode(pendingRuntimeInsert.tree.children, pendingRuntimeInsert.nodeId, null)
+            };
+            applyVisualValue(pendingRuntimeInsert.payload, nextTree, true, false);
+            setPendingRuntimeInsert(null);
+          }}
+          onSubmit={(node) => {
+            const replacement = {
+              ...node,
+              id: pendingRuntimeInsert.nodeId,
+              label: node.type === "paragraph" ? "Text" : node.type === "image" ? "Image" : "Video",
+              children: [],
+              metadata: findNode(pendingRuntimeInsert.tree, pendingRuntimeInsert.nodeId)?.metadata || {}
+            };
+            const nextTree = {
+              ...pendingRuntimeInsert.tree,
+              children: replaceTreeNode(pendingRuntimeInsert.tree.children, pendingRuntimeInsert.nodeId, replacement)
+            };
+            applyVisualValue(pendingRuntimeInsert.payload, nextTree, true, false);
+            setPendingRuntimeInsert(null);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -2177,6 +2279,7 @@ function NativeBuilderWorkspace({
           />
         </Suspense>
       )}
+
     </div>
   );
 }
