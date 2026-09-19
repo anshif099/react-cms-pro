@@ -14,6 +14,10 @@ export interface EditableTextProps {
   style?: React.CSSProperties;
 }
 
+const EDITABLE_TEXT_TAGS = new Set([
+  'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'div', 'span',
+]);
+
 export function EditableText({
   regionId,
   defaultValue,
@@ -41,6 +45,12 @@ export function EditableText({
 
   const isRich = typeof value === 'object' && value !== null;
   const displayValue = isRich ? (value.text !== undefined ? value.text : '') : value;
+  const configuredTag = isRich && typeof value.htmlTag === 'string'
+    ? value.htmlTag.toLowerCase()
+    : '';
+  const RenderComponent: React.ElementType = configuredTag && EDITABLE_TEXT_TAGS.has(configuredTag)
+    ? configuredTag
+    : Component;
   
   const textStyle: React.CSSProperties = {};
   if (isRich) {
@@ -245,6 +255,7 @@ export function EditableText({
         type: 'text',
         pageId,
         value,
+        elementTag: e.currentTarget.tagName.toLowerCase(),
         computedStyle,
         additive: e.metaKey || e.ctrlKey || e.shiftKey,
       });
@@ -333,6 +344,7 @@ export function EditableText({
         type: 'text',
         pageId,
         value,
+        elementTag: e.currentTarget.tagName.toLowerCase(),
         computedStyle,
         additive: e.metaKey || e.ctrlKey || e.shiftKey,
       });
@@ -407,16 +419,16 @@ export function EditableText({
 
   if (!editMode) {
     return (
-      <Component className={className} style={{ ...style, ...textStyle }}>
+      <RenderComponent className={className} style={{ ...style, ...textStyle }}>
         {displayValue}
-      </Component>
+      </RenderComponent>
     );
   }
 
   const activeAlign = textStyle.textAlign || 'left';
 
   return (
-    <Component
+    <RenderComponent
       className={`rcms-editable-region rcms-editable-text ${className}`}
       style={{
         ...style,
@@ -577,6 +589,6 @@ export function EditableText({
           }}
         />
       )}
-    </Component>
+    </RenderComponent>
   );
 }

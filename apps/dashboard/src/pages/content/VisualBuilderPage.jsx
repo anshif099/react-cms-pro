@@ -1017,6 +1017,9 @@ function ConnectedSourceWorkspace({
       : value || "";
     const textStyleValue = typeof value === "object" && value !== null ? value : {};
     const selectedComputedStyle = selectedRegion.computedStyle || {};
+    const selectedHtmlTag = String(
+      textStyleValue.htmlTag || selectedRegion.elementTag || "span"
+    ).toLowerCase();
     const fontSizeField = device === "mobile"
       ? "fontSizeMobile"
       : device === "tablet"
@@ -1108,6 +1111,34 @@ function ConnectedSourceWorkspace({
           </div>
           {selectedRegion.type === "text" && (
             <>
+              <label className="block">
+                <span className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  HTML text type
+                  <span className="rounded border border-blue-500/30 bg-blue-500/10 px-1.5 py-0.5 text-[9px] text-blue-300">
+                    {selectedHtmlTag.toUpperCase()}
+                  </span>
+                </span>
+                <select
+                  value={selectedHtmlTag}
+                  onChange={(event) => updateSelectedField("htmlTag", event.target.value)}
+                  className="mt-2 h-9 w-full cursor-pointer rounded-lg border border-slate-800 bg-[#070b14] px-3 text-xs text-slate-200 outline-none focus:border-blue-500"
+                  aria-label="HTML text type"
+                >
+                  <option value="h1">H1 — Main page heading</option>
+                  <option value="h2">H2 — Section heading</option>
+                  <option value="h3">H3 — Subsection heading</option>
+                  <option value="h4">H4 — Heading level 4</option>
+                  <option value="h5">H5 — Heading level 5</option>
+                  <option value="h6">H6 — Heading level 6</option>
+                  <option value="p">P — Paragraph</option>
+                  <option value="div">DIV — Generic block</option>
+                  <option value="span">SPAN — Inline text</option>
+                </select>
+                <p className="mt-1.5 text-[9px] leading-4 text-slate-600">
+                  Changes the semantic HTML tag without removing your text styles.
+                </p>
+              </label>
+
               <label className="block">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
                   Text
