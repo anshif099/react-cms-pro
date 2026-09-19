@@ -1,0 +1,1 @@
+import{D as e}from"./index-DyArdC_4.js";function t(){return e()}export{t};
