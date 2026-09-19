@@ -171,11 +171,30 @@ function lastTreeNode(nodes = []) {
   return null;
 }
 
-function ConnectedInsertContentModal({ locale, clipboard, onCancel, onSubmit }) {
+function ConnectedInsertContentModal({ locale, pages = [], clipboard, onCancel, onSubmit }) {
   const [type, setType] = useState("paragraph");
   const [text, setText] = useState("");
   const [url, setUrl] = useState("");
   const [description, setDescription] = useState("");
+  const [linkType, setLinkType] = useState("internal");
+  const [variant, setVariant] = useState("primary");
+  const [size, setSize] = useState("md");
+  const [color, setColor] = useState("#2563eb");
+  const [radius, setRadius] = useState(10);
+  const [shadow, setShadow] = useState("medium");
+  const [icon, setIcon] = useState("none");
+  const [iconPosition, setIconPosition] = useState("left");
+  const [alignment, setAlignment] = useState("center");
+  const [newTab, setNewTab] = useState(false);
+
+  const fieldClass = "h-11 rounded-xl border border-slate-700 bg-slate-950 px-3 text-sm font-normal text-white outline-none focus:border-blue-500";
+  const resolveButtonUrl = () => {
+    const destination = url.trim();
+    if (linkType === "whatsapp") return `https://wa.me/${destination.replace(/\D/g, "")}`;
+    if (linkType === "phone") return `tel:${destination.replace(/\s/g, "")}`;
+    if (linkType === "email") return `mailto:${destination}`;
+    return destination;
+  };
 
   return (
     <div className="fixed inset-0 z-[9999] grid place-items-center bg-slate-950/80 p-5 backdrop-blur-sm">
@@ -185,16 +204,23 @@ function ConnectedInsertContentModal({ locale, clipboard, onCancel, onSubmit }) 
           event.preventDefault();
           const cleanText = text.trim();
           const cleanUrl = url.trim();
-          if (type === "paragraph" ? !cleanText : !cleanUrl) return;
+          if (type === "paragraph" ? !cleanText : type === "button" ? (!cleanText || !cleanUrl) : !cleanUrl) return;
           onSubmit(type === "paragraph" ? {
             type,
             props: { locales: { [locale]: { text: `<p>${cleanText.replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll("\n", "<br />")}</p>` } } }
           } : type === "image" ? {
             type,
             props: { src: cleanUrl, width: "100%", height: "auto", objectFit: "cover", locales: { [locale]: { alt: description.trim() } } }
-          } : {
+          } : type === "video" ? {
             type,
             props: { url: cleanUrl, controls: true, locales: { [locale]: { caption: description.trim() } } }
+          } : {
+            type: "button",
+            props: {
+              url: resolveButtonUrl(), linkType, variant, size, color,
+              radius: Number(radius), shadow, icon, iconPosition, alignment, newTab,
+              locales: { [locale]: { label: cleanText } }
+            }
           });
         }}
       >
@@ -202,12 +228,35 @@ function ConnectedInsertContentModal({ locale, clipboard, onCancel, onSubmit }) 
           <div><h2 className="text-lg font-extrabold text-white">Add content</h2><p className="mt-1 text-xs text-slate-400">This content will replace the new empty section.</p></div>
           <button type="button" onClick={onCancel} className="h-8 w-8 rounded-lg bg-slate-800 text-lg text-slate-300 cursor-pointer">×</button>
         </div>
-        <div className="my-5 grid grid-cols-3 gap-2">
-          {["paragraph", "image", "video"].map((item) => <button key={item} type="button" onClick={() => setType(item)} className={`h-10 rounded-lg border text-xs font-bold capitalize cursor-pointer ${type === item ? "border-blue-400 bg-blue-600 text-white" : "border-slate-700 bg-slate-950 text-slate-300"}`}>{item === "paragraph" ? "Text" : item}</button>)}
+        <div className="my-5 grid grid-cols-4 gap-2">
+          {["paragraph", "button", "image", "video"].map((item) => <button key={item} type="button" onClick={() => setType(item)} className={`h-10 rounded-lg border text-xs font-bold capitalize cursor-pointer ${type === item ? "border-blue-400 bg-blue-600 text-white" : "border-slate-700 bg-slate-950 text-slate-300"}`}>{item === "paragraph" ? "Text" : item}</button>)}
         </div>
         {clipboard && <button type="button" onClick={() => onSubmit(structuredClone(clipboard))} className="mb-4 h-11 w-full rounded-xl border border-violet-400 bg-violet-900 text-xs font-extrabold text-white cursor-pointer">Paste copied component here</button>}
         {type === "paragraph" ? (
           <label className="grid gap-2 text-xs font-bold text-slate-300">Text<textarea autoFocus required rows={6} value={text} onChange={(event) => setText(event.target.value)} className="rounded-xl border border-slate-700 bg-slate-950 p-3 text-sm font-normal leading-6 text-white outline-none focus:border-blue-500" placeholder="Write the text to add…" /></label>
+        ) : type === "button" ? (
+          <div className="grid max-h-[58vh] gap-4 overflow-y-auto pr-1">
+            <label className="grid gap-2 text-xs font-bold text-slate-300">Button label<input autoFocus required value={text} onChange={(event) => setText(event.target.value)} className={fieldClass} placeholder="Contact us" /></label>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="grid gap-2 text-xs font-bold text-slate-300">Redirect type<select value={linkType} onChange={(event) => { setLinkType(event.target.value); setUrl(""); }} className={fieldClass}><option value="internal">Internal page</option><option value="external">External website</option><option value="whatsapp">WhatsApp</option><option value="phone">Phone call</option><option value="email">Email</option></select></label>
+              <label className="grid gap-2 text-xs font-bold text-slate-300">Destination{linkType === "internal" && pages.length ? <select required value={url} onChange={(event) => setUrl(event.target.value)} className={fieldClass}><option value="">Select a page</option>{pages.map((item) => <option key={item.id} value={item.route || item.slug || `/pages/${item.id}`}>{item.title || item.name || item.slug}</option>)}</select> : <input required value={url} onChange={(event) => setUrl(event.target.value)} className={fieldClass} placeholder={linkType === "whatsapp" ? "919876543210" : linkType === "phone" ? "+91 98765 43210" : linkType === "email" ? "hello@example.com" : linkType === "external" ? "https://example.com" : "/about"} />}</label>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <label className="grid gap-2 text-xs font-bold text-slate-300">Style<select value={variant} onChange={(event) => setVariant(event.target.value)} className={fieldClass}><option value="primary">Primary</option><option value="secondary">Secondary</option><option value="outline">Outline</option><option value="ghost">Ghost</option></select></label>
+              <label className="grid gap-2 text-xs font-bold text-slate-300">Size<select value={size} onChange={(event) => setSize(event.target.value)} className={fieldClass}><option value="sm">Small</option><option value="md">Medium</option><option value="lg">Large</option></select></label>
+              <label className="grid gap-2 text-xs font-bold text-slate-300">Alignment<select value={alignment} onChange={(event) => setAlignment(event.target.value)} className={fieldClass}><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select></label>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="grid gap-2 text-xs font-bold text-slate-300">Icon<select value={icon} onChange={(event) => setIcon(event.target.value)} className={fieldClass}><option value="none">No icon</option><option value="arrow-right">Arrow</option><option value="whatsapp">WhatsApp</option><option value="phone">Phone</option><option value="mail">Email</option><option value="external-link">External link</option><option value="download">Download</option></select></label>
+              <label className="grid gap-2 text-xs font-bold text-slate-300">Icon position<select value={iconPosition} onChange={(event) => setIconPosition(event.target.value)} className={fieldClass}><option value="left">Left</option><option value="right">Right</option></select></label>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <label className="grid gap-2 text-xs font-bold text-slate-300">Colour<input type="color" value={color} onChange={(event) => setColor(event.target.value)} className={`${fieldClass} p-1`} /></label>
+              <label className="grid gap-2 text-xs font-bold text-slate-300">Corners<input type="number" min="0" max="999" value={radius} onChange={(event) => setRadius(event.target.value)} className={fieldClass} /></label>
+              <label className="grid gap-2 text-xs font-bold text-slate-300">Shadow<select value={shadow} onChange={(event) => setShadow(event.target.value)} className={fieldClass}><option value="none">None</option><option value="small">Small</option><option value="medium">Medium</option><option value="large">Large</option></select></label>
+            </div>
+            <label className="flex items-center gap-2 text-xs font-bold text-slate-300"><input type="checkbox" checked={newTab} onChange={(event) => setNewTab(event.target.checked)} className="h-4 w-4 accent-blue-500" /> Open link in a new tab</label>
+          </div>
         ) : (
           <div className="grid gap-4">
             <label className="grid gap-2 text-xs font-bold text-slate-300">{type === "image" ? "Image URL" : "Video URL"}<input autoFocus required type="url" value={url} onChange={(event) => setUrl(event.target.value)} className="h-11 rounded-xl border border-slate-700 bg-slate-950 px-3 text-sm font-normal text-white outline-none focus:border-blue-500" placeholder={`https://example.com/${type === "image" ? "image.jpg" : "video.mp4"}`} /></label>
@@ -227,6 +276,7 @@ function ConnectedSourceWorkspace({
   pageKey,
   locale,
   page,
+  pages,
   website,
   theme,
   pageSettings,
@@ -2084,6 +2134,7 @@ function ConnectedSourceWorkspace({
       {pendingRuntimeInsert && (
         <ConnectedInsertContentModal
           locale={locale}
+          pages={pages}
           clipboard={connectedClipboard}
           onCancel={() => {
             const nextTree = {
@@ -2097,7 +2148,7 @@ function ConnectedSourceWorkspace({
             const replacement = {
               ...node,
               id: pendingRuntimeInsert.nodeId,
-              label: node.type === "paragraph" ? "Text" : node.type === "image" ? "Image" : "Video",
+              label: node.type === "paragraph" ? "Text" : node.type === "image" ? "Image" : node.type === "button" ? "Button" : "Video",
               children: [],
               metadata: findNode(pendingRuntimeInsert.tree, pendingRuntimeInsert.nodeId)?.metadata || {}
             };
@@ -2516,8 +2567,10 @@ export function VisualBuilderPage() {
   const mode = searchParams.get("mode") === "preview" ? "preview" : "edit";
   const isPreview = mode === "preview";
   const {
+    pages,
     selectedPage,
     pageLoading,
+    fetchPages,
     fetchPageById,
     setSelectedPage
   } = usePages();
@@ -2584,6 +2637,10 @@ export function VisualBuilderPage() {
     if (!websiteId || !pageId) return;
     fetchPageById(websiteId, pageId);
   }, [fetchPageById, pageId, websiteId]);
+
+  useEffect(() => {
+    if (websiteId && !pages.length) fetchPages(websiteId);
+  }, [fetchPages, pages.length, websiteId]);
 
   useEffect(() => {
     if (!websiteId) return undefined;
@@ -3560,6 +3617,7 @@ export function VisualBuilderPage() {
         pageKey={pageKey}
         locale={activeLocale}
         page={selectedPage}
+        pages={pages}
         website={sourceWebsite}
         theme={themeTokens}
         pageSettings={pageSettings}
@@ -3620,6 +3678,7 @@ export function VisualBuilderPage() {
           pageKey={pageKey}
           locale={activeLocale}
           page={selectedPage}
+          pages={pages}
           website={sourceWebsite}
           theme={themeTokens}
           pageSettings={pageSettings}

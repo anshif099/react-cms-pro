@@ -372,6 +372,17 @@ export const BLOCK_SCHEMAS = [
       { key: "label", label: "Button Label", type: "text", localized: true, defaultValue: "Learn More" },
       { key: "url", label: "Button URL", type: "url", localized: false, defaultValue: "#" },
       {
+        key: "linkType", label: "Redirect Type", type: "select", localized: false, defaultValue: "internal",
+        options: [
+          { value: "internal", label: "Internal Page" },
+          { value: "external", label: "External Website" },
+          { value: "whatsapp", label: "WhatsApp" },
+          { value: "phone", label: "Phone Call" },
+          { value: "email", label: "Email" }
+        ]
+      },
+      { key: "newTab", label: "Open in New Tab", type: "boolean", localized: false },
+      {
         key: "variant",
         label: "Variant",
         type: "select",
@@ -398,6 +409,26 @@ export const BLOCK_SCHEMAS = [
       },
       { key: "color", label: "Button Color", type: "color", localized: false, defaultValue: "#2563eb" },
       { key: "radius", label: "Corner Radius", type: "number", localized: false, defaultValue: 10 },
+      {
+        key: "icon", label: "Icon", type: "select", localized: false, defaultValue: "none",
+        options: [
+          { value: "none", label: "No Icon" },
+          { value: "arrow-right", label: "Arrow" },
+          { value: "whatsapp", label: "WhatsApp" },
+          { value: "phone", label: "Phone" },
+          { value: "mail", label: "Email" },
+          { value: "external-link", label: "External Link" },
+          { value: "download", label: "Download" }
+        ]
+      },
+      {
+        key: "iconPosition", label: "Icon Position", type: "select", localized: false, defaultValue: "left",
+        options: [{ value: "left", label: "Left" }, { value: "right", label: "Right" }]
+      },
+      {
+        key: "alignment", label: "Alignment", type: "select", localized: false, defaultValue: "center",
+        options: [{ value: "left", label: "Left" }, { value: "center", label: "Center" }, { value: "right", label: "Right" }]
+      },
       {
         key: "shadow",
         label: "Shadow",

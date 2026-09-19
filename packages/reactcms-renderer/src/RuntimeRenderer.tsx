@@ -139,6 +139,9 @@ function InlineText({
 function buttonStyle(node: ComponentNode): React.CSSProperties {
   const props = node.props || {};
   const color = props.color || 'var(--rcms-color-primary, #2563eb)';
+  const isOutline = props.variant === 'outline';
+  const isGhost = props.variant === 'ghost';
+  const isSecondary = props.variant === 'secondary';
   const shadows: Record<string, string> = {
     none: 'none',
     small: '0 5px 14px rgba(15,23,42,.12)',
@@ -154,13 +157,28 @@ function buttonStyle(node: ComponentNode): React.CSSProperties {
     borderRadius: props.radius !== undefined
       ? `${props.radius}px`
       : 'var(--rcms-button-radius, 10px)',
-    background: props.variant === 'outline' ? 'transparent' : color,
-    border: `1px solid ${color}`,
-    color: props.variant === 'outline' ? color : '#fff',
+    gap: '9px',
+    cursor: 'pointer',
+    background: isOutline || isGhost ? 'transparent' : isSecondary ? '#0f172a' : color,
+    border: isGhost ? '1px solid transparent' : `1px solid ${isSecondary ? '#0f172a' : color}`,
+    color: isOutline || isGhost ? color : '#fff',
     boxShadow: shadows[props.shadow || 'medium'] || props.shadow,
     fontWeight: props.weight || 'var(--rcms-button-weight, 700)',
     textDecoration: 'none',
   };
+}
+
+function ButtonIcon({ name }: { name?: string }) {
+  if (!name || name === 'none') return null;
+  const symbols: Record<string, string> = {
+    'arrow-right': '→', whatsapp: 'WA', phone: '☎', mail: '✉',
+    'external-link': '↗', download: '↓',
+  };
+  return (
+    <span aria-hidden="true" style={{ display: 'inline-grid', placeItems: 'center', minWidth: '1.1em', fontSize: name === 'whatsapp' ? '.68em' : '1.05em', fontWeight: 800 }}>
+      {symbols[name] || '•'}
+    </span>
+  );
 }
 
 function cards(items: any[], bodyKey = 'description') {
@@ -313,12 +331,30 @@ function BuiltinComponent({
         lineHeight: 1.8,
         textAlign: props.alignment || 'left',
       }, true);
-    case 'button':
+    case 'button': {
+      const buttonIcon = <ButtonIcon name={props.icon} />;
+      const buttonContent = (
+        <>
+          {props.iconPosition !== 'right' ? buttonIcon : null}
+          {inline('label', 'Learn More', 'span')}
+          {props.iconPosition === 'right' ? buttonIcon : null}
+        </>
+      );
       return (
         <div style={{ textAlign: props.alignment || 'center' }}>
-          <span style={buttonStyle(node)}>{inline('label', 'Learn More', 'span')}</span>
+          {props.url ? (
+            <a
+              href={mode === 'edit' ? undefined : props.url}
+              target={props.newTab ? '_blank' : undefined}
+              rel={props.newTab ? 'noopener noreferrer' : undefined}
+              style={buttonStyle(node)}
+            >
+              {buttonContent}
+            </a>
+          ) : <span style={buttonStyle(node)}>{buttonContent}</span>}
         </div>
       );
+    }
     case 'image':
       return props.src ? (
         <figure style={{ margin: 0, textAlign: 'center' }}>
