@@ -1020,6 +1020,22 @@ function ConnectedSourceWorkspace({
     const selectedHtmlTag = String(
       textStyleValue.htmlTag || selectedRegion.elementTag || "span"
     ).toLowerCase();
+    const textTagTypography = {
+      h1: { fontSize: "56px", fontSizeTablet: "44px", fontSizeMobile: "36px", lineHeight: "1.1" },
+      h2: { fontSize: "48px", fontSizeTablet: "38px", fontSizeMobile: "32px", lineHeight: "1.15" },
+      h3: { fontSize: "40px", fontSizeTablet: "34px", fontSizeMobile: "28px", lineHeight: "1.2" },
+      h4: { fontSize: "32px", fontSizeTablet: "28px", fontSizeMobile: "24px", lineHeight: "1.25" },
+      h5: { fontSize: "24px", fontSizeTablet: "22px", fontSizeMobile: "20px", lineHeight: "1.3" },
+      h6: { fontSize: "20px", fontSizeTablet: "19px", fontSizeMobile: "18px", lineHeight: "1.35" },
+      p: { fontSize: "16px", fontSizeTablet: "16px", fontSizeMobile: "16px", lineHeight: "1.6" }
+    };
+    const updateSelectedTextTag = (htmlTag) => {
+      const baseValue = typeof value === "object" && value !== null
+        ? { ...value }
+        : { text: String(value || "") };
+      const typography = textTagTypography[htmlTag] || {};
+      applyVisualValue(selectedRegion, { ...baseValue, htmlTag, ...typography });
+    };
     const fontSizeField = device === "mobile"
       ? "fontSizeMobile"
       : device === "tablet"
@@ -1120,7 +1136,7 @@ function ConnectedSourceWorkspace({
                 </span>
                 <select
                   value={selectedHtmlTag}
-                  onChange={(event) => updateSelectedField("htmlTag", event.target.value)}
+                  onChange={(event) => updateSelectedTextTag(event.target.value)}
                   className="mt-2 h-9 w-full cursor-pointer rounded-lg border border-slate-800 bg-[#070b14] px-3 text-xs text-slate-200 outline-none focus:border-blue-500"
                   aria-label="HTML text type"
                 >
@@ -1135,7 +1151,7 @@ function ConnectedSourceWorkspace({
                   <option value="span">SPAN — Inline text</option>
                 </select>
                 <p className="mt-1.5 text-[9px] leading-4 text-slate-600">
-                  Changes the semantic HTML tag without removing your text styles.
+                  Changes the semantic tag and applies a responsive size preset. You can fine-tune it below.
                 </p>
               </label>
 
