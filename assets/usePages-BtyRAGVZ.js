@@ -1,0 +1,1 @@
+import{D as e}from"./index-C7R-DTUr.js";function t(){return e()}export{t};
