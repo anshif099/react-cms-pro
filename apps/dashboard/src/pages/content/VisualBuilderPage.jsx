@@ -763,6 +763,29 @@ function ConnectedSourceWorkspace({
   }, [applyVisualValue]);
 
   useEffect(() => {
+    if (isPreview) return undefined;
+    const handleHistoryShortcut = (event) => {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+      const target = event.target;
+      if (
+        target instanceof HTMLElement
+        && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
+      ) return;
+
+      const key = event.key.toLowerCase();
+      if (key === "z" && !event.shiftKey) {
+        event.preventDefault();
+        undoConnectedEdit();
+      } else if (key === "y" || (key === "z" && event.shiftKey)) {
+        event.preventDefault();
+        redoConnectedEdit();
+      }
+    };
+    window.addEventListener("keydown", handleHistoryShortcut);
+    return () => window.removeEventListener("keydown", handleHistoryShortcut);
+  }, [isPreview, redoConnectedEdit, undoConnectedEdit]);
+
+  useEffect(() => {
     connectedDraftHydrationRunRef.current += 1;
     clearConnectedDraftHydrationTimers();
     setWorkspaceMode("visual");

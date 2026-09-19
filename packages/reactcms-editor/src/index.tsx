@@ -276,6 +276,11 @@ function EditorState({
         else undo();
         return;
       }
+      if (modifier && event.key.toLowerCase() === 'y') {
+        event.preventDefault();
+        redo();
+        return;
+      }
       if (modifier && event.key.toLowerCase() === 'd' && selectionState.activeId) {
         event.preventDefault();
         duplicate(selectionState.activeId);
