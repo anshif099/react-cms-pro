@@ -6,6 +6,19 @@ import {
   decodeFirebaseObject,
 } from './keyUtils';
 
+describe('encodeFirebaseObject undefined handling', () => {
+  it('removes undefined object properties recursively and normalizes array slots', () => {
+    expect(encodeFirebaseObject({
+      title: 'Button',
+      optional: undefined,
+      children: [{ styles: { color: '#111827', fontSize: undefined } }, undefined],
+    })).toEqual({
+      title: 'Button',
+      children: [{ styles: { color: '#111827' } }, null],
+    });
+  });
+});
+
 describe('keyUtils', () => {
   it('should encode keys with invalid Firebase RTDB characters', () => {
     expect(encodeFirebaseKey('hero.title')).toBe('hero~2Etitle');

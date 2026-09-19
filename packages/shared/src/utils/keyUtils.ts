@@ -33,14 +33,23 @@ export function decodeFirebaseKey(key: string): string {
  * Recursively encodes keys in an object for Firebase RTDB storage.
  */
 export function encodeFirebaseObject<T>(obj: T): T {
+  if (obj === undefined) {
+    return null as T;
+  }
   if (obj === null || typeof obj !== 'object') {
     return obj;
   }
   if (Array.isArray(obj)) {
-    return obj.map((item) => encodeFirebaseObject(item)) as unknown as T;
+    return obj.map((item) => (
+      item === undefined ? null : encodeFirebaseObject(item)
+    )) as unknown as T;
   }
   const result: Record<string, any> = {};
   for (const [key, val] of Object.entries(obj)) {
+    // Firebase Realtime Database rejects undefined anywhere in a write payload.
+    // Optional React component properties should be omitted, just as JSON
+    // serialization omits them, while preserving null as an intentional value.
+    if (val === undefined) continue;
     const encodedKey = encodeFirebaseKey(key);
     result[encodedKey] = val && typeof val === 'object' ? encodeFirebaseObject(val) : val;
   }
