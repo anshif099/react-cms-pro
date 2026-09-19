@@ -1,0 +1,1 @@
+import{D as e}from"./index-0RkPA-wG.js";function t(){return e()}export{t};
