@@ -174,7 +174,7 @@ function lastTreeNode(nodes = []) {
 function ConnectedInsertContentModal({ locale, pages = [], clipboard, onCancel, onSubmit }) {
   const [type, setType] = useState("paragraph");
   const [text, setText] = useState("");
-  const [headingLevel, setHeadingLevel] = useState("h2");
+  const [textType, setTextType] = useState("paragraph");
   const [url, setUrl] = useState("");
   const [description, setDescription] = useState("");
   const [linkType, setLinkType] = useState("internal");
@@ -205,13 +205,13 @@ function ConnectedInsertContentModal({ locale, pages = [], clipboard, onCancel, 
           event.preventDefault();
           const cleanText = text.trim();
           const cleanUrl = url.trim();
-          if (["paragraph", "heading"].includes(type) ? !cleanText : type === "button" ? (!cleanText || !cleanUrl) : !cleanUrl) return;
-          onSubmit(type === "paragraph" ? {
-            type,
+          if (type === "paragraph" ? !cleanText : type === "button" ? (!cleanText || !cleanUrl) : !cleanUrl) return;
+          onSubmit(type === "paragraph" && textType === "paragraph" ? {
+            type: "paragraph",
             props: { locales: { [locale]: { text: `<p>${cleanText.replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll("\n", "<br />")}</p>` } } }
-          } : type === "heading" ? {
-            type,
-            props: { level: headingLevel, alignment: "left", locales: { [locale]: { text: cleanText } } }
+          } : type === "paragraph" ? {
+            type: "heading",
+            props: { level: textType, alignment: "left", locales: { [locale]: { text: cleanText } } }
           } : type === "image" ? {
             type,
             props: { src: cleanUrl, width: "100%", height: "auto", objectFit: "cover", locales: { [locale]: { alt: description.trim() } } }
@@ -232,16 +232,14 @@ function ConnectedInsertContentModal({ locale, pages = [], clipboard, onCancel, 
           <div><h2 className="text-lg font-extrabold text-white">Add content</h2><p className="mt-1 text-xs text-slate-400">This content will replace the new empty section.</p></div>
           <button type="button" onClick={onCancel} className="h-8 w-8 rounded-lg bg-slate-800 text-lg text-slate-300 cursor-pointer">×</button>
         </div>
-        <div className="my-5 grid grid-cols-5 gap-2">
-          {["paragraph", "heading", "button", "image", "video"].map((item) => <button key={item} type="button" onClick={() => setType(item)} className={`h-10 rounded-lg border text-xs font-bold capitalize cursor-pointer ${type === item ? "border-blue-400 bg-blue-600 text-white" : "border-slate-700 bg-slate-950 text-slate-300"}`}>{item}</button>)}
+        <div className="my-5 grid grid-cols-4 gap-2">
+          {["paragraph", "button", "image", "video"].map((item) => <button key={item} type="button" onClick={() => setType(item)} className={`h-10 rounded-lg border text-xs font-bold capitalize cursor-pointer ${type === item ? "border-blue-400 bg-blue-600 text-white" : "border-slate-700 bg-slate-950 text-slate-300"}`}>{item === "paragraph" ? "Text" : item}</button>)}
         </div>
         {clipboard && <button type="button" onClick={() => onSubmit(structuredClone(clipboard))} className="mb-4 h-11 w-full rounded-xl border border-violet-400 bg-violet-900 text-xs font-extrabold text-white cursor-pointer">Paste copied component here</button>}
         {type === "paragraph" ? (
-          <label className="grid gap-2 text-xs font-bold text-slate-300">Text<textarea autoFocus required rows={6} value={text} onChange={(event) => setText(event.target.value)} className="rounded-xl border border-slate-700 bg-slate-950 p-3 text-sm font-normal leading-6 text-white outline-none focus:border-blue-500" placeholder="Write the text to add…" /></label>
-        ) : type === "heading" ? (
           <div className="grid gap-4">
-            <label className="grid gap-2 text-xs font-bold text-slate-300">Heading level<select value={headingLevel} onChange={(event) => setHeadingLevel(event.target.value)} className={fieldClass}><option value="h1">H1 — Main page heading</option><option value="h2">H2 — Section heading</option><option value="h3">H3 — Subsection heading</option><option value="h4">H4 — Heading level 4</option><option value="h5">H5 — Heading level 5</option><option value="h6">H6 — Heading level 6</option></select></label>
-            <label className="grid gap-2 text-xs font-bold text-slate-300">Heading text<textarea autoFocus required rows={4} value={text} onChange={(event) => setText(event.target.value)} className="rounded-xl border border-slate-700 bg-slate-950 p-3 text-sm font-normal leading-6 text-white outline-none focus:border-blue-500" placeholder="Write the heading to add…" /></label>
+            <label className="grid gap-2 text-xs font-bold text-slate-300">Text<textarea autoFocus required rows={6} value={text} onChange={(event) => setText(event.target.value)} className="rounded-xl border border-slate-700 bg-slate-950 p-3 text-sm font-normal leading-6 text-white outline-none focus:border-blue-500" placeholder="Write the text to add..." /></label>
+            <label className="grid gap-2 text-xs font-bold text-slate-300">Text type<select value={textType} onChange={(event) => setTextType(event.target.value)} className={fieldClass}><option value="paragraph">Paragraph - Normal text</option><option value="h1">H1 - Main page heading</option><option value="h2">H2 - Section heading</option><option value="h3">H3 - Subsection heading</option><option value="h4">H4 - Heading level 4</option><option value="h5">H5 - Heading level 5</option><option value="h6">H6 - Heading level 6</option></select><span className="text-[10px] font-normal text-slate-500">The selected heading level automatically uses its matching default size.</span></label>
           </div>
         ) : type === "button" ? (
           <div className="grid max-h-[58vh] gap-4 overflow-y-auto pr-1">
