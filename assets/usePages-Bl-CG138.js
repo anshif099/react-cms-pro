@@ -1,1 +1,0 @@
-import{D as e}from"./index-BpV8rBMX.js";function t(){return e()}export{t};
