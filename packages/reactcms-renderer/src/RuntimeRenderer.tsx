@@ -37,6 +37,18 @@ function responsiveStyle(node: ComponentNode, mode: ResponsiveMode) {
   };
 }
 
+function responsiveTypographyStyle(node: ComponentNode, mode: ResponsiveMode): React.CSSProperties {
+  const styles = responsiveStyle(node, mode);
+  const keys: Array<keyof React.CSSProperties> = [
+    'color', 'fontFamily', 'fontSize', 'fontStyle', 'fontWeight',
+    'letterSpacing', 'lineHeight', 'textAlign', 'textDecoration', 'textTransform',
+  ];
+  return keys.reduce<React.CSSProperties>((result, key) => {
+    if (styles[key] !== undefined) (result as any)[key] = styles[key];
+    return result;
+  }, {});
+}
+
 function inlinePath(locale: string, key: string): Array<string | number> {
   return ['props', 'locales', locale, key];
 }
@@ -220,6 +232,7 @@ function BuiltinComponent({
   node,
   locale,
   mode,
+  responsiveMode,
   selected,
   children,
   mutate,
@@ -227,12 +240,14 @@ function BuiltinComponent({
   node: ComponentNode;
   locale: string;
   mode: RuntimeRendererProps['mode'];
+  responsiveMode: ResponsiveMode;
   selected: boolean;
   children: React.ReactNode;
   mutate: (path: Array<string | number>, value: unknown) => void;
 }) {
   const props = node.props || {};
   const edit = mode === 'edit';
+  const typography = responsiveTypographyStyle(node, responsiveMode);
   const text = (key: string, fallback = '') => localized(node, locale, key, fallback);
   const inline = (
     key: string,
@@ -322,6 +337,7 @@ function BuiltinComponent({
         color: props.color || 'var(--rcms-color-text, #0f172a)',
         textAlign: props.alignment || 'left',
         fontSize: level === 'h1' ? '52px' : level === 'h2' ? '38px' : undefined,
+        ...typography,
       });
     }
     case 'paragraph':
@@ -330,6 +346,7 @@ function BuiltinComponent({
         fontSize: '17px',
         lineHeight: 1.8,
         textAlign: props.alignment || 'left',
+        ...typography,
       }, true);
     case 'button': {
       const buttonIcon = <ButtonIcon name={props.icon} />;
@@ -971,6 +988,7 @@ function RenderNode({
         node={node}
         locale={locale}
         mode={mode}
+        responsiveMode={responsiveMode}
         selected={selected}
         mutate={mutate}
       >

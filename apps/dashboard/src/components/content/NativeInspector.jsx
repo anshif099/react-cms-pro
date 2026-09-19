@@ -162,7 +162,7 @@ export function NativeInspector({
   const updateProps = (patch) => updateNode({ props: { ...(node.props || {}), ...patch } });
   const updateMetadata = (patch) => updateNode({ metadata: { ...metadata, ...patch } });
   const updateStyle = (key, value, mode = responsiveMode) => {
-    const target = mode === "desktop" ? "base" : mode;
+    const target = mode;
     updateNode({
       styles: {
         ...(node.styles || {}),
