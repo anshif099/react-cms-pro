@@ -625,6 +625,8 @@ function NodeFrame({
   onCommand,
   onResize,
   onPosition,
+  onRelocate,
+  onRelocateNode,
   responsiveMode,
   children,
 }: {
@@ -639,6 +641,8 @@ function NodeFrame({
   onCommand?: RuntimeRendererProps['onCommand'];
   onResize?: (width: number, height: number) => void;
   onPosition?: (offsetX: number, offsetY: number) => void;
+  onRelocate?: (anchorRegionId: string, position: 'before' | 'after') => void;
+  onRelocateNode?: (targetNodeId: string, position: 'before' | 'after') => void;
   responsiveMode: ResponsiveMode;
   children: React.ReactNode;
 }) {
@@ -702,6 +706,7 @@ function NodeFrame({
           : undefined,
     outlineOffset: selected || hovered ? '-2px' : undefined,
     transition: 'outline-color 100ms ease, box-shadow 100ms ease',
+    pointerEvents: positionPreview ? 'none' : undefined,
   };
 
   const determineDrop = (event: React.DragEvent): DropPosition => {
@@ -732,6 +737,12 @@ function NodeFrame({
         onSelect?.(node.id, event.metaKey || event.ctrlKey || event.shiftKey);
         const frame = event.currentTarget;
         const parent = frame.parentElement;
+        let scrollHost: HTMLElement | null = frame.parentElement;
+        while (scrollHost) {
+          const overflowY = window.getComputedStyle(scrollHost).overflowY;
+          if (/(auto|scroll)/.test(overflowY) && scrollHost.scrollHeight > scrollHost.clientHeight) break;
+          scrollHost = scrollHost.parentElement;
+        }
         const renderedWidth = frame.getBoundingClientRect().width;
         const layoutWidth = frame.offsetWidth || renderedWidth;
         const scale = renderedWidth > 0 && layoutWidth > 0 ? renderedWidth / layoutWidth : 1;
@@ -743,11 +754,42 @@ function NodeFrame({
         const startX = event.clientX;
         const startY = event.clientY;
         let moved = false;
+        const relocationTarget = (clientX: number, clientY: number) => {
+          const target = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
+          const targetNode = target?.closest<HTMLElement>('[data-rcms-node]') || null;
+          if (targetNode?.dataset.rcmsNode && targetNode.dataset.rcmsNode !== node.id) {
+            const rect = targetNode.getBoundingClientRect();
+            return {
+              nodeId: targetNode.dataset.rcmsNode,
+              regionId: '',
+              position: clientY >= rect.top + rect.height / 2 ? 'after' as const : 'before' as const,
+            };
+          }
+          const region = target?.closest<HTMLElement>('[data-rcms-region]') || null;
+          if (!region || region.dataset.rcmsRegion === node.metadata?.runtimePlacement?.anchorRegionId) return null;
+          const rect = region.getBoundingClientRect();
+          return {
+            nodeId: '',
+            regionId: region.dataset.rcmsRegion || '',
+            position: clientY >= rect.top + rect.height / 2 ? 'after' as const : 'before' as const,
+          };
+        };
         const move = (moveEvent: PointerEvent) => {
           const dx = (moveEvent.clientX - startX) / scale;
           const dy = (moveEvent.clientY - startY) / scale;
           if (!moved && Math.hypot(dx, dy) < 2) return;
           moved = true;
+          const edge = 72;
+          const viewportTop = scrollHost?.getBoundingClientRect().top || 0;
+          const viewportBottom = scrollHost?.getBoundingClientRect().bottom || window.innerHeight;
+          if (moveEvent.clientY < viewportTop + edge) {
+            if (scrollHost) scrollHost.scrollTop -= 24;
+            else window.scrollBy({ top: -24, behavior: 'auto' });
+          }
+          if (moveEvent.clientY > viewportBottom - edge) {
+            if (scrollHost) scrollHost.scrollTop += 24;
+            else window.scrollBy({ top: 24, behavior: 'auto' });
+          }
           setPositionPreview(resolvePosition(moveEvent.clientX, moveEvent.clientY));
         };
         const finish = (upEvent: PointerEvent) => {
@@ -755,8 +797,15 @@ function NodeFrame({
           window.removeEventListener('pointerup', finish);
           window.removeEventListener('pointercancel', cancel);
           if (moved) {
-            const next = resolvePosition(upEvent.clientX, upEvent.clientY);
-            onPosition(next.offsetX, next.offsetY);
+            const relocation = relocationTarget(upEvent.clientX, upEvent.clientY);
+            if (relocation?.nodeId && onRelocateNode) {
+              onRelocateNode(relocation.nodeId, relocation.position);
+            } else if (relocation?.regionId && onRelocate) {
+              onRelocate(relocation.regionId, relocation.position);
+            } else {
+              const next = resolvePosition(upEvent.clientX, upEvent.clientY);
+              onPosition(next.offsetX, next.offsetY);
+            }
           }
           setPositionPreview(null);
         };
@@ -1167,6 +1216,23 @@ function RenderNode({
           path: ['props'],
           value: { ...(node.props || {}), offsetX, offsetY },
         });
+      }}
+      onRelocate={(anchorRegionId, position) => {
+        onMutation?.({
+          nodeId: node.id,
+          path: [],
+          value: {
+            ...node,
+            props: { ...(node.props || {}), offsetX: 0, offsetY: 0 },
+            metadata: {
+              ...(node.metadata || {}),
+              runtimePlacement: { anchorRegionId, position },
+            },
+          },
+        });
+      }}
+      onRelocateNode={(targetNodeId, position) => {
+        renderer.onMove?.(node.id, targetNodeId, position);
       }}
       responsiveMode={responsiveMode}
     >
