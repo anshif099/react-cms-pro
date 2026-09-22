@@ -116,6 +116,33 @@ describe("source visual patches", () => {
     );
     expect(result.content).toContain(`num: '02', title: 'Social Media', image: img6`);
   });
+
+  it("preserves manual styles when patching repeated text", () => {
+    const source = `
+      const servicesData = [
+        { num: '01', title: 'Digital Marketing' },
+        { num: '02', title: 'Social Media' }
+      ];
+      {servicesData.map((service) => (
+        <EditableText
+          regionId={\`services.\${service.num}.title\`}
+          defaultValue={service.title}
+        />
+      ))}
+    `;
+    const result = patchEditableRegionSource(
+      source,
+      "services.01.title",
+      { text: "Digital Marketing", color: "#ff4f4f" }
+    );
+
+    expect(result.changed).toBe(true);
+    expect(result.dynamic).toBe(true);
+    expect(result.content).toContain(
+      `num: '01', title: {"text":"Digital Marketing","color":"#ff4f4f"}`
+    );
+    expect(result.content).toContain(`num: '02', title: 'Social Media'`);
+  });
 });
 
 describe("connected source imports", () => {

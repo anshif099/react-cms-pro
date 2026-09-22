@@ -293,9 +293,17 @@ function patchCompiledRegionSource(source, regionId, value) {
   return null;
 }
 
-function collectionValue(field, value) {
+function collectionValue(field, value, component) {
   if (field === "image" && value && typeof value === "object") {
     return value.src;
+  }
+  // Repeated EditableText regions commonly point at a string property in an
+  // array (for example `service.title`). Once a manual style is applied, the
+  // SDK deliberately promotes that string to `{ text, ...styles }`. Keep that
+  // richer value in the backing collection; reducing it to `value.text` makes
+  // style-only edits indistinguishable from the original source value.
+  if (component === "EditableText" && value && typeof value === "object") {
+    return value;
   }
   if (value && typeof value === "object" && "text" in value) {
     return value.text;
@@ -331,7 +339,7 @@ function patchDynamicCollectionRegion(source, regionId, value, component) {
 
   const objectSource = source.slice(objectStart, objectEnd);
   const fieldRange = findObjectPropertyValueRange(objectSource, field);
-  const nextValue = collectionValue(field, value);
+  const nextValue = collectionValue(field, value, component);
   if (!fieldRange || nextValue === undefined) return null;
 
   const replacement = JSON.stringify(nextValue);
