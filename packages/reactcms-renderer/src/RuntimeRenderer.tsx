@@ -672,7 +672,8 @@ function NodeFrame({
     position: 'relative',
     display: node.hidden ? 'none' : compactButton ? 'inline-block' : 'block',
     verticalAlign: compactButton ? 'top' : undefined,
-    width: resizePreview ? `${resizePreview.width}px` : undefined,
+    width: resizePreview ? `${resizePreview.width}px` : compactButton ? 'fit-content' : undefined,
+    maxWidth: compactButton ? '100%' : undefined,
     height: resizePreview ? `${resizePreview.height}px` : undefined,
     marginLeft: compactButton && displayedOffsetX ? `${displayedOffsetX}px` : undefined,
     marginTop: compactButton && displayedOffsetY ? `${displayedOffsetY}px` : undefined,
@@ -1169,7 +1170,9 @@ function RenderNode({
       }}
       responsiveMode={responsiveMode}
     >
-      <div style={responsiveStyle(node, responsiveMode)}>
+      <div style={node.type === 'button'
+        ? { ...responsiveStyle(node, responsiveMode), width: 'fit-content', maxWidth: '100%' }
+        : responsiveStyle(node, responsiveMode)}>
         {content}
       </div>
     </NodeFrame>

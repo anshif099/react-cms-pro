@@ -1,4 +1,4 @@
-import React, { useContext } from 'react';
+import React, { useContext, useEffect, useState } from 'react';
 import { useEditable } from '../hooks/useEditable';
 import { CMSContext } from '../context/CMSContext';
 import { PageContext } from '../context/PageContext';
@@ -27,6 +27,7 @@ export function EditableSection({
   const page = useContext(PageContext);
 
   const [value] = useEditable<Record<string, unknown>>(regionId, defaultValue, 'section', label);
+  const [isSelected, setIsSelected] = useState(false);
   const editMode = cms?.editMode || false;
   const pageId = page?.currentPage?.id || 'global';
   const sectionValue = value && typeof value === 'object' ? value : {};
@@ -40,6 +41,12 @@ export function EditableSection({
   if (sectionValue.layout === 'grid') sectionStyle.display = 'grid';
   if (sectionValue.layout === 'full') sectionStyle.width = '100%';
 
+  useEffect(() => MessageBus.subscribe((message) => {
+    if (message.type !== 'rcms/v1/region-selected') return;
+    const payload = message.payload as { regionId?: string; type?: string };
+    setIsSelected(payload.regionId === regionId && payload.type === 'section');
+  }), [regionId]);
+
   const handleClick = (e: React.MouseEvent) => {
     if (editMode && cms?.websiteId) {
       // Ignore click if it originated from a child editable region inside this section
@@ -48,6 +55,7 @@ export function EditableSection({
         return;
       }
       e.stopPropagation();
+      setIsSelected(true);
       MessageBus.send('rcms/v1/region-selected', cms.websiteId, {
         regionId,
         type: 'section',
@@ -74,7 +82,7 @@ export function EditableSection({
       className={`rcms-editable-region rcms-editable-section ${className}`}
       style={{
         ...sectionStyle,
-        outline: '2px dashed #3b82f6',
+        outline: isSelected ? '2px solid #2563eb' : 'none',
         outlineOffset: '4px',
         position: 'relative',
         cursor: 'pointer',

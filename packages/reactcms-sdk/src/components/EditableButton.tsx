@@ -1,4 +1,4 @@
-import React, { useContext, useState } from 'react';
+import React, { useContext, useEffect, useState } from 'react';
 import { useEditable } from '../hooks/useEditable';
 import { CMSContext } from '../context/CMSContext';
 import { PageContext } from '../context/PageContext';
@@ -18,6 +18,8 @@ export interface ButtonValue {
   iconImage?: string;
   iconPosition?: 'left' | 'right';
   iconSize?: number;
+  offsetX?: number;
+  offsetY?: number;
 }
 
 export interface EditableButtonProps {
@@ -50,17 +52,25 @@ export function EditableButton({
 
   const [value, setValue] = useEditable<ButtonValue>(regionId, defaultBtnObj, 'button', label);
   const [resizePreview, setResizePreview] = useState<{ width: number; height: number } | null>(null);
+  const [positionPreview, setPositionPreview] = useState<{ offsetX: number; offsetY: number } | null>(null);
+  const [isSelected, setIsSelected] = useState(false);
   const editMode = cms?.editMode || false;
   const pageId = page?.currentPage?.id || 'global';
 
   const btnText = typeof value === 'string' ? value : value?.text || '';
   const btnHref = typeof value === 'object' ? value?.href : undefined;
+  const offsetX = typeof value === 'object' ? Number(value?.offsetX) || 0 : 0;
+  const offsetY = typeof value === 'object' ? Number(value?.offsetY) || 0 : 0;
+  const displayedOffsetX = positionPreview?.offsetX ?? offsetX;
+  const displayedOffsetY = positionPreview?.offsetY ?? offsetY;
   const buttonStyle: React.CSSProperties = { ...style };
   buttonStyle.display = 'inline-flex';
   buttonStyle.alignItems = 'center';
   buttonStyle.justifyContent = 'center';
   buttonStyle.gap = '8px';
   buttonStyle.boxSizing = 'border-box';
+  if (displayedOffsetX) buttonStyle.marginLeft = `${displayedOffsetX}px`;
+  if (displayedOffsetY) buttonStyle.marginTop = `${displayedOffsetY}px`;
   if (typeof value === 'object' && value) {
     if (value.color) {
       if (value.variant === 'outline' || value.variant === 'ghost') {
@@ -97,22 +107,34 @@ export function EditableButton({
     buttonStyle.height = `${resizePreview.height}px`;
   }
 
+  useEffect(() => MessageBus.subscribe((message) => {
+    if (message.type !== 'rcms/v1/region-selected') return;
+    const payload = message.payload as { regionId?: string; type?: string };
+    setIsSelected(payload.regionId === regionId && payload.type === 'button');
+  }), [regionId]);
+
+  const selectButton = (additive = false) => {
+    if (!editMode || !cms?.websiteId) return;
+    setIsSelected(true);
+    MessageBus.send('rcms/v1/region-selected', cms.websiteId, {
+      regionId,
+      type: 'button',
+      pageId,
+      value,
+      additive,
+    });
+    MessageBus.send('rcms/v1/open-inspector', cms.websiteId, {
+      regionId,
+      type: 'button',
+      pageId,
+    });
+  };
+
   const handleClick = (e: React.MouseEvent) => {
     if (editMode && cms?.websiteId) {
       e.preventDefault();
       e.stopPropagation();
-      MessageBus.send('rcms/v1/region-selected', cms.websiteId, {
-        regionId,
-        type: 'button',
-        pageId,
-        value,
-        additive: e.metaKey || e.ctrlKey || e.shiftKey,
-      });
-      MessageBus.send('rcms/v1/open-inspector', cms.websiteId, {
-        regionId,
-        type: 'button',
-        pageId,
-      });
+      selectButton(e.metaKey || e.ctrlKey || e.shiftKey);
     } else if (onClick) {
       onClick(e);
     }
@@ -156,10 +178,57 @@ export function EditableButton({
       className={`rcms-editable-region rcms-editable-button ${className}`}
       style={{
         ...buttonStyle,
-        outline: '2px dashed #3b82f6',
+        outline: isSelected ? '2px solid #2563eb' : '1px dashed rgba(37,99,235,.7)',
         outlineOffset: '2px',
         position: 'relative',
-        cursor: 'pointer',
+        cursor: 'grab',
+      }}
+      onPointerDown={(event: React.PointerEvent) => {
+        if (event.button !== 0 || (event.target as HTMLElement).closest('[data-rcms-resize-handle]')) return;
+        event.preventDefault();
+        event.stopPropagation();
+        selectButton(event.metaKey || event.ctrlKey || event.shiftKey);
+        const element = event.currentTarget as HTMLElement;
+        const parent = element.parentElement;
+        const renderedWidth = element.getBoundingClientRect().width;
+        const layoutWidth = element.offsetWidth || renderedWidth;
+        const scale = renderedWidth > 0 && layoutWidth > 0 ? renderedWidth / layoutWidth : 1;
+        const maxOffsetX = Math.max(0, (parent?.clientWidth || layoutWidth) - layoutWidth);
+        const startX = event.clientX;
+        const startY = event.clientY;
+        let moved = false;
+        const resolvePosition = (clientX: number, clientY: number) => ({
+          offsetX: Math.round(Math.max(0, Math.min(maxOffsetX, offsetX + (clientX - startX) / scale))),
+          offsetY: Math.round(Math.max(0, offsetY + (clientY - startY) / scale)),
+        });
+        const move = (moveEvent: PointerEvent) => {
+          if (!moved && Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) < 2) return;
+          moved = true;
+          setPositionPreview(resolvePosition(moveEvent.clientX, moveEvent.clientY));
+        };
+        const cleanup = () => {
+          window.removeEventListener('pointermove', move);
+          window.removeEventListener('pointerup', finish);
+          window.removeEventListener('pointercancel', cancel);
+        };
+        const finish = (upEvent: PointerEvent) => {
+          cleanup();
+          if (moved) {
+            const nextPosition = resolvePosition(upEvent.clientX, upEvent.clientY);
+            const next: ButtonValue = typeof value === 'object' && value ? { ...value } : { text: btnText };
+            next.offsetX = nextPosition.offsetX;
+            next.offsetY = nextPosition.offsetY;
+            setValue(next);
+          }
+          setPositionPreview(null);
+        };
+        const cancel = () => {
+          cleanup();
+          setPositionPreview(null);
+        };
+        window.addEventListener('pointermove', move);
+        window.addEventListener('pointerup', finish);
+        window.addEventListener('pointercancel', cancel);
       }}
       onClick={handleClick}
       data-rcms-region={regionId}
@@ -168,6 +237,7 @@ export function EditableButton({
     >
       {renderedContent}
       <span
+        data-rcms-resize-handle="true"
         title="Drag to resize button"
         aria-label="Resize button"
         onMouseDown={(event) => {
