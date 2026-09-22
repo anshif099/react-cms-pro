@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { findButtonDropTarget, startButtonDrag } from './buttonDrag';
+import { buttonHorizontalPosition, findButtonDropTarget, startButtonDrag } from './buttonDrag';
 
 function bounds(element: Element, left: number, top: number, width: number, height: number) {
   vi.spyOn(element, 'getBoundingClientRect').mockReturnValue({
@@ -24,6 +24,41 @@ beforeEach(() => {
 afterEach(() => { cancel?.(); cancel = undefined; vi.restoreAllMocks(); document.body.innerHTML = ''; });
 
 describe('button pointer drag', () => {
+  it.each([
+    [20, 0], [370, .5], [720, 1], [195, .25], [-100, 0], [900, 1],
+  ])('maps pointer X %s to horizontal placement %s including the grab offset', (x, expected) => {
+    expect(buttonHorizontalPosition(x, 20, 100, 0, 800)).toBe(expected);
+  });
+  it('handles a button wider than the destination without overflow arithmetic', () => {
+    expect(buttonHorizontalPosition(400, 20, 900, 0, 800)).toBe(0);
+  });
+  it('updates the horizontal slot while the vertical destination stays unchanged', () => {
+    const frame = document.querySelector<HTMLElement>('[data-rcms-node]')!;
+    const drop = vi.fn();
+    cancel = startButtonDrag(frame, { clientX: 120, clientY: 120, pointerId: 1 }, drop);
+    pointer('pointermove', 195, 615);
+    const slot = document.querySelector<HTMLElement>('[data-rcms-button-drop-placeholder]')!;
+    expect(slot.style.left).toBe('25%');
+    pointer('pointermove', 545, 615);
+    expect(slot.style.left).toBe('75%');
+    pointer('pointerup', 545, 615);
+    expect(drop).toHaveBeenCalledWith(expect.objectContaining({
+      regionId: 'image', position: 'after', horizontalPosition: .75,
+    }));
+  });
+  it('accounts for scaled destination padding and border', () => {
+    const frame = document.querySelector<HTMLElement>('[data-rcms-node]')!;
+    const section = document.querySelector<HTMLElement>('section')!;
+    section.style.paddingLeft = '20px';
+    section.style.paddingRight = '20px';
+    section.style.border = '10px solid black';
+    Object.defineProperty(section, 'offsetWidth', { configurable: true, value: 1600 });
+    const drop = vi.fn();
+    cancel = startButtonDrag(frame, { clientX: 120, clientY: 120, pointerId: 1 }, drop);
+    pointer('pointermove', 370, 615);
+    pointer('pointerup', 370, 615);
+    expect(drop).toHaveBeenCalledWith(expect.objectContaining({ horizontalPosition: .5 }));
+  });
   it('targets the image after-edge in blank space instead of its full section', () => {
     const frame = document.querySelector<HTMLElement>('[data-rcms-node]')!;
     expect(findButtonDropTarget(frame, 300, 615)).toMatchObject({ regionId: 'image', position: 'after' });

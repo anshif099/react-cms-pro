@@ -19,6 +19,7 @@ describe('rendered button drag wiring', () => {
     const image = document.createElement('div');
     image.dataset.rcmsRegion = 'hero-image';
     document.body.append(host, image);
+    vi.spyOn(document.body, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 820, height: 800, right: 820, bottom: 800 } as DOMRect);
     const tree: PageComponentTree = {
       id: 'test', type: 'page', version: 2, children: [{
         id: 'button', type: 'button', props: { text: 'Move button', url: '/contact', offsetX: 25, offsetY: 30 },
@@ -44,11 +45,19 @@ describe('rendered button drag wiring', () => {
     expect(onMutation).toHaveBeenCalledWith({
       nodeId: 'button', path: [],
       value: expect.objectContaining({
-        props: expect.objectContaining({ offsetX: 0, offsetY: 0 }),
+        props: expect.objectContaining({ offsetX: 0, offsetY: 0, horizontalPosition: .4 }),
         metadata: { runtimePlacement: { anchorRegionId: 'hero-image', position: 'after' } },
       }),
     });
     expect(frame.style.display).toBe('inline-block');
+    // Simulate persistence/reload: only the serialized tree reaches a new renderer.
+    const saved = JSON.parse(JSON.stringify(onMutation.mock.calls[0][0].value));
+    act(() => root.render(<RuntimeRenderer tree={{ ...tree, children: [saved] }} mode="runtime" locale="en" responsiveMode="mobile" />));
+    const restored = host.querySelector<HTMLElement>('[data-rcms-node="button"]')!;
+    expect(restored.style.left).toBe('40%');
+    expect(restored.style.translate).toBe('-40% 0');
+    expect(restored.style.display).toBe('block');
+    expect(restored.style.marginLeft).toBe('0px');
     act(() => root.unmount());
     expect(document.querySelector('[data-rcms-drag-ghost]')).toBeNull();
   });

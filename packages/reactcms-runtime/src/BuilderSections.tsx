@@ -290,11 +290,11 @@ function RuntimeAdditionsPortal({
     if (!host) return;
     // The source page may center children with flex or text-align. Give a
     // freely positioned button the parent's full horizontal space to use.
-    const positioned = nodes.some((node) => typeof node.props?.horizontalPosition === 'number');
-    host.style.width = positioned ? '100%' : '';
-    host.style.minWidth = positioned ? '0' : '';
-    host.style.alignSelf = positioned ? 'stretch' : '';
-  }, [host, nodes]);
+    host.style.width = '100%';
+    host.style.minWidth = '0';
+    host.style.alignSelf = 'stretch';
+    host.style.boxSizing = 'border-box';
+  }, [host]);
 
   useEffect(() => {
     if (typeof document === 'undefined') return undefined;

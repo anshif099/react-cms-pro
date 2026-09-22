@@ -26,6 +26,11 @@ describe('moveRuntimeAddition', () => {
     expect(moveRuntimeAddition(tree, 'button', 'missing', 'after')).toBe(tree);
     expect(moveRuntimeAddition(tree, 'button', 'button', 'after')).toBe(tree);
   });
+  it('preserves an arbitrary horizontal drop position across portal moves and reload', () => {
+    const next = JSON.parse(JSON.stringify(moveRuntimeAddition(tree, 'button', 'other', 'after', .83)));
+    expect(next.children[1].props).toMatchObject({ offsetX: 0, offsetY: 0, horizontalPosition: .83 });
+    expect(next.children[1].metadata.runtimePlacement.anchorRegionId).toBe('image');
+  });
   it('inherits the top-level destination placement for nested targets', () => {
     const nested = { ...tree, children: [...tree.children, { id: 'section', type: 'section', metadata: { runtimePlacement: { anchorRegionId: 'footer', position: 'before' } }, children: [{ id: 'child', type: 'paragraph' }] }] } as PageComponentTree;
     const next = moveRuntimeAddition(nested, 'button', 'child', 'after');
