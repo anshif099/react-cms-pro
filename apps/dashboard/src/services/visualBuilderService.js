@@ -40,7 +40,7 @@ const BLOCK_STARTER_VALUES = {
   },
   button: {
     localized: { label: "Learn More" },
-    global: { url: "#", variant: "primary", size: "md", color: "#2563eb", radius: 10 }
+    global: { url: "#", variant: "primary", size: "md", color: "#2563eb", radius: 10, iconSize: 18 }
   },
   gallery: { global: { columns: "3", gap: 16, images: [] } },
   features: {

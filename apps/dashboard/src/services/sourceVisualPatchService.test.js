@@ -143,6 +143,29 @@ describe("source visual patches", () => {
     );
     expect(result.content).toContain(`num: '02', title: 'Social Media'`);
   });
+
+  it("preserves appearance and icon values when patching repeated buttons", () => {
+    const source = `
+      const actions = [{ id: 'audit', label: 'Free Audit' }];
+      {actions.map((action) => (
+        <EditableButton
+          regionId={\`actions.\${action.id}.label\`}
+          defaultValue={action.label}
+        />
+      ))}
+    `;
+    const result = patchEditableRegionSource(source, "actions.audit.label", {
+      text: "Free Audit",
+      color: "#ef4444",
+      iconImage: "https://cdn.example.com/audit.svg",
+      width: "180px"
+    });
+
+    expect(result.changed).toBe(true);
+    expect(result.content).toContain(
+      'label: {"text":"Free Audit","color":"#ef4444","iconImage":"https://cdn.example.com/audit.svg","width":"180px"}'
+    );
+  });
 });
 
 describe("connected source imports", () => {

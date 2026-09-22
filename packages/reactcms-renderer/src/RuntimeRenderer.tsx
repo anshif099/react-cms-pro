@@ -162,8 +162,11 @@ function buttonStyle(node: ComponentNode): React.CSSProperties {
   };
   return {
     display: 'inline-flex',
+    boxSizing: 'border-box',
     alignItems: 'center',
     justifyContent: 'center',
+    width: props.width || undefined,
+    height: props.height || undefined,
     minHeight: props.size === 'lg' ? '50px' : props.size === 'sm' ? '36px' : '42px',
     padding: props.size === 'lg' ? '0 26px' : props.size === 'sm' ? '0 14px' : '0 20px',
     borderRadius: props.radius !== undefined
@@ -180,7 +183,17 @@ function buttonStyle(node: ComponentNode): React.CSSProperties {
   };
 }
 
-function ButtonIcon({ name }: { name?: string }) {
+function ButtonIcon({ name, src, size = 18 }: { name?: string; src?: string; size?: number }) {
+  if (src) {
+    return (
+      <img
+        src={src}
+        alt=""
+        aria-hidden="true"
+        style={{ width: `${size}px`, height: `${size}px`, objectFit: 'contain', flex: '0 0 auto' }}
+      />
+    );
+  }
   if (!name || name === 'none') return null;
   const symbols: Record<string, string> = {
     'arrow-right': '→', whatsapp: 'WA', phone: '☎', mail: '✉',
@@ -349,7 +362,7 @@ function BuiltinComponent({
         ...typography,
       }, true);
     case 'button': {
-      const buttonIcon = <ButtonIcon name={props.icon} />;
+      const buttonIcon = <ButtonIcon name={props.icon} src={props.iconImage} size={props.iconSize || 18} />;
       const buttonContent = (
         <>
           {props.iconPosition !== 'right' ? buttonIcon : null}
@@ -610,6 +623,7 @@ function NodeFrame({
   onMove,
   onInsert,
   onCommand,
+  onResize,
   responsiveMode,
   children,
 }: {
@@ -622,6 +636,7 @@ function NodeFrame({
   onMove?: RuntimeRendererProps['onMove'];
   onInsert?: RuntimeRendererProps['onInsert'];
   onCommand?: RuntimeRendererProps['onCommand'];
+  onResize?: (width: number, height: number) => void;
   responsiveMode: ResponsiveMode;
   children: React.ReactNode;
 }) {
@@ -631,6 +646,7 @@ function NodeFrame({
   const [insertUrl, setInsertUrl] = useState('');
   const [insertAlt, setInsertAlt] = useState('');
   const [dropPosition, setDropPosition] = useState<DropPosition | null>(null);
+  const [resizePreview, setResizePreview] = useState<{ width: number; height: number } | null>(null);
   if (node.hidden && mode !== 'edit') return null;
 
   const editable = mode === 'edit';
@@ -643,11 +659,17 @@ function NodeFrame({
     'scale-in': 'rcms-scale-in',
     parallax: 'rcms-slide-up',
   };
+  const compactButton = node.type === 'button';
   const shellStyle: React.CSSProperties = {
     position: 'relative',
-    display: node.hidden ? 'none' : 'block',
+    display: node.hidden ? 'none' : compactButton ? 'inline-block' : 'block',
+    verticalAlign: compactButton ? 'top' : undefined,
+    width: resizePreview ? `${resizePreview.width}px` : undefined,
+    height: resizePreview ? `${resizePreview.height}px` : undefined,
     background: design.background,
-    padding: `${design.paddingY ?? (['spacer', 'divider'].includes(node.type) ? 0 : 36)}px 24px`,
+    padding: compactButton
+      ? `${design.paddingY ?? 6}px 6px`
+      : `${design.paddingY ?? (['spacer', 'divider'].includes(node.type) ? 0 : 36)}px 24px`,
     opacity: responsiveVisible ? node.props?.opacity ?? 1 : .32,
     borderRadius: design.radius ? `${design.radius}px` : undefined,
     boxShadow: design.shadow && design.shadow !== 'none' ? design.shadow : undefined,
@@ -742,6 +764,54 @@ function NodeFrame({
           background: dropPosition === 'inside' ? 'rgba(37,99,235,.08)' : '#2563eb',
           borderRadius: '4px',
         }} />
+      )}
+
+      {selected && editable && compactButton && !node.locked && onResize && (
+        <span
+          title="Drag to resize button"
+          aria-label="Resize button"
+          onMouseDown={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const frame = event.currentTarget.parentElement;
+            if (!frame) return;
+            const rect = frame.getBoundingClientRect();
+            const startX = event.clientX;
+            const startY = event.clientY;
+            const startWidth = rect.width;
+            const startHeight = rect.height;
+            const padding = 12;
+            const handleMove = (moveEvent: MouseEvent) => {
+              setResizePreview({
+                width: Math.max(72, startWidth + moveEvent.clientX - startX),
+                height: Math.max(36, startHeight + moveEvent.clientY - startY),
+              });
+            };
+            const handleUp = (upEvent: MouseEvent) => {
+              const width = Math.round(Math.max(60, startWidth + upEvent.clientX - startX - padding));
+              const height = Math.round(Math.max(28, startHeight + upEvent.clientY - startY - padding));
+              window.removeEventListener('mousemove', handleMove);
+              window.removeEventListener('mouseup', handleUp);
+              setResizePreview(null);
+              onResize(width, height);
+            };
+            window.addEventListener('mousemove', handleMove);
+            window.addEventListener('mouseup', handleUp);
+          }}
+          style={{
+            position: 'absolute',
+            zIndex: 1100,
+            right: '-5px',
+            bottom: '-5px',
+            width: '13px',
+            height: '13px',
+            border: '2px solid #fff',
+            borderRadius: '3px',
+            background: '#2563eb',
+            boxShadow: '0 2px 8px rgba(15,23,42,.35)',
+            cursor: 'nwse-resize',
+          }}
+        />
       )}
 
       {(hovered || selected) && editable && onInsert && (
@@ -1007,6 +1077,13 @@ function RenderNode({
       onMove={renderer.onMove}
       onInsert={renderer.onInsert}
       onCommand={renderer.onCommand}
+      onResize={(width, height) => {
+        onMutation?.({
+          nodeId: node.id,
+          path: ['props'],
+          value: { ...(node.props || {}), width: `${width}px`, height: `${height}px` },
+        });
+      }}
       responsiveMode={responsiveMode}
     >
       <div style={responsiveStyle(node, responsiveMode)}>

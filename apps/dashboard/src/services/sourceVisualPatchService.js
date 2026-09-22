@@ -302,7 +302,7 @@ function collectionValue(field, value, component) {
   // SDK deliberately promotes that string to `{ text, ...styles }`. Keep that
   // richer value in the backing collection; reducing it to `value.text` makes
   // style-only edits indistinguishable from the original source value.
-  if (component === "EditableText" && value && typeof value === "object") {
+  if (["EditableText", "EditableButton"].includes(component) && value && typeof value === "object") {
     return value;
   }
   if (value && typeof value === "object" && "text" in value) {

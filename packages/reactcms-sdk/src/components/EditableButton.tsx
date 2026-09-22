@@ -1,4 +1,4 @@
-import React, { useContext } from 'react';
+import React, { useContext, useState } from 'react';
 import { useEditable } from '../hooks/useEditable';
 import { CMSContext } from '../context/CMSContext';
 import { PageContext } from '../context/PageContext';
@@ -12,6 +12,12 @@ export interface ButtonValue {
   color?: string;
   radius?: number;
   shadow?: 'none' | 'sm' | 'md' | 'lg';
+  width?: string;
+  height?: string;
+  icon?: string;
+  iconImage?: string;
+  iconPosition?: 'left' | 'right';
+  iconSize?: number;
 }
 
 export interface EditableButtonProps {
@@ -42,13 +48,19 @@ export function EditableButton({
     ? { text: defaultValue }
     : defaultValue;
 
-  const [value] = useEditable<ButtonValue>(regionId, defaultBtnObj, 'button', label);
+  const [value, setValue] = useEditable<ButtonValue>(regionId, defaultBtnObj, 'button', label);
+  const [resizePreview, setResizePreview] = useState<{ width: number; height: number } | null>(null);
   const editMode = cms?.editMode || false;
   const pageId = page?.currentPage?.id || 'global';
 
   const btnText = typeof value === 'string' ? value : value?.text || '';
   const btnHref = typeof value === 'object' ? value?.href : undefined;
   const buttonStyle: React.CSSProperties = { ...style };
+  buttonStyle.display = 'inline-flex';
+  buttonStyle.alignItems = 'center';
+  buttonStyle.justifyContent = 'center';
+  buttonStyle.gap = '8px';
+  buttonStyle.boxSizing = 'border-box';
   if (typeof value === 'object' && value) {
     if (value.color) {
       if (value.variant === 'outline' || value.variant === 'ghost') {
@@ -61,6 +73,8 @@ export function EditableButton({
       }
     }
     if (value.radius !== undefined) buttonStyle.borderRadius = `${value.radius}px`;
+    if (value.width) buttonStyle.width = value.width;
+    if (value.height) buttonStyle.height = value.height;
     if (value.size) {
       buttonStyle.padding = value.size === 'lg'
         ? '14px 24px'
@@ -77,6 +91,10 @@ export function EditableButton({
             ? '0 4px 10px rgba(15,23,42,.1)'
             : '0 10px 25px rgba(15,23,42,.15)';
     }
+  }
+  if (resizePreview) {
+    buttonStyle.width = `${resizePreview.width}px`;
+    buttonStyle.height = `${resizePreview.height}px`;
   }
 
   const handleClick = (e: React.MouseEvent) => {
@@ -103,9 +121,26 @@ export function EditableButton({
   const Tag = btnHref && !editMode ? 'a' : Component;
   const tagProps = Tag === 'a' ? { href: btnHref } : {};
 
-  const renderedContent = typeof children === 'function'
+  const providedContent = typeof children === 'function'
     ? children(value || defaultBtnObj)
     : (children !== undefined ? children : btnText);
+  const iconSize = typeof value === 'object' ? value?.iconSize || 18 : 18;
+  const customIcon = typeof value === 'object' && value?.iconImage ? (
+    <img src={value.iconImage} alt="" aria-hidden="true" style={{ width: iconSize, height: iconSize, objectFit: 'contain', flex: '0 0 auto' }} />
+  ) : null;
+  const symbol = typeof value === 'object' ? ({
+    'arrow-right': '→', whatsapp: 'WA', phone: '☎', mail: '✉',
+    'external-link': '↗', download: '↓',
+  } as Record<string, string>)[value?.icon || ''] : '';
+  const presetIcon = !customIcon && symbol ? <span aria-hidden="true">{symbol}</span> : null;
+  const buttonIcon = customIcon || presetIcon;
+  const renderedContent = children !== undefined ? providedContent : (
+    <>
+      {typeof value === 'object' && value?.iconPosition !== 'right' ? buttonIcon : null}
+      {providedContent}
+      {typeof value === 'object' && value?.iconPosition === 'right' ? buttonIcon : null}
+    </>
+  );
 
   if (!editMode) {
     return (
@@ -123,6 +158,7 @@ export function EditableButton({
         ...buttonStyle,
         outline: '2px dashed #3b82f6',
         outlineOffset: '2px',
+        position: 'relative',
         cursor: 'pointer',
       }}
       onClick={handleClick}
@@ -131,6 +167,43 @@ export function EditableButton({
       data-rcms-label={label}
     >
       {renderedContent}
+      <span
+        title="Drag to resize button"
+        aria-label="Resize button"
+        onMouseDown={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const target = event.currentTarget.parentElement;
+          if (!target) return;
+          const rect = target.getBoundingClientRect();
+          const startX = event.clientX;
+          const startY = event.clientY;
+          const move = (moveEvent: MouseEvent) => setResizePreview({
+            width: Math.max(60, rect.width + moveEvent.clientX - startX),
+            height: Math.max(28, rect.height + moveEvent.clientY - startY),
+          });
+          const up = (upEvent: MouseEvent) => {
+            window.removeEventListener('mousemove', move);
+            window.removeEventListener('mouseup', up);
+            const next = typeof value === 'object' && value ? { ...value } : { text: btnText };
+            next.width = `${Math.round(Math.max(60, rect.width + upEvent.clientX - startX))}px`;
+            next.height = `${Math.round(Math.max(28, rect.height + upEvent.clientY - startY))}px`;
+            setResizePreview(null);
+            setValue(next);
+          };
+          window.addEventListener('mousemove', move);
+          window.addEventListener('mouseup', up);
+        }}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+        }}
+        style={{
+          position: 'absolute', right: '-7px', bottom: '-7px', width: '13px', height: '13px',
+          border: '2px solid #fff', borderRadius: '3px', background: '#2563eb',
+          boxShadow: '0 2px 8px rgba(15,23,42,.35)', cursor: 'nwse-resize', zIndex: 2,
+        }}
+      />
     </Tag>
   );
 }

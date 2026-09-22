@@ -184,8 +184,12 @@ function ConnectedInsertContentModal({ locale, pages = [], clipboard, onCancel, 
   const [radius, setRadius] = useState(10);
   const [shadow, setShadow] = useState("medium");
   const [icon, setIcon] = useState("none");
+  const [iconImage, setIconImage] = useState("");
+  const [iconSize, setIconSize] = useState(18);
   const [iconPosition, setIconPosition] = useState("left");
   const [alignment, setAlignment] = useState("center");
+  const [buttonWidth, setButtonWidth] = useState("");
+  const [buttonHeight, setButtonHeight] = useState("");
   const [newTab, setNewTab] = useState(false);
 
   const fieldClass = "h-11 rounded-xl border border-slate-700 bg-slate-950 px-3 text-sm font-normal text-white outline-none focus:border-blue-500";
@@ -222,7 +226,8 @@ function ConnectedInsertContentModal({ locale, pages = [], clipboard, onCancel, 
             type: "button",
             props: {
               url: resolveButtonUrl(), linkType, variant, size, color,
-              radius: Number(radius), shadow, icon, iconPosition, alignment, newTab,
+              radius: Number(radius), shadow, icon, iconImage, iconSize: Number(iconSize),
+              iconPosition, alignment, width: buttonWidth, height: buttonHeight, newTab,
               locales: { [locale]: { label: cleanText } }
             }
           });
@@ -247,6 +252,17 @@ function ConnectedInsertContentModal({ locale, pages = [], clipboard, onCancel, 
             <div className="grid grid-cols-2 gap-3">
               <label className="grid gap-2 text-xs font-bold text-slate-300">Redirect type<select value={linkType} onChange={(event) => { setLinkType(event.target.value); setUrl(""); }} className={fieldClass}><option value="internal">Internal page</option><option value="external">External website</option><option value="whatsapp">WhatsApp</option><option value="phone">Phone call</option><option value="email">Email</option></select></label>
               <label className="grid gap-2 text-xs font-bold text-slate-300">Destination{linkType === "internal" && pages.length ? <select required value={url} onChange={(event) => setUrl(event.target.value)} className={fieldClass}><option value="">Select a page</option>{pages.map((item) => <option key={item.id} value={item.route || item.slug || `/pages/${item.id}`}>{item.title || item.name || item.slug}</option>)}</select> : <input required value={url} onChange={(event) => setUrl(event.target.value)} className={fieldClass} placeholder={linkType === "whatsapp" ? "919876543210" : linkType === "phone" ? "+91 98765 43210" : linkType === "email" ? "hello@example.com" : linkType === "external" ? "https://example.com" : "/about"} />}</label>
+            </div>
+            <ImagePicker
+              label="Custom icon image"
+              value={iconImage}
+              onChange={setIconImage}
+              placeholder="Upload, browse, or paste an icon URL"
+            />
+            <div className="grid grid-cols-3 gap-3">
+              <label className="grid gap-2 text-xs font-bold text-slate-300">Icon size<input type="number" min="8" max="128" value={iconSize} onChange={(event) => setIconSize(event.target.value)} className={fieldClass} /></label>
+              <label className="grid gap-2 text-xs font-bold text-slate-300">Width<input value={buttonWidth} onChange={(event) => setButtonWidth(event.target.value)} className={fieldClass} placeholder="auto / 180px" /></label>
+              <label className="grid gap-2 text-xs font-bold text-slate-300">Height<input value={buttonHeight} onChange={(event) => setButtonHeight(event.target.value)} className={fieldClass} placeholder="auto / 48px" /></label>
             </div>
             <div className="grid grid-cols-3 gap-3">
               <label className="grid gap-2 text-xs font-bold text-slate-300">Style<select value={variant} onChange={(event) => setVariant(event.target.value)} className={fieldClass}><option value="primary">Primary</option><option value="secondary">Secondary</option><option value="outline">Outline</option><option value="ghost">Ghost</option></select></label>
@@ -1411,6 +1427,57 @@ function ConnectedSourceWorkspace({
                   className="mt-2 h-9 w-full rounded-lg border border-slate-800 bg-[#070b14] px-3 text-xs text-slate-200 outline-none focus:border-blue-500"
                 />
               </label>
+              <div className="rounded-xl border border-slate-800 bg-slate-950/35 p-3 space-y-3">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  Button appearance
+                </p>
+                <label className="block">
+                  <span className="text-[10px] font-semibold text-slate-500">Button colour</span>
+                  <div className="mt-1.5 flex gap-2">
+                    <input
+                      type="color"
+                      value={/^#[0-9a-f]{6}$/i.test(value?.color || "") ? value.color : "#2563eb"}
+                      onChange={(event) => updateSelectedField("color", event.target.value)}
+                      className="h-9 w-11 cursor-pointer rounded-lg border border-slate-700 bg-[#070b14] p-1"
+                    />
+                    <input
+                      value={value?.color || ""}
+                      onChange={(event) => updateSelectedField("color", event.target.value)}
+                      placeholder="#2563eb"
+                      className="h-9 min-w-0 flex-1 rounded-lg border border-slate-800 bg-[#070b14] px-3 font-mono text-xs text-slate-200 outline-none focus:border-blue-500"
+                    />
+                  </div>
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="block">
+                    <span className="text-[10px] font-semibold text-slate-500">Width</span>
+                    <input value={value?.width || ""} onChange={(event) => updateSelectedField("width", event.target.value)} placeholder="auto / 180px" className="mt-1.5 h-9 w-full rounded-lg border border-slate-800 bg-[#070b14] px-3 text-xs text-slate-200 outline-none focus:border-blue-500" />
+                  </label>
+                  <label className="block">
+                    <span className="text-[10px] font-semibold text-slate-500">Height</span>
+                    <input value={value?.height || ""} onChange={(event) => updateSelectedField("height", event.target.value)} placeholder="auto / 48px" className="mt-1.5 h-9 w-full rounded-lg border border-slate-800 bg-[#070b14] px-3 text-xs text-slate-200 outline-none focus:border-blue-500" />
+                  </label>
+                </div>
+                <ImagePicker
+                  label="Custom icon image"
+                  value={value?.iconImage || ""}
+                  onChange={(url) => updateSelectedField("iconImage", url)}
+                  placeholder="Upload, browse, or paste an icon URL"
+                />
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="block">
+                    <span className="text-[10px] font-semibold text-slate-500">Icon position</span>
+                    <select value={value?.iconPosition || "left"} onChange={(event) => updateSelectedField("iconPosition", event.target.value)} className="mt-1.5 h-9 w-full rounded-lg border border-slate-800 bg-[#070b14] px-3 text-xs text-slate-200 outline-none focus:border-blue-500">
+                      <option value="left">Left</option>
+                      <option value="right">Right</option>
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="text-[10px] font-semibold text-slate-500">Icon size</span>
+                    <input type="number" min="8" max="128" value={value?.iconSize || 18} onChange={(event) => updateSelectedField("iconSize", Number(event.target.value))} className="mt-1.5 h-9 w-full rounded-lg border border-slate-800 bg-[#070b14] px-3 text-xs text-slate-200 outline-none focus:border-blue-500" />
+                  </label>
+                </div>
+              </div>
             </>
           )}
 
