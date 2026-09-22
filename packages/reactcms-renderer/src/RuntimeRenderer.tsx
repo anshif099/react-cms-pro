@@ -275,7 +275,7 @@ function BuiltinComponent({
       html={html}
       editable={edit && !node.locked}
       selected={selected}
-      style={style}
+      style={{ ...style, ...typography }}
       onCommit={(value) => mutate(inlinePath(locale, key), value)}
       nodeId={node.id}
       field={key}

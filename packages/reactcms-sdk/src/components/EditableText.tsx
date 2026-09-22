@@ -1,4 +1,4 @@
-import React, { useContext, useState, useRef } from 'react';
+import React, { useContext, useState, useRef, useLayoutEffect } from 'react';
 import { useEditable } from '../hooks/useEditable';
 import { CMSContext } from '../context/CMSContext';
 import { PageContext } from '../context/PageContext';
@@ -42,6 +42,7 @@ export function EditableText({
   const [isResizing, setIsResizing] = useState(false);
   const [resizeWidth, setResizeWidth] = useState<number | null>(null);
   const resizeStartRef = useRef<{ startX: number; startWidth: number } | null>(null);
+  const elementRef = useRef<HTMLElement | null>(null);
 
   const isRich = typeof value === 'object' && value !== null;
   const displayValue = isRich ? (value.text !== undefined ? value.text : '') : value;
@@ -131,6 +132,20 @@ export function EditableText({
     textStyle.maxWidth = '100%';
     textStyle.display = 'inline-block';
   }
+
+  // Legacy sites often assign heading sizes with `!important`. A normal React
+  // inline style cannot override that declaration, so apply the CMS-selected
+  // responsive size directly to the editable element with the same priority.
+  // This only runs when the editor has an explicit size value.
+  useLayoutEffect(() => {
+    const element = elementRef.current;
+    if (!element) return;
+    if (textStyle.fontSize !== undefined && textStyle.fontSize !== null && textStyle.fontSize !== '') {
+      element.style.setProperty('font-size', String(textStyle.fontSize), 'important');
+    } else {
+      element.style.removeProperty('font-size');
+    }
+  }, [textStyle.fontSize, RenderComponent]);
 
   const handleUpdateAlign = (newAlign: string) => {
     const vw = typeof window !== 'undefined' ? window.innerWidth : 1280;
@@ -419,7 +434,7 @@ export function EditableText({
 
   if (!editMode) {
     return (
-      <RenderComponent className={className} style={{ ...style, ...textStyle }}>
+      <RenderComponent ref={elementRef} className={className} style={{ ...style, ...textStyle }}>
         {displayValue}
       </RenderComponent>
     );
@@ -429,6 +444,7 @@ export function EditableText({
 
   return (
     <RenderComponent
+      ref={elementRef}
       className={`rcms-editable-region rcms-editable-text ${className}`}
       style={{
         ...style,
