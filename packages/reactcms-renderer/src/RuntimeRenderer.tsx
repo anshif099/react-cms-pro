@@ -674,6 +674,8 @@ function NodeFrame({
     verticalAlign: compactButton ? 'top' : undefined,
     width: resizePreview ? `${resizePreview.width}px` : undefined,
     height: resizePreview ? `${resizePreview.height}px` : undefined,
+    marginLeft: compactButton && displayedOffsetX ? `${displayedOffsetX}px` : undefined,
+    marginTop: compactButton && displayedOffsetY ? `${displayedOffsetY}px` : undefined,
     background: compactButton ? 'transparent' : design.background,
     padding: compactButton
       ? 0
@@ -681,9 +683,7 @@ function NodeFrame({
     opacity: responsiveVisible ? node.props?.opacity ?? 1 : .32,
     borderRadius: design.radius ? `${design.radius}px` : undefined,
     boxShadow: design.shadow && design.shadow !== 'none' ? design.shadow : undefined,
-    transform: compactButton && (displayedOffsetX || displayedOffsetY)
-      ? `translate(${displayedOffsetX}px, ${displayedOffsetY}px)${design.transform ? ` ${design.transform}` : ''}`
-      : design.transform || undefined,
+    transform: design.transform || undefined,
     animationName: animationNames[animation.name],
     animationDuration: animation.name && animation.name !== 'none'
       ? `${animation.duration || 400}ms`
@@ -730,9 +730,15 @@ function NodeFrame({
         event.stopPropagation();
         onSelect?.(node.id, event.metaKey || event.ctrlKey || event.shiftKey);
         const frame = event.currentTarget;
+        const parent = frame.parentElement;
         const renderedWidth = frame.getBoundingClientRect().width;
         const layoutWidth = frame.offsetWidth || renderedWidth;
         const scale = renderedWidth > 0 && layoutWidth > 0 ? renderedWidth / layoutWidth : 1;
+        const maxOffsetX = Math.max(0, (parent?.clientWidth || layoutWidth) - layoutWidth);
+        const resolvePosition = (clientX: number, clientY: number) => ({
+          offsetX: Math.round(Math.max(0, Math.min(maxOffsetX, offsetX + (clientX - startX) / scale))),
+          offsetY: Math.round(Math.max(0, offsetY + (clientY - startY) / scale)),
+        });
         const startX = event.clientX;
         const startY = event.clientY;
         let moved = false;
@@ -741,20 +747,15 @@ function NodeFrame({
           const dy = (moveEvent.clientY - startY) / scale;
           if (!moved && Math.hypot(dx, dy) < 2) return;
           moved = true;
-          setPositionPreview({
-            offsetX: Math.round(offsetX + dx),
-            offsetY: Math.round(offsetY + dy),
-          });
+          setPositionPreview(resolvePosition(moveEvent.clientX, moveEvent.clientY));
         };
         const finish = (upEvent: PointerEvent) => {
           window.removeEventListener('pointermove', move);
           window.removeEventListener('pointerup', finish);
           window.removeEventListener('pointercancel', cancel);
           if (moved) {
-            onPosition(
-              Math.round(offsetX + (upEvent.clientX - startX) / scale),
-              Math.round(offsetY + (upEvent.clientY - startY) / scale),
-            );
+            const next = resolvePosition(upEvent.clientX, upEvent.clientY);
+            onPosition(next.offsetX, next.offsetY);
           }
           setPositionPreview(null);
         };
