@@ -649,6 +649,7 @@ function NodeFrame({
   const [insertAlt, setInsertAlt] = useState('');
   const [dropPosition, setDropPosition] = useState<DropPosition | null>(null);
   const [resizePreview, setResizePreview] = useState<{ width: number; height: number } | null>(null);
+  const [positionPreview, setPositionPreview] = useState<{ offsetX: number; offsetY: number } | null>(null);
   const dragStart = useRef<{ x: number; y: number; offsetX: number; offsetY: number } | null>(null);
   if (node.hidden && mode !== 'edit') return null;
 
@@ -665,6 +666,8 @@ function NodeFrame({
   const compactButton = node.type === 'button';
   const offsetX = Number(node.props?.offsetX) || 0;
   const offsetY = Number(node.props?.offsetY) || 0;
+  const displayedOffsetX = positionPreview?.offsetX ?? offsetX;
+  const displayedOffsetY = positionPreview?.offsetY ?? offsetY;
   const shellStyle: React.CSSProperties = {
     position: 'relative',
     display: node.hidden ? 'none' : compactButton ? 'inline-block' : 'block',
@@ -678,8 +681,8 @@ function NodeFrame({
     opacity: responsiveVisible ? node.props?.opacity ?? 1 : .32,
     borderRadius: design.radius ? `${design.radius}px` : undefined,
     boxShadow: design.shadow && design.shadow !== 'none' ? design.shadow : undefined,
-    transform: compactButton && (offsetX || offsetY)
-      ? `translate(${offsetX}px, ${offsetY}px)${design.transform ? ` ${design.transform}` : ''}`
+    transform: compactButton && (displayedOffsetX || displayedOffsetY)
+      ? `translate(${displayedOffsetX}px, ${displayedOffsetY}px)${design.transform ? ` ${design.transform}` : ''}`
       : design.transform || undefined,
     animationName: animationNames[animation.name],
     animationDuration: animation.name && animation.name !== 'none'
@@ -718,7 +721,53 @@ function NodeFrame({
       aria-label={node.metadata?.accessibility?.ariaLabel}
       role={node.metadata?.accessibility?.role}
       tabIndex={node.metadata?.accessibility?.tabIndex}
-      draggable={editable && !node.locked}
+      draggable={editable && !node.locked && !compactButton}
+      onPointerDown={(event) => {
+        if (!editable || !compactButton || node.locked || !onPosition || event.button !== 0) return;
+        const target = event.target as HTMLElement;
+        if (target.closest('button,input,textarea,select,[contenteditable="true"],[data-rcms-resize-handle]')) return;
+        event.preventDefault();
+        event.stopPropagation();
+        onSelect?.(node.id, event.metaKey || event.ctrlKey || event.shiftKey);
+        const frame = event.currentTarget;
+        const renderedWidth = frame.getBoundingClientRect().width;
+        const layoutWidth = frame.offsetWidth || renderedWidth;
+        const scale = renderedWidth > 0 && layoutWidth > 0 ? renderedWidth / layoutWidth : 1;
+        const startX = event.clientX;
+        const startY = event.clientY;
+        let moved = false;
+        const move = (moveEvent: PointerEvent) => {
+          const dx = (moveEvent.clientX - startX) / scale;
+          const dy = (moveEvent.clientY - startY) / scale;
+          if (!moved && Math.hypot(dx, dy) < 2) return;
+          moved = true;
+          setPositionPreview({
+            offsetX: Math.round(offsetX + dx),
+            offsetY: Math.round(offsetY + dy),
+          });
+        };
+        const finish = (upEvent: PointerEvent) => {
+          window.removeEventListener('pointermove', move);
+          window.removeEventListener('pointerup', finish);
+          window.removeEventListener('pointercancel', cancel);
+          if (moved) {
+            onPosition(
+              Math.round(offsetX + (upEvent.clientX - startX) / scale),
+              Math.round(offsetY + (upEvent.clientY - startY) / scale),
+            );
+          }
+          setPositionPreview(null);
+        };
+        const cancel = () => {
+          window.removeEventListener('pointermove', move);
+          window.removeEventListener('pointerup', finish);
+          window.removeEventListener('pointercancel', cancel);
+          setPositionPreview(null);
+        };
+        window.addEventListener('pointermove', move);
+        window.addEventListener('pointerup', finish);
+        window.addEventListener('pointercancel', cancel);
+      }}
       onDragStart={(event) => {
         event.stopPropagation();
         if (compactButton && onPosition) {
@@ -793,6 +842,7 @@ function NodeFrame({
 
       {selected && editable && compactButton && !node.locked && onResize && (
         <span
+          data-rcms-resize-handle="true"
           title="Drag to resize button"
           aria-label="Resize button"
           onMouseDown={(event) => {
