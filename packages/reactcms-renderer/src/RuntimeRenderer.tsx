@@ -640,8 +640,8 @@ function NodeFrame({
   onInsert?: RuntimeRendererProps['onInsert'];
   onCommand?: RuntimeRendererProps['onCommand'];
   onResize?: (width: number, height: number) => void;
-  onRelocate?: (anchorRegionId: string, position: 'before' | 'after') => void;
-  onRelocateNode?: (targetNodeId: string, position: 'before' | 'after') => void;
+  onRelocate?: (anchorRegionId: string, position: 'before' | 'after', horizontalPosition?: number) => void;
+  onRelocateNode?: (targetNodeId: string, position: 'before' | 'after', horizontalPosition?: number) => void;
   responsiveMode: ResponsiveMode;
   children: React.ReactNode;
 }) {
@@ -667,11 +667,16 @@ function NodeFrame({
     parallax: 'rcms-slide-up',
   };
   const compactButton = node.type === 'button';
+  const horizontalPosition = compactButton && typeof node.props?.horizontalPosition === 'number'
+    && Number.isFinite(node.props.horizontalPosition)
+    ? Math.max(0, Math.min(1, node.props.horizontalPosition)) : null;
   const offsetX = Number(node.props?.offsetX) || 0;
   const offsetY = Number(node.props?.offsetY) || 0;
   const shellStyle: React.CSSProperties = {
     position: 'relative',
-    display: node.hidden ? 'none' : compactButton ? 'inline-block' : 'block',
+    display: node.hidden ? 'none' : compactButton && horizontalPosition === null ? 'inline-block' : 'block',
+    left: horizontalPosition !== null ? `${horizontalPosition * 100}%` : undefined,
+    translate: horizontalPosition !== null ? `${-horizontalPosition * 100}% 0` : undefined,
     verticalAlign: compactButton ? 'top' : undefined,
     width: resizePreview
       ? `${resizePreview.width}px`
@@ -680,7 +685,8 @@ function NodeFrame({
         : undefined,
     height: resizePreview ? `${resizePreview.height}px` : undefined,
     maxWidth: compactButton ? '100%' : undefined,
-    marginLeft: compactButton && offsetX ? `${offsetX}px` : undefined,
+    marginLeft: horizontalPosition !== null ? 0 : compactButton && offsetX ? `${offsetX}px` : undefined,
+    marginRight: horizontalPosition !== null ? 0 : undefined,
     marginTop: compactButton && offsetY ? `${offsetY}px` : undefined,
     background: compactButton ? 'transparent' : design.background,
     padding: compactButton
@@ -739,8 +745,8 @@ function NodeFrame({
         onSelect?.(node.id, event.metaKey || event.ctrlKey || event.shiftKey);
         dragCleanup.current?.();
         dragCleanup.current = startButtonDrag(event.currentTarget, event, (destination) => {
-          if (destination.nodeId) onRelocateNode?.(destination.nodeId, destination.position);
-          else if (destination.regionId) onRelocate?.(destination.regionId, destination.position);
+          if (destination.nodeId) onRelocateNode?.(destination.nodeId, destination.position, destination.horizontalPosition);
+          else if (destination.regionId) onRelocate?.(destination.regionId, destination.position, destination.horizontalPosition);
         });
       }}
       onDragStart={(event) => {
@@ -1120,13 +1126,13 @@ function RenderNode({
           value: { ...(node.props || {}), width: `${width}px`, height: `${height}px` },
         });
       }}
-      onRelocate={(anchorRegionId, position) => {
+      onRelocate={(anchorRegionId, position, horizontalPosition) => {
         onMutation?.({
           nodeId: node.id,
           path: [],
           value: {
             ...node,
-            props: { ...(node.props || {}), offsetX: 0, offsetY: 0 },
+            props: { ...(node.props || {}), offsetX: 0, offsetY: 0, horizontalPosition },
             metadata: {
               ...(node.metadata || {}),
               runtimePlacement: { anchorRegionId, position },
@@ -1134,8 +1140,8 @@ function RenderNode({
           },
         });
       }}
-      onRelocateNode={(targetNodeId, position) => {
-        renderer.onMove?.(node.id, targetNodeId, position);
+      onRelocateNode={(targetNodeId, position, horizontalPosition) => {
+        renderer.onMove?.(node.id, targetNodeId, position, horizontalPosition);
       }}
       responsiveMode={responsiveMode}
     >

@@ -87,7 +87,7 @@ export interface RuntimeRendererProps {
   onSelect?: (nodeId: string, additive?: boolean) => void;
   onHover?: (nodeId: string | null) => void;
   onMutation?: (mutation: RendererMutation) => void;
-  onMove?: (nodeId: string, targetId: string, position: DropPosition) => void;
+  onMove?: (nodeId: string, targetId: string, position: DropPosition, horizontalPosition?: number) => void;
   onInsert?: (
     componentType: string,
     targetId: string,

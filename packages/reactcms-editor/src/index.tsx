@@ -54,7 +54,7 @@ export interface NativeEditorContextValue {
   mutate: (mutation: RendererMutation, label?: string) => void;
   update: (nodeId: string, updater: Partial<ComponentNode> | ((node: ComponentNode) => ComponentNode), label?: string) => void;
   insert: (node: ComponentNode, targetId?: string | null, position?: DropPosition, label?: string) => void;
-  move: (nodeId: string, targetId: string, position: DropPosition) => void;
+  move: (nodeId: string, targetId: string, position: DropPosition, horizontalPosition?: number) => void;
   moveByOffset: (nodeId: string, offset: number) => void;
   duplicate: (nodeId: string) => void;
   remove: (nodeId: string) => void;
@@ -159,8 +159,12 @@ function EditorState({
     selection.select(node.id);
   }, [commit, selection, tree]);
 
-  const move = useCallback((nodeId: string, targetId: string, position: DropPosition) => {
-    commit(moveTreeNode(tree, nodeId, targetId, position), { label: 'Move component', source: 'layers' });
+  const move = useCallback((nodeId: string, targetId: string, position: DropPosition, horizontalPosition?: number) => {
+    const moved = moveTreeNode(tree, nodeId, targetId, position);
+    const next = horizontalPosition === undefined ? moved : updateNode(moved, nodeId, (node) => ({
+      ...node, props: { ...node.props, horizontalPosition, offsetX: 0, offsetY: 0 },
+    }));
+    commit(next, { label: 'Move component', source: 'layers' });
     selection.select(nodeId);
   }, [commit, selection, tree]);
 

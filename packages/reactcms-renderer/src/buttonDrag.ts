@@ -3,7 +3,23 @@ export type ButtonDropTarget = {
   nodeId: string;
   regionId: string;
   position: 'before' | 'after';
+  horizontalPosition?: number;
 };
+
+/** Fraction of the available horizontal travel, independent of viewport size. */
+export function buttonHorizontalPosition(pointerX: number, grabX: number, buttonWidth: number, left: number, width: number): number {
+  const travel = width - buttonWidth;
+  return travel > 0 ? Math.max(0, Math.min(1, (pointerX - grabX - left) / travel)) : 0;
+}
+
+function contentBounds(element: HTMLElement) {
+  const rect = element.getBoundingClientRect();
+  const style = element.ownerDocument.defaultView!.getComputedStyle(element);
+  const scale = element.offsetWidth > 0 ? rect.width / element.offsetWidth : 1;
+  const leftInset = ((parseFloat(style.borderLeftWidth) || 0) + (parseFloat(style.paddingLeft) || 0)) * scale;
+  const rightInset = ((parseFloat(style.borderRightWidth) || 0) + (parseFloat(style.paddingRight) || 0)) * scale;
+  return { left: rect.left + leftInset, width: Math.max(0, rect.width - leftInset - rightInset), scale };
+}
 
 /** Use nearby edges, not the enclosing section: blank space below an image
  * belongs to the image's after-edge even when the section contains the point. */
@@ -64,20 +80,27 @@ export function startButtonDrag(
     if (!active || ended) return;
     Object.assign(ghost!.style, { left: `${x - (start.clientX - rect.left)}px`, top: `${y - (start.clientY - rect.top)}px` });
     const slot = placeholder?.getBoundingClientRect();
-    if (slot && x >= slot.left && x <= slot.right && y >= slot.top && y <= slot.bottom) return;
-    const next = findButtonDropTarget(frame, x, y);
-    if (next?.element === destination?.element && next?.position === destination?.position) return;
-    placeholder?.remove();
+    const next = slot && x >= slot.left && x <= slot.right && y >= slot.top && y <= slot.bottom
+      ? destination : findButtonDropTarget(frame, x, y);
+    const sameTarget = next?.element === destination?.element && next?.position === destination?.position;
+    if (!sameTarget) placeholder?.remove();
     destination = next;
     if (!next?.element.parentElement) return;
+    const parent = next.element.parentElement;
+    const bounds = contentBounds(parent);
+    const horizontalPosition = buttonHorizontalPosition(x, start.clientX - rect.left, rect.width, bounds.left, bounds.width);
+    next.horizontalPosition = horizontalPosition;
     placeholder ||= doc.createElement('div');
     placeholder.dataset.rcmsButtonDropPlaceholder = 'true';
     Object.assign(placeholder.style, {
-      boxSizing: 'border-box', width: `${rect.width}px`, height: `${rect.height}px`,
-      display: 'inline-block', verticalAlign: 'top', maxWidth: '100%',
+      boxSizing: 'border-box', width: `${rect.width / (bounds.scale || 1)}px`, height: `${rect.height / (bounds.scale || 1)}px`,
+      display: 'block', position: 'relative', margin: '0', maxWidth: '100%',
+      left: `${horizontalPosition * 100}%`, translate: `${-horizontalPosition * 100}% 0`,
       border: '2px dashed #2563eb', borderRadius: '8px', background: 'rgba(37,99,235,.1)', pointerEvents: 'none',
     });
-    next.element.parentElement.insertBefore(placeholder, next.position === 'before' ? next.element : next.element.nextSibling);
+    if (!sameTarget || !placeholder.isConnected) {
+      parent.insertBefore(placeholder, next.position === 'before' ? next.element : next.element.nextSibling);
+    }
   };
   const tick = (time: number) => {
     if (ended || !active) return;
@@ -114,7 +137,7 @@ export function startButtonDrag(
     });
     Object.assign(ghost.style, {
       position: 'fixed', width: `${rect.width}px`, height: `${rect.height}px`, margin: '0',
-      transform: 'none', animation: 'none', transition: 'none', zIndex: '2147483646', opacity: '.85',
+      transform: 'none', translate: 'none', animation: 'none', transition: 'none', zIndex: '2147483646', opacity: '.85',
     });
     doc.body.appendChild(ghost);
     frame.style.setProperty('display', 'none', 'important');

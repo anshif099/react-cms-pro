@@ -182,6 +182,7 @@ function reorderNode(nodes: ComponentNode[], nodeId: string, direction: -1 | 1):
 
 export function moveRuntimeAddition(
   tree: PageComponentTree, nodeId: string, targetId: string, position: DropPosition,
+  horizontalPosition?: number,
 ): PageComponentTree {
   const node = findNode(tree.children, nodeId);
   const target = findNode(tree.children, targetId);
@@ -191,7 +192,7 @@ export function moveRuntimeAddition(
   const owner = tree.children.find((root) => root.id === targetId || findNode(root.children || [], targetId));
   const addition = {
     ...node,
-    props: { ...node.props, offsetX: 0, offsetY: 0 },
+    props: { ...node.props, offsetX: 0, offsetY: 0, ...(horizontalPosition !== undefined ? { horizontalPosition } : {}) },
     metadata: { ...node.metadata, runtimePlacement: normalizedRuntimePlacement(owner?.metadata?.runtimePlacement) },
   };
   return { ...tree, children: insertNode(removeNode(tree.children, nodeId), targetId, position, addition) };
@@ -284,6 +285,16 @@ function RuntimeAdditionsPortal({
   const [host, setHost] = useState<HTMLElement | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!host) return;
+    // The source page may center children with flex or text-align. Give a
+    // freely positioned button the parent's full horizontal space to use.
+    const positioned = nodes.some((node) => typeof node.props?.horizontalPosition === 'number');
+    host.style.width = positioned ? '100%' : '';
+    host.style.minWidth = positioned ? '0' : '';
+    host.style.alignSelf = positioned ? 'stretch' : '';
+  }, [host, nodes]);
 
   useEffect(() => {
     if (typeof document === 'undefined') return undefined;
@@ -428,8 +439,8 @@ function RuntimeAdditionsPortal({
     }
   }, [commit, tree]);
 
-  const handleMove = useCallback((nodeId: string, targetId: string, position: DropPosition) => {
-    const next = moveRuntimeAddition(tree, nodeId, targetId, position);
+  const handleMove = useCallback((nodeId: string, targetId: string, position: DropPosition, horizontalPosition?: number) => {
+    const next = moveRuntimeAddition(tree, nodeId, targetId, position, horizontalPosition);
     if (next !== tree) commit(next);
   }, [commit, tree]);
 
