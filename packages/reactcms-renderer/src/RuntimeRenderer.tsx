@@ -624,6 +624,7 @@ function NodeFrame({
   onInsert,
   onCommand,
   onResize,
+  onPosition,
   responsiveMode,
   children,
 }: {
@@ -637,6 +638,7 @@ function NodeFrame({
   onInsert?: RuntimeRendererProps['onInsert'];
   onCommand?: RuntimeRendererProps['onCommand'];
   onResize?: (width: number, height: number) => void;
+  onPosition?: (offsetX: number, offsetY: number) => void;
   responsiveMode: ResponsiveMode;
   children: React.ReactNode;
 }) {
@@ -647,6 +649,7 @@ function NodeFrame({
   const [insertAlt, setInsertAlt] = useState('');
   const [dropPosition, setDropPosition] = useState<DropPosition | null>(null);
   const [resizePreview, setResizePreview] = useState<{ width: number; height: number } | null>(null);
+  const dragStart = useRef<{ x: number; y: number; offsetX: number; offsetY: number } | null>(null);
   if (node.hidden && mode !== 'edit') return null;
 
   const editable = mode === 'edit';
@@ -660,20 +663,24 @@ function NodeFrame({
     parallax: 'rcms-slide-up',
   };
   const compactButton = node.type === 'button';
+  const offsetX = Number(node.props?.offsetX) || 0;
+  const offsetY = Number(node.props?.offsetY) || 0;
   const shellStyle: React.CSSProperties = {
     position: 'relative',
     display: node.hidden ? 'none' : compactButton ? 'inline-block' : 'block',
     verticalAlign: compactButton ? 'top' : undefined,
     width: resizePreview ? `${resizePreview.width}px` : undefined,
     height: resizePreview ? `${resizePreview.height}px` : undefined,
-    background: design.background,
+    background: compactButton ? 'transparent' : design.background,
     padding: compactButton
-      ? `${design.paddingY ?? 6}px 6px`
+      ? 0
       : `${design.paddingY ?? (['spacer', 'divider'].includes(node.type) ? 0 : 36)}px 24px`,
     opacity: responsiveVisible ? node.props?.opacity ?? 1 : .32,
     borderRadius: design.radius ? `${design.radius}px` : undefined,
     boxShadow: design.shadow && design.shadow !== 'none' ? design.shadow : undefined,
-    transform: design.transform || undefined,
+    transform: compactButton && (offsetX || offsetY)
+      ? `translate(${offsetX}px, ${offsetY}px)${design.transform ? ` ${design.transform}` : ''}`
+      : design.transform || undefined,
     animationName: animationNames[animation.name],
     animationDuration: animation.name && animation.name !== 'none'
       ? `${animation.duration || 400}ms`
@@ -714,8 +721,26 @@ function NodeFrame({
       draggable={editable && !node.locked}
       onDragStart={(event) => {
         event.stopPropagation();
+        if (compactButton && onPosition) {
+          dragStart.current = { x: event.clientX, y: event.clientY, offsetX, offsetY };
+          event.dataTransfer.effectAllowed = 'move';
+          event.dataTransfer.setData('application/reactcms-free-position', node.id);
+          return;
+        }
         event.dataTransfer.effectAllowed = 'move';
         event.dataTransfer.setData('application/reactcms-node', node.id);
+      }}
+      onDragEnd={(event) => {
+        if (!compactButton || !dragStart.current || !onPosition) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const endX = event.clientX || dragStart.current.x;
+        const endY = event.clientY || dragStart.current.y;
+        onPosition(
+          Math.round(dragStart.current.offsetX + endX - dragStart.current.x),
+          Math.round(dragStart.current.offsetY + endY - dragStart.current.y),
+        );
+        dragStart.current = null;
       }}
       onDragOver={(event) => {
         if (!editable) return;
@@ -780,7 +805,7 @@ function NodeFrame({
             const startY = event.clientY;
             const startWidth = rect.width;
             const startHeight = rect.height;
-            const padding = 12;
+            const padding = 0;
             const handleMove = (moveEvent: MouseEvent) => {
               setResizePreview({
                 width: Math.max(72, startWidth + moveEvent.clientX - startX),
@@ -1084,6 +1109,13 @@ function RenderNode({
           value: { ...(node.props || {}), width: `${width}px`, height: `${height}px` },
         });
       }}
+      onPosition={(offsetX, offsetY) => {
+        onMutation?.({
+          nodeId: node.id,
+          path: ['props'],
+          value: { ...(node.props || {}), offsetX, offsetY },
+        });
+      }}
       responsiveMode={responsiveMode}
     >
       <div style={responsiveStyle(node, responsiveMode)}>
@@ -1099,6 +1131,7 @@ export function RuntimeRenderer({
   responsiveMode = 'desktop',
   mode = 'runtime',
   theme = null,
+  transparentBackground = false,
   ...callbacks
 }: RuntimeRendererProps) {
   const renderer = useMemo(() => ({
@@ -1117,9 +1150,9 @@ export function RuntimeRenderer({
     '--rcms-button-radius': theme?.buttons?.borderRadius || '10px',
     '--rcms-button-weight': theme?.buttons?.fontWeight || '700',
     width: '100%',
-    minHeight: '100%',
+    minHeight: transparentBackground ? undefined : '100%',
     color: 'var(--rcms-color-text)',
-    background: 'var(--rcms-color-background)',
+    background: transparentBackground ? 'transparent' : 'var(--rcms-color-background)',
     fontFamily: theme?.typography?.bodyFont || 'Inter, system-ui, sans-serif',
     fontSize: theme?.typography?.baseSize || '16px',
     ...responsiveStyle({ id: tree.id, type: 'page', styles: tree.styles }, responsiveMode),

@@ -410,6 +410,8 @@ export const BLOCK_SCHEMAS = [
       { key: "color", label: "Button Color", type: "color", localized: false, defaultValue: "#2563eb" },
       { key: "width", label: "Button Width (for example 180px)", type: "text", localized: false },
       { key: "height", label: "Button Height (for example 48px)", type: "text", localized: false },
+      { key: "offsetX", label: "Horizontal Position (px)", type: "number", localized: false, defaultValue: 0 },
+      { key: "offsetY", label: "Vertical Position (px)", type: "number", localized: false, defaultValue: 0 },
       { key: "radius", label: "Corner Radius", type: "number", localized: false, defaultValue: 10 },
       { key: "iconImage", label: "Upload Custom Icon", type: "image", localized: false },
       { key: "iconSize", label: "Icon Size (px)", type: "number", localized: false, defaultValue: 18 },

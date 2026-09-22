@@ -420,6 +420,7 @@ function RuntimeAdditionsPortal({
         responsiveMode="desktop"
         mode={editMode ? 'edit' : 'runtime'}
         theme={theme}
+        transparentBackground
         selectedIds={selectedIds}
         hoveredId={hoveredId}
         onSelect={handleSelect}

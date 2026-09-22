@@ -79,6 +79,8 @@ export interface RuntimeRendererProps {
     branding?: Record<string, string>;
     [key: string]: any;
   } | null;
+  /** Render into an existing website without painting a page background. */
+  transparentBackground?: boolean;
   selectedIds?: string[];
   hoveredId?: string | null;
   registry?: ComponentRegistry;
