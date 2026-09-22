@@ -3,7 +3,35 @@ import { RUNTIME_ADDITIONS_REGION } from '@anshif.rainhopes/reactcms-renderer';
 import {
   attachRuntimeHostFallback,
   decodeRuntimeAdditionsForMode,
+  moveRuntimeAddition,
 } from './BuilderSections';
+import type { PageComponentTree } from '@anshif.rainhopes/reactcms-renderer';
+
+describe('moveRuntimeAddition', () => {
+  const tree = {
+    id: 'additions', type: 'page', version: 2,
+    children: [
+      { id: 'button', type: 'button', props: { offsetX: 50, offsetY: 80 }, metadata: { runtimePlacement: { anchorRegionId: 'heading', position: 'after' } } },
+      { id: 'other', type: 'button', metadata: { runtimePlacement: { anchorRegionId: 'image', position: 'after' } } },
+    ],
+  } as PageComponentTree;
+  it('persists the destination portal, not just array order, through serialization', () => {
+    const next = JSON.parse(JSON.stringify(moveRuntimeAddition(tree, 'button', 'other', 'after')));
+    expect(next.children.map((node: { id: string }) => node.id)).toEqual(['other', 'button']);
+    expect(next.children[1].metadata.runtimePlacement).toEqual({ anchorRegionId: 'image', position: 'after' });
+    expect(next.children[1].props).toMatchObject({ offsetX: 0, offsetY: 0 });
+    expect(tree.children[0].metadata?.runtimePlacement).toEqual({ anchorRegionId: 'heading', position: 'after' });
+  });
+  it('does not delete a node for a missing or self target', () => {
+    expect(moveRuntimeAddition(tree, 'button', 'missing', 'after')).toBe(tree);
+    expect(moveRuntimeAddition(tree, 'button', 'button', 'after')).toBe(tree);
+  });
+  it('inherits the top-level destination placement for nested targets', () => {
+    const nested = { ...tree, children: [...tree.children, { id: 'section', type: 'section', metadata: { runtimePlacement: { anchorRegionId: 'footer', position: 'before' } }, children: [{ id: 'child', type: 'paragraph' }] }] } as PageComponentTree;
+    const next = moveRuntimeAddition(nested, 'button', 'child', 'after');
+    expect(next.children[1].children?.[1].metadata?.runtimePlacement).toEqual({ anchorRegionId: 'footer', position: 'before' });
+  });
+});
 
 const publishedTree = {
   id: 'runtime_additions_published',

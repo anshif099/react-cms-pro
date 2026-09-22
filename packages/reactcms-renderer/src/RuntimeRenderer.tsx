@@ -6,6 +6,7 @@ import React, {
   useState,
 } from 'react';
 import { defaultComponentRegistry } from './registry';
+import { startButtonDrag } from './buttonDrag';
 import type {
   ComponentNode,
   DropPosition,
@@ -101,7 +102,7 @@ function InlineText({
     className,
     style: {
       ...style,
-      cursor: editable ? (editing ? 'text' : 'text') : undefined,
+      cursor: editable ? (editing ? 'text' : style?.cursor || 'text') : undefined,
       outline: editing ? '2px solid #2563eb' : undefined,
       outlineOffset: editing ? '3px' : undefined,
       minWidth: editable && selected ? '12px' : undefined,
@@ -366,7 +367,7 @@ function BuiltinComponent({
       const buttonContent = (
         <>
           {props.iconPosition !== 'right' ? buttonIcon : null}
-          {inline('label', 'Learn More', 'span')}
+          {inline('label', 'Learn More', 'span', { cursor: mode === 'edit' ? 'grab' : undefined })}
           {props.iconPosition === 'right' ? buttonIcon : null}
         </>
       );
@@ -624,7 +625,6 @@ function NodeFrame({
   onInsert,
   onCommand,
   onResize,
-  onPosition,
   onRelocate,
   onRelocateNode,
   responsiveMode,
@@ -640,7 +640,6 @@ function NodeFrame({
   onInsert?: RuntimeRendererProps['onInsert'];
   onCommand?: RuntimeRendererProps['onCommand'];
   onResize?: (width: number, height: number) => void;
-  onPosition?: (offsetX: number, offsetY: number) => void;
   onRelocate?: (anchorRegionId: string, position: 'before' | 'after') => void;
   onRelocateNode?: (targetNodeId: string, position: 'before' | 'after') => void;
   responsiveMode: ResponsiveMode;
@@ -653,9 +652,8 @@ function NodeFrame({
   const [insertAlt, setInsertAlt] = useState('');
   const [dropPosition, setDropPosition] = useState<DropPosition | null>(null);
   const [resizePreview, setResizePreview] = useState<{ width: number; height: number } | null>(null);
-  const [positionPreview, setPositionPreview] = useState<{ offsetX: number; offsetY: number } | null>(null);
-  const [dragPreview, setDragPreview] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
-  const dragStart = useRef<{ x: number; y: number; offsetX: number; offsetY: number } | null>(null);
+  const dragCleanup = useRef<(() => void) | null>(null);
+  useEffect(() => () => dragCleanup.current?.(), []);
   if (node.hidden && mode !== 'edit') return null;
 
   const editable = mode === 'edit';
@@ -671,31 +669,24 @@ function NodeFrame({
   const compactButton = node.type === 'button';
   const offsetX = Number(node.props?.offsetX) || 0;
   const offsetY = Number(node.props?.offsetY) || 0;
-  const displayedOffsetX = positionPreview?.offsetX ?? offsetX;
-  const displayedOffsetY = positionPreview?.offsetY ?? offsetY;
   const shellStyle: React.CSSProperties = {
-    position: dragPreview ? 'fixed' : 'relative',
-    zIndex: dragPreview ? 2147482000 : undefined,
-    left: dragPreview ? `${dragPreview.left}px` : undefined,
-    top: dragPreview ? `${dragPreview.top}px` : undefined,
+    position: 'relative',
     display: node.hidden ? 'none' : compactButton ? 'inline-block' : 'block',
     verticalAlign: compactButton ? 'top' : undefined,
-    width: dragPreview
-      ? `${dragPreview.width}px`
-      : resizePreview
-        ? `${resizePreview.width}px`
-        : compactButton
-          ? 'fit-content'
-          : undefined,
-    height: dragPreview ? `${dragPreview.height}px` : resizePreview ? `${resizePreview.height}px` : undefined,
+    width: resizePreview
+      ? `${resizePreview.width}px`
+      : compactButton
+        ? 'fit-content'
+        : undefined,
+    height: resizePreview ? `${resizePreview.height}px` : undefined,
     maxWidth: compactButton ? '100%' : undefined,
-    marginLeft: !dragPreview && compactButton && displayedOffsetX ? `${displayedOffsetX}px` : undefined,
-    marginTop: !dragPreview && compactButton && displayedOffsetY ? `${displayedOffsetY}px` : undefined,
+    marginLeft: compactButton && offsetX ? `${offsetX}px` : undefined,
+    marginTop: compactButton && offsetY ? `${offsetY}px` : undefined,
     background: compactButton ? 'transparent' : design.background,
     padding: compactButton
       ? 0
       : `${design.paddingY ?? (['spacer', 'divider'].includes(node.type) ? 0 : 36)}px 24px`,
-    opacity: dragPreview ? .82 : responsiveVisible ? node.props?.opacity ?? 1 : .32,
+    opacity: responsiveVisible ? node.props?.opacity ?? 1 : .32,
     borderRadius: design.radius ? `${design.radius}px` : undefined,
     boxShadow: design.shadow && design.shadow !== 'none' ? design.shadow : undefined,
     transform: design.transform || undefined,
@@ -716,7 +707,8 @@ function NodeFrame({
           : undefined,
     outlineOffset: selected || hovered ? '-2px' : undefined,
     transition: 'outline-color 100ms ease, box-shadow 100ms ease',
-    pointerEvents: dragPreview ? 'none' : undefined,
+    cursor: editable && compactButton ? 'grab' : undefined,
+    touchAction: editable && compactButton ? 'none' : undefined,
   };
 
   const determineDrop = (event: React.DragEvent): DropPosition => {
@@ -739,194 +731,26 @@ function NodeFrame({
       tabIndex={node.metadata?.accessibility?.tabIndex}
       draggable={editable && !node.locked && !compactButton}
       onPointerDown={(event) => {
-        if (!editable || !compactButton || node.locked || !onPosition || event.button !== 0) return;
+        if (!editable || !compactButton || node.locked || event.button !== 0) return;
         const target = event.target as HTMLElement;
         if (target.closest('button,input,textarea,select,[contenteditable="true"],[data-rcms-resize-handle]')) return;
         event.preventDefault();
         event.stopPropagation();
         onSelect?.(node.id, event.metaKey || event.ctrlKey || event.shiftKey);
-        const frame = event.currentTarget;
-        const parent = frame.parentElement;
-        let scrollHost: HTMLElement | null = frame.parentElement;
-        while (scrollHost) {
-          const overflowY = window.getComputedStyle(scrollHost).overflowY;
-          if (/(auto|scroll)/.test(overflowY) && scrollHost.scrollHeight > scrollHost.clientHeight) break;
-          scrollHost = scrollHost.parentElement;
-        }
-        const renderedWidth = frame.getBoundingClientRect().width;
-        const layoutWidth = frame.offsetWidth || renderedWidth;
-        const scale = renderedWidth > 0 && layoutWidth > 0 ? renderedWidth / layoutWidth : 1;
-        const maxOffsetX = Math.max(0, (parent?.clientWidth || layoutWidth) - layoutWidth);
-        const resolvePosition = (clientX: number, clientY: number) => ({
-          offsetX: Math.round(Math.max(0, Math.min(maxOffsetX, offsetX + (clientX - startX) / scale))),
-          offsetY: Math.round(Math.max(0, offsetY + (clientY - startY) / scale)),
+        dragCleanup.current?.();
+        dragCleanup.current = startButtonDrag(event.currentTarget, event, (destination) => {
+          if (destination.nodeId) onRelocateNode?.(destination.nodeId, destination.position);
+          else if (destination.regionId) onRelocate?.(destination.regionId, destination.position);
         });
-        const startX = event.clientX;
-        const startY = event.clientY;
-        const startRect = frame.getBoundingClientRect();
-        const grabX = startX - startRect.left;
-        const grabY = startY - startRect.top;
-        let moved = false;
-        let placeholder: HTMLDivElement | null = null;
-        let placeholderKey = '';
-        const relocationTarget = (clientX: number, clientY: number) => {
-          const target = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
-          const targetNode = target?.closest<HTMLElement>('[data-rcms-node]') || null;
-          if (targetNode?.dataset.rcmsNode && targetNode.dataset.rcmsNode !== node.id) {
-            const rect = targetNode.getBoundingClientRect();
-            return {
-              element: targetNode,
-              nodeId: targetNode.dataset.rcmsNode,
-              regionId: '',
-              position: clientY >= rect.top + rect.height / 2 ? 'after' as const : 'before' as const,
-            };
-          }
-          const region = target?.closest<HTMLElement>('[data-rcms-region]') || null;
-          if (region && region.dataset.rcmsRegion !== node.metadata?.runtimePlacement?.anchorRegionId) {
-            const rect = region.getBoundingClientRect();
-            return {
-              element: region,
-              nodeId: '',
-              regionId: region.dataset.rcmsRegion || '',
-              position: clientY >= rect.top + rect.height / 2 ? 'after' as const : 'before' as const,
-            };
-          }
-
-          const currentAnchor = node.metadata?.runtimePlacement?.anchorRegionId;
-          const nearest = Array.from(document.querySelectorAll<HTMLElement>('[data-rcms-region]'))
-            .filter((element) => element.dataset.rcmsRegion && element.dataset.rcmsRegion !== currentAnchor)
-            .flatMap((element) => {
-              const rect = element.getBoundingClientRect();
-              if (rect.width <= 0 || rect.height <= 0 || rect.bottom < 0 || rect.top > window.innerHeight) return [];
-              const horizontalDistance = clientX < rect.left
-                ? rect.left - clientX
-                : clientX > rect.right
-                  ? clientX - rect.right
-                  : 0;
-              return [
-                { element, nodeId: '', regionId: element.dataset.rcmsRegion || '', position: 'before' as const, distance: Math.hypot(clientY - rect.top, horizontalDistance) },
-                { element, nodeId: '', regionId: element.dataset.rcmsRegion || '', position: 'after' as const, distance: Math.hypot(clientY - rect.bottom, horizontalDistance) },
-              ];
-            })
-            .sort((a, b) => a.distance - b.distance)[0];
-          return nearest || null;
-        };
-        const showPlaceholder = (relocation: ReturnType<typeof relocationTarget>) => {
-          if (!relocation?.element?.parentElement) return;
-          const key = `${relocation.nodeId || relocation.regionId}:${relocation.position}`;
-          if (key === placeholderKey) return;
-          placeholder?.remove();
-          placeholder = document.createElement('div');
-          placeholder.dataset.rcmsButtonDropPlaceholder = 'true';
-          Object.assign(placeholder.style, {
-            boxSizing: 'border-box',
-            width: `${Math.max(60, startRect.width)}px`,
-            height: `${Math.max(28, startRect.height)}px`,
-            margin: '8px',
-            border: '2px dashed #2563eb',
-            borderRadius: '8px',
-            background: 'rgba(37,99,235,.1)',
-            pointerEvents: 'none',
-          });
-          const parentElement = relocation.element.parentElement;
-          parentElement.insertBefore(
-            placeholder,
-            relocation.position === 'before' ? relocation.element : relocation.element.nextSibling,
-          );
-          placeholderKey = key;
-        };
-        const move = (moveEvent: PointerEvent) => {
-          const dx = (moveEvent.clientX - startX) / scale;
-          const dy = (moveEvent.clientY - startY) / scale;
-          if (!moved && Math.hypot(dx, dy) < 2) return;
-          moved = true;
-          setDragPreview({
-            left: moveEvent.clientX - grabX,
-            top: moveEvent.clientY - grabY,
-            width: startRect.width,
-            height: startRect.height,
-          });
-          const edge = 72;
-          const viewportTop = scrollHost?.getBoundingClientRect().top || 0;
-          const viewportBottom = scrollHost?.getBoundingClientRect().bottom || window.innerHeight;
-          if (moveEvent.clientY < viewportTop + edge) {
-            if (scrollHost) scrollHost.scrollTop -= 24;
-            else window.scrollBy({ top: -24, behavior: 'auto' });
-          }
-          if (moveEvent.clientY > viewportBottom - edge) {
-            if (scrollHost) scrollHost.scrollTop += 24;
-            else window.scrollBy({ top: 24, behavior: 'auto' });
-          }
-          showPlaceholder(relocationTarget(moveEvent.clientX, moveEvent.clientY));
-        };
-        const cleanup = () => {
-          window.removeEventListener('pointermove', move);
-          window.removeEventListener('pointerup', finish);
-          window.removeEventListener('pointercancel', cancel);
-          window.removeEventListener('scroll', markScrolled, true);
-          placeholder?.remove();
-          placeholder = null;
-          placeholderKey = '';
-        };
-        const markScrolled = () => {
-          if (!moved) {
-            moved = true;
-            setDragPreview({
-              left: startRect.left,
-              top: startRect.top,
-              width: startRect.width,
-              height: startRect.height,
-            });
-          }
-        };
-        const finish = (upEvent: PointerEvent) => {
-          const relocation = moved ? relocationTarget(upEvent.clientX, upEvent.clientY) : null;
-          cleanup();
-          if (moved) {
-            if (relocation?.nodeId && onRelocateNode) {
-              onRelocateNode(relocation.nodeId, relocation.position);
-            } else if (relocation?.regionId && onRelocate) {
-              onRelocate(relocation.regionId, relocation.position);
-            } else {
-              const next = resolvePosition(upEvent.clientX, upEvent.clientY);
-              onPosition(next.offsetX, next.offsetY);
-            }
-          }
-          setPositionPreview(null);
-          setDragPreview(null);
-        };
-        const cancel = () => {
-          cleanup();
-          setPositionPreview(null);
-          setDragPreview(null);
-        };
-        window.addEventListener('pointermove', move);
-        window.addEventListener('pointerup', finish);
-        window.addEventListener('pointercancel', cancel);
-        window.addEventListener('scroll', markScrolled, true);
       }}
       onDragStart={(event) => {
         event.stopPropagation();
-        if (compactButton && onPosition) {
-          dragStart.current = { x: event.clientX, y: event.clientY, offsetX, offsetY };
-          event.dataTransfer.effectAllowed = 'move';
-          event.dataTransfer.setData('application/reactcms-free-position', node.id);
+        if (compactButton) {
+          event.preventDefault();
           return;
         }
         event.dataTransfer.effectAllowed = 'move';
         event.dataTransfer.setData('application/reactcms-node', node.id);
-      }}
-      onDragEnd={(event) => {
-        if (!compactButton || !dragStart.current || !onPosition) return;
-        event.preventDefault();
-        event.stopPropagation();
-        const endX = event.clientX || dragStart.current.x;
-        const endY = event.clientY || dragStart.current.y;
-        onPosition(
-          Math.round(dragStart.current.offsetX + endX - dragStart.current.x),
-          Math.round(dragStart.current.offsetY + endY - dragStart.current.y),
-        );
-        dragStart.current = null;
       }}
       onDragOver={(event) => {
         if (!editable) return;
@@ -1294,13 +1118,6 @@ function RenderNode({
           nodeId: node.id,
           path: ['props'],
           value: { ...(node.props || {}), width: `${width}px`, height: `${height}px` },
-        });
-      }}
-      onPosition={(offsetX, offsetY) => {
-        onMutation?.({
-          nodeId: node.id,
-          path: ['props'],
-          value: { ...(node.props || {}), offsetX, offsetY },
         });
       }}
       onRelocate={(anchorRegionId, position) => {

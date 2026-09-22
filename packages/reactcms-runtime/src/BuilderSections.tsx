@@ -180,6 +180,23 @@ function reorderNode(nodes: ComponentNode[], nodeId: string, direction: -1 | 1):
   });
 }
 
+export function moveRuntimeAddition(
+  tree: PageComponentTree, nodeId: string, targetId: string, position: DropPosition,
+): PageComponentTree {
+  const node = findNode(tree.children, nodeId);
+  const target = findNode(tree.children, targetId);
+  if (!node || !target || nodeId === targetId || findNode(node.children || [], targetId)) return tree;
+  // Top-level nodes are grouped into portals by placement, not array order.
+  // Adopt the destination portal when crossing from one insertion area to another.
+  const owner = tree.children.find((root) => root.id === targetId || findNode(root.children || [], targetId));
+  const addition = {
+    ...node,
+    props: { ...node.props, offsetX: 0, offsetY: 0 },
+    metadata: { ...node.metadata, runtimePlacement: normalizedRuntimePlacement(owner?.metadata?.runtimePlacement) },
+  };
+  return { ...tree, children: insertNode(removeNode(tree.children, nodeId), targetId, position, addition) };
+}
+
 function refreshNodeIds(node: ComponentNode, suffix: string): ComponentNode {
   return {
     ...node,
@@ -340,6 +357,13 @@ function RuntimeAdditionsPortal({
   }, [commit, locale, placement, tree]);
 
   const handleMutation = useCallback((mutation: RendererMutation) => {
+    // Moving a nested button to a source-site region must also detach it from
+    // its old parent; only root nodes participate in portal placement.
+    if (!mutation.path.length && (mutation.value as ComponentNode)?.metadata?.runtimePlacement) {
+      const moved = mutation.value as ComponentNode;
+      commit({ ...tree, children: [...removeNode(tree.children, mutation.nodeId), moved] });
+      return;
+    }
     commit({
       ...tree,
       children: updateNode(tree.children, mutation.nodeId, mutation.path, mutation.value),
@@ -405,10 +429,8 @@ function RuntimeAdditionsPortal({
   }, [commit, tree]);
 
   const handleMove = useCallback((nodeId: string, targetId: string, position: DropPosition) => {
-    const node = findNode(tree.children, nodeId);
-    if (!node || findNode(node.children || [], targetId)) return;
-    const without = removeNode(tree.children, nodeId);
-    commit({ ...tree, children: insertNode(without, targetId, position, node) });
+    const next = moveRuntimeAddition(tree, nodeId, targetId, position);
+    if (next !== tree) commit(next);
   }, [commit, tree]);
 
   if (!host) return null;
