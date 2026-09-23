@@ -108,6 +108,7 @@ describe("connected source providers", () => {
     expect(source).toContain('page?.deleted === true');
     expect(source).toContain('data-reactcms-deleted-route');
     expect(source).toContain('data-reactcms-published-section-styles');
+    expect(source).toContain('data-reactcms-runtime-typography');
     expect(source).toContain('element.style.setProperty("background", value.background, "important")');
     expect(source).toContain('sendRuntimeMessage("rcms/v1/enter-edit-mode")');
     expect(source).toContain('window.self === window.top');
@@ -506,7 +507,7 @@ describe("connected source providers", () => {
         url: "https://triosis.in/reactcms-route-check-test"
       }))
       .mockResolvedValueOnce(new Response(
-        'document.querySelector("script[data-reactcms-route-bootstrap]"); data-reactcms-deleted-route data-reactcms-published-section-styles',
+        'document.querySelector("script[data-reactcms-route-bootstrap]"); data-reactcms-deleted-route data-reactcms-published-section-styles data-reactcms-runtime-typography',
         { status: 200, headers: { "Content-Type": "text/javascript" } }
       ));
     vi.stubGlobal("fetch", fetchMock);

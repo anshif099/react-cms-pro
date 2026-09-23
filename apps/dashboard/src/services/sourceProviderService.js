@@ -290,7 +290,7 @@ export async function verifyExistingLiveRouting(website) {
     );
   }
   const publishedStyleBridgeConfigured = bootstrapSource
-    .includes("data-reactcms-published-section-styles");
+    .includes("data-reactcms-runtime-typography");
   if (!publishedStyleBridgeConfigured) {
     throw new Error(
       "The live route is working, but its ReactCMS published-style bridge is outdated."
@@ -389,9 +389,11 @@ const applicationSource = bootstrap?.dataset.reactcmsApp || "";
 const websiteId = bootstrap?.dataset.reactcmsWebsite || "";
 const databaseUrl = (bootstrap?.dataset.reactcmsDatabase || "").replace(/\\/$/, "");
 const LIVE_STYLE_BRIDGE = "data-reactcms-published-section-styles";
+const LIVE_TYPOGRAPHY_BRIDGE = "data-reactcms-runtime-typography";
 let activePageKey = "";
 let publishedSignature = "";
 let publishedRegions = {};
+let runtimeTypographyTree = null;
 const liveRegionElements = new Map();
 
 function routePageKey() {
@@ -478,6 +480,53 @@ function applyKnownSectionStyles() {
   });
 }
 
+function collectRuntimeTypography(nodes, result) {
+  (nodes || []).forEach((node) => {
+    const styles = Object.assign({}, node?.styles?.base || {}, node?.styles?.desktop || {});
+    const declarations = [];
+    const probe = document.createElement("span");
+    ["color", "font-family", "font-size", "font-weight", "letter-spacing", "line-height", "text-align"]
+      .forEach((property) => {
+        const key = property.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
+        if (styles[key] === undefined || styles[key] === "") return;
+        probe.style.setProperty(property, String(styles[key]));
+        const value = probe.style.getPropertyValue(property);
+        if (value) declarations.push(property + ": " + value + " !important;");
+      });
+    if (node?.id && declarations.length) result.set(String(node.id), declarations.join(" "));
+    collectRuntimeTypography(node?.children, result);
+  });
+}
+
+function applyRuntimeTypography() {
+  let stylesheet = document.querySelector("style[" + LIVE_TYPOGRAPHY_BRIDGE + "]");
+  if (!stylesheet) {
+    stylesheet = document.createElement("style");
+    stylesheet.setAttribute(LIVE_TYPOGRAPHY_BRIDGE, "true");
+    document.head.appendChild(stylesheet);
+  }
+  document.querySelectorAll("[data-reactcms-typography-id]").forEach((element) => {
+    element.removeAttribute("data-reactcms-typography-id");
+  });
+  const typography = new Map();
+  collectRuntimeTypography(runtimeTypographyTree?.children, typography);
+  const rules = [];
+  document.querySelectorAll("[data-rcms-node-id]").forEach((element) => {
+    const declarations = typography.get(element.getAttribute("data-rcms-node-id"));
+    if (!declarations) return;
+    const id = String(rules.length);
+    element.setAttribute("data-reactcms-typography-id", id);
+    const selector = "[data-reactcms-typography-id='" + id + "']";
+    rules.push(selector + ", " + selector + " * { " + declarations + " }");
+  });
+  stylesheet.textContent = rules.join(" ");
+}
+
+function setRuntimeTypographyTree(tree) {
+  runtimeTypographyTree = tree?.children ? tree : null;
+  window.requestAnimationFrame(applyRuntimeTypography);
+}
+
 function sendRuntimeMessage(type, payload = {}) {
   window.postMessage({
     rcms: true,
@@ -540,6 +589,7 @@ async function hydratePublishedPage(pageKey, page) {
   if (!page || page.deleted === true) return;
   activePageKey = pageKey;
   publishedRegions = pageRegions(page);
+  setRuntimeTypographyTree(publishedRegions.__rcms_runtime_additions__);
   broadcastPublishedRegions(pageKey, publishedRegions);
   await discoverSectionElements(publishedRegions);
   applyKnownSectionStyles();
@@ -562,6 +612,7 @@ async function refreshPublishedPage() {
 function watchPublishedPage() {
   const observer = new MutationObserver(() => {
     window.requestAnimationFrame(applyKnownSectionStyles);
+    window.requestAnimationFrame(applyRuntimeTypography);
   });
   if (document.body) observer.observe(document.body, { childList: true, subtree: true });
   window.setInterval(refreshPublishedPage, 4000);
@@ -577,6 +628,14 @@ function showDeletedPage() {
 async function start() {
   if (!applicationSource) throw new Error("The ReactCMS application module is missing.");
   const pageKey = routePageKey();
+  activePageKey = pageKey;
+  window.addEventListener("message", (event) => {
+    const message = event.data;
+    if (event.source !== window.parent || !message || message.rcms !== true
+      || message.type !== "rcms/v1/field-update") return;
+    if (message.payload?.regionId !== "__rcms_runtime_additions__") return;
+    setRuntimeTypographyTree(message.payload.value);
+  });
   let page = null;
   if (websiteId && databaseUrl) {
     try {
@@ -590,6 +649,10 @@ async function start() {
     }
   }
   await import(new URL(applicationSource, location.origin).href);
+  if (window.self !== window.top) {
+    const observer = new MutationObserver(() => window.requestAnimationFrame(applyRuntimeTypography));
+    if (document.body) observer.observe(document.body, { childList: true, subtree: true });
+  }
   if (window.self === window.top && page) {
     publishedSignature = pageKey + ":" + JSON.stringify(page?.regions || {});
     await hydratePublishedPage(pageKey, page);
