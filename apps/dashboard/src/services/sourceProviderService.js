@@ -290,7 +290,7 @@ export async function verifyExistingLiveRouting(website) {
     );
   }
   const publishedStyleBridgeConfigured = bootstrapSource
-    .includes("data-reactcms-runtime-typography");
+    .includes("data-reactcms-runtime-style-v2");
   if (!publishedStyleBridgeConfigured) {
     throw new Error(
       "The live route is working, but its ReactCMS published-style bridge is outdated."
@@ -389,7 +389,7 @@ const applicationSource = bootstrap?.dataset.reactcmsApp || "";
 const websiteId = bootstrap?.dataset.reactcmsWebsite || "";
 const databaseUrl = (bootstrap?.dataset.reactcmsDatabase || "").replace(/\\/$/, "");
 const LIVE_STYLE_BRIDGE = "data-reactcms-published-section-styles";
-const LIVE_TYPOGRAPHY_BRIDGE = "data-reactcms-runtime-typography";
+const LIVE_TYPOGRAPHY_BRIDGE = "data-reactcms-runtime-style-v2";
 let activePageKey = "";
 let publishedSignature = "";
 let publishedRegions = {};
@@ -483,17 +483,25 @@ function applyKnownSectionStyles() {
 function collectRuntimeTypography(nodes, result) {
   (nodes || []).forEach((node) => {
     const styles = Object.assign({}, node?.styles?.base || {}, node?.styles?.desktop || {});
-    const declarations = [];
+    const textDeclarations = [];
+    const borderDeclarations = [];
     const probe = document.createElement("span");
-    ["color", "font-family", "font-size", "font-weight", "letter-spacing", "line-height", "text-align"]
+    ["color", "font-family", "font-size", "font-weight", "letter-spacing", "line-height", "text-align", "border-color", "border-width", "border-style"]
       .forEach((property) => {
         const key = property.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
         if (styles[key] === undefined || styles[key] === "") return;
         probe.style.setProperty(property, String(styles[key]));
         const value = probe.style.getPropertyValue(property);
-        if (value) declarations.push(property + ": " + value + " !important;");
+        if (value) {
+          const target = property.startsWith("border-") ? borderDeclarations : textDeclarations;
+          target.push(property + ": " + value + " !important;");
+        }
       });
-    if (node?.id && declarations.length) result.set(String(node.id), declarations.join(" "));
+    if (styles.borderColor && !styles.borderWidth) borderDeclarations.push("border-width: 1px !important;");
+    if (styles.borderColor && !styles.borderStyle) borderDeclarations.push("border-style: solid !important;");
+    if (node?.id && (textDeclarations.length || borderDeclarations.length)) {
+      result.set(String(node.id), { text: textDeclarations.join(" "), border: borderDeclarations.join(" ") });
+    }
     collectRuntimeTypography(node?.children, result);
   });
 }
@@ -513,11 +521,22 @@ function applyRuntimeTypography() {
   const rules = [];
   document.querySelectorAll("[data-rcms-node-id]").forEach((element) => {
     const declarations = typography.get(element.getAttribute("data-rcms-node-id"));
-    if (!declarations) return;
+    if (!declarations?.text) return;
     const id = String(rules.length);
     element.setAttribute("data-reactcms-typography-id", id);
     const selector = "[data-reactcms-typography-id='" + id + "']";
-    rules.push(selector + ", " + selector + " * { " + declarations + " }");
+    rules.push(selector + ", " + selector + " * { " + declarations.text + " }");
+  });
+  document.querySelectorAll("[data-rcms-node]").forEach((element) => {
+    const declarations = typography.get(element.getAttribute("data-rcms-node"));
+    if (!declarations?.border) return;
+    const id = String(rules.length);
+    element.setAttribute("data-reactcms-border-id", id);
+    const selector = "[data-reactcms-border-id='" + id + "']";
+    rules.push(selector + " { " + declarations.border + " }");
+    if (element.getAttribute("data-rcms-type") === "button") {
+      rules.push(selector + " a, " + selector + " button { " + declarations.border + " }");
+    }
   });
   stylesheet.textContent = rules.join(" ");
 }
