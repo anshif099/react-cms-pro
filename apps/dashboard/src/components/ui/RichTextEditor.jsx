@@ -21,7 +21,7 @@ export function RichTextEditor({ label, value, onChange, placeholder = "Enter de
     ],
     content: value || "",
     onUpdate: ({ editor }) => {
-      if (onChange) {
+      if (onChange && editor.schema) {
         onChange(editor.getHTML());
       }
     },
@@ -29,12 +29,12 @@ export function RichTextEditor({ label, value, onChange, placeholder = "Enter de
 
   // Sync value from prop if editor is loaded and value differs
   React.useEffect(() => {
-    if (editor && value !== undefined && value !== editor.getHTML()) {
+    if (editor?.schema && value !== undefined && value !== editor.getHTML()) {
       editor.commands.setContent(value);
     }
   }, [value, editor]);
 
-  if (!editor) return null;
+  if (!editor?.schema) return null;
 
   const toggleLink = () => {
     if (editor.isActive("link")) {
