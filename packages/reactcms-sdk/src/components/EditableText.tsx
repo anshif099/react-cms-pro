@@ -46,6 +46,7 @@ export function EditableText({
 
   const isRich = typeof value === 'object' && value !== null;
   const displayValue = isRich ? (value.text !== undefined ? value.text : '') : value;
+  const isEmpty = typeof displayValue === 'string' && !displayValue.trim();
   const configuredTag = isRich && typeof value.htmlTag === 'string'
     ? value.htmlTag.toLowerCase()
     : '';
@@ -434,7 +435,7 @@ export function EditableText({
 
   if (!editMode) {
     return (
-      <RenderComponent ref={elementRef} className={className} style={{ ...style, ...textStyle }} data-rcms-region={regionId}>
+      <RenderComponent ref={elementRef} className={className} style={{ ...style, ...textStyle, ...(isEmpty ? { display: 'none' } : {}) }} data-rcms-region={regionId}>
         {displayValue}
       </RenderComponent>
     );
@@ -465,7 +466,7 @@ export function EditableText({
       data-rcms-type="text"
       data-rcms-label={label}
     >
-      {displayValue}
+      {isEmpty ? 'Empty text — select to edit' : displayValue}
 
       {/* Floating Alignment Quick Toolbar */}
       {isSelected && (

@@ -78,6 +78,18 @@ describe("connected source providers", () => {
     });
   });
 
+  it("clears one page's template text without changing another page", () => {
+    const existing = 'window.__REACTCMS_GIT_CONTENT__ = {"ad":{"ad.heading":{"text":"About Advertisement"}},"shop":{"shop.heading":{"text":"About Shop"}}};\n';
+    const content = mergeReactCmsGitContent(existing, "ad", {
+      "ad.heading": { text: "" }
+    });
+
+    expect(parseReactCmsGitContent(content)).toEqual({
+      ad: { "ad.heading": { text: "" } },
+      shop: { "shop.heading": { text: "About Shop" } }
+    });
+  });
+
   it("loads the Git content manifest before the application module", () => {
     const html = '<body>\n  <div id="root"></div>\n  <script type="module" src="/src/main.jsx"></script>\n</body>';
     const result = ensureReactCmsContentLoader(html);

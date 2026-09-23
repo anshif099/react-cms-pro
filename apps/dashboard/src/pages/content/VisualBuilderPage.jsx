@@ -47,6 +47,7 @@ import themeService from "../../services/themeService";
 import websiteService from "../../services/websiteService";
 import sourceCredentialService from "../../services/sourceCredentialService";
 import sourceProviderService from "../../services/sourceProviderService";
+import { mergeReactCmsGitContent } from "../../services/sourceProviderService";
 import registryService from "../../services/registryService";
 import pageService from "../../services/pageService";
 import contentSyncService from "../../services/contentSyncService";
@@ -97,6 +98,10 @@ function sourceDraftKey(websiteId, pageId) {
 
 function sourceFilesDraftKey(websiteId, pageId) {
   return `reactcms_source_files_draft:${websiteId}:${pageId}`;
+}
+
+function sourcePreviewOverridesKey(websiteId, pageId) {
+  return `reactcms_source_preview_overrides:${websiteId}:${pageId}`;
 }
 
 async function loadConnectedSourceGraph(website, entryPath, entryContent) {
@@ -612,9 +617,20 @@ function ConnectedSourceWorkspace({
     })
       .then((draftRegions) => {
         if (connectedDraftHydrationRunRef.current !== hydrationRun) return;
+        let sourceOverrides = {};
+        if (!visualOnly) {
+          try {
+            sourceOverrides = JSON.parse(
+              sessionStorage.getItem(sourcePreviewOverridesKey(websiteId, pageId)) || "{}"
+            );
+          } catch {
+            sourceOverrides = {};
+          }
+        }
         const entries = Object.entries(draftRegions || {}).filter(([regionId, value]) => (
           value !== null && value !== undefined
-          && (visualOnly || regionId === RUNTIME_ADDITIONS_REGION)
+          && (visualOnly || regionId === RUNTIME_ADDITIONS_REGION
+            || Object.prototype.hasOwnProperty.call(sourceOverrides, regionId))
         ));
         const draftValues = new Map(entries);
         const hydratedSelection = selectedRegionsRef.current.map((region) => (
@@ -1250,6 +1266,14 @@ function ConnectedSourceWorkspace({
                   className="mt-2 w-full resize-y rounded-lg border border-slate-800 bg-[#070b14] p-3 text-xs leading-5 text-slate-200 outline-none focus:border-blue-500"
                 />
               </label>
+              <button
+                type="button"
+                disabled={!textValue}
+                onClick={() => updateSelectedField("text", "")}
+                className="h-9 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 text-[10px] font-bold text-rose-300 disabled:opacity-40"
+              >
+                Delete selected text
+              </button>
 
               <div className="rounded-xl border border-slate-800 bg-slate-950/35 p-3">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
@@ -2789,6 +2813,16 @@ export function VisualBuilderPage() {
           selectedPage.sourceFile,
           source.content
         );
+        if (website.connection?.provider === "github") {
+          try {
+            sourceFiles["public/reactcms-content.js"] = (
+              await sourceProviderService.readFile(website, "public/reactcms-content.js")
+            ).content;
+          } catch (manifestError) {
+            if (!/not found|no such file/i.test(manifestError?.message || "")) throw manifestError;
+            sourceFiles["public/reactcms-content.js"] = "";
+          }
+        }
         if (cancelled) return;
         const legacyDraft = sessionStorage.getItem(
           sourceDraftKey(websiteId, pageId)
@@ -3260,6 +3294,7 @@ export function VisualBuilderPage() {
       );
       sessionStorage.removeItem(sourceDraftKey(websiteId, pageId));
       sessionStorage.removeItem(sourceFilesDraftKey(websiteId, pageId));
+      sessionStorage.removeItem(sourcePreviewOverridesKey(websiteId, pageId));
       sourceDirtyPathsRef.current = new Set();
       setSourceSaveStatus("saved");
       setSelectedPage((current) => current ? {
@@ -3294,6 +3329,55 @@ export function VisualBuilderPage() {
   };
 
   const patchSourceFromVisual = useCallback((change) => {
+    if (change.regionId.startsWith(`${pageKey}.`)
+      && sourceWebsite?.connection?.provider === "github") {
+      const manifestPath = "public/reactcms-content.js";
+      const currentManifest = sourceFilesRef.current[manifestPath];
+      if (currentManifest === undefined) {
+        return { changed: false, error: "The page content manifest is still loading." };
+      }
+      const nextManifest = mergeReactCmsGitContent(currentManifest, pageKey, {
+        [change.regionId]: change.value
+      });
+      sourceFilesRef.current = { ...sourceFilesRef.current, [manifestPath]: nextManifest };
+      sourceDirtyPathsRef.current.add(manifestPath);
+      sessionStorage.setItem(sourceFilesDraftKey(websiteId, pageId), JSON.stringify(
+        Object.fromEntries(Array.from(sourceDirtyPathsRef.current).map((path) => [
+          path,
+          sourceFilesRef.current[path]
+        ]))
+      ));
+      let previewOverrides = {};
+      try {
+        previewOverrides = JSON.parse(
+          sessionStorage.getItem(sourcePreviewOverridesKey(websiteId, pageId)) || "{}"
+        );
+      } catch {
+        previewOverrides = {};
+      }
+      sessionStorage.setItem(sourcePreviewOverridesKey(websiteId, pageId), JSON.stringify({
+        ...previewOverrides,
+        [change.regionId]: change.value
+      }));
+      regionsRef.current = { ...regionsRef.current, [change.regionId]: change.value };
+      setSourceSaveStatus("unsaved");
+      const targets = connectedDraftTargets({
+        websiteId,
+        pageKey,
+        runtimeWebsiteId: change.runtimeWebsiteId,
+        runtimeWebsiteIds: change.runtimeWebsiteIds,
+        runtimePageId: change.pageId,
+        pageAliases: [pageId, selectedPage?.id, selectedPage?.routeId, selectedPage?.slug, selectedPage?.route],
+        regionId: change.regionId
+      });
+      const write = visualBuilderService.persistRegionTargets(targets, change.regionId, change.value);
+      connectedWritesRef.current.add(write);
+      write.catch((error) => {
+        console.error(error);
+        toast.error(error.message || "The page text could not be saved.");
+      }).finally(() => connectedWritesRef.current.delete(write));
+      return { changed: true, sourceFile: manifestPath };
+    }
     if (change.regionId === RUNTIME_ADDITIONS_REGION && isPageComponentTree(change.value)) {
       const targets = connectedDraftTargets({
         websiteId,
@@ -3344,7 +3428,7 @@ export function VisualBuilderPage() {
       changed: false,
       error: `Region "${change.regionId}" was not found in the loaded page components.`
     };
-  }, [pageId, pageKey, selectedPage?.id, selectedPage?.route, selectedPage?.routeId, selectedPage?.slug, selectedPage?.sourceFile, toast, websiteId]);
+  }, [pageId, pageKey, selectedPage?.id, selectedPage?.route, selectedPage?.routeId, selectedPage?.slug, selectedPage?.sourceFile, sourceWebsite?.connection?.provider, toast, websiteId]);
 
   const persistConnectedRegion = useCallback((change) => {
     if (!websiteId || !pageKey || !change.regionId) {

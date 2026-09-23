@@ -72,7 +72,11 @@ export function useEditable<T>(
         ? storedInitial
         : defaultValue
   );
-  const prefersGit = gitInitial !== undefined && !cms?.editMode;
+  const isPreview = typeof window !== 'undefined' && (() => {
+    const query = new URLSearchParams(window.location.search);
+    return query.has('rcms_preview') || query.get('mode') === 'preview';
+  })();
+  const prefersGit = gitInitial !== undefined && !cms?.editMode && !isPreview;
 
   // Register region with Runtime Context on mount & check for stored value updates
   useEffect(() => {
