@@ -26,9 +26,10 @@ describe('moveRuntimeAddition', () => {
     expect(moveRuntimeAddition(tree, 'button', 'missing', 'after')).toBe(tree);
     expect(moveRuntimeAddition(tree, 'button', 'button', 'after')).toBe(tree);
   });
-  it('preserves an arbitrary horizontal drop position across portal moves and reload', () => {
+  it('places a button beside its target without a horizontal offset', () => {
     const next = JSON.parse(JSON.stringify(moveRuntimeAddition(tree, 'button', 'other', 'after', .83)));
-    expect(next.children[1].props).toMatchObject({ offsetX: 0, offsetY: 0, horizontalPosition: .83 });
+    expect(next.children[1].props).toMatchObject({ offsetX: 0, offsetY: 0 });
+    expect(next.children[1].props.horizontalPosition).toBeUndefined();
     expect(next.children[1].metadata.runtimePlacement.anchorRegionId).toBe('image');
   });
   it('inherits the top-level destination placement for nested targets', () => {

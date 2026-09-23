@@ -192,7 +192,14 @@ export function moveRuntimeAddition(
   const owner = tree.children.find((root) => root.id === targetId || findNode(root.children || [], targetId));
   const addition = {
     ...node,
-    props: { ...node.props, offsetX: 0, offsetY: 0, ...(horizontalPosition !== undefined ? { horizontalPosition } : {}) },
+    props: {
+      ...node.props,
+      offsetX: 0,
+      offsetY: 0,
+      horizontalPosition: node.type === 'button' && target.type === 'button'
+        ? undefined
+        : horizontalPosition ?? node.props?.horizontalPosition,
+    },
     metadata: { ...node.metadata, runtimePlacement: normalizedRuntimePlacement(owner?.metadata?.runtimePlacement) },
   };
   return { ...tree, children: insertNode(removeNode(tree.children, nodeId), targetId, position, addition) };

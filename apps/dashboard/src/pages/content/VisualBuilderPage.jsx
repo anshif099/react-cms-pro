@@ -1190,13 +1190,14 @@ function ConnectedSourceWorkspace({
       const selectedTree = isPageComponentTree(value) ? value : null;
       const tree = selectedTree || runtimeAdditionsRef.current;
       if (selectedTree) runtimeAdditionsRef.current = selectedTree;
-      const nodeId = `section_${Date.now().toString(36)}`;
       const selectedRuntimeNode = selectedTree
         ? (selectedRegion.componentId ? findNode(selectedTree, selectedRegion.componentId) : lastTreeNode(selectedTree.children))
         : null;
+      const besideButton = selectedRuntimeNode?.type === "button";
+      const nodeId = `${besideButton ? "button" : "section"}_${Date.now().toString(36)}`;
       const placeholder = {
-        id: nodeId, type: "section", label: "Section",
-        props: { locales: { [locale]: { title: "New section" } } }, children: [],
+        id: nodeId, type: besideButton ? "button" : "section", label: besideButton ? "Button" : "Section",
+        props: { locales: { [locale]: besideButton ? { label: "New button" } : { title: "New section" } } }, children: [],
         metadata: selectedRuntimeNode?.metadata
           ? structuredClone(selectedRuntimeNode.metadata)
           : { runtimePlacement: { anchorRegionId: selectedRegion.regionId, position: "after" } }
@@ -1223,7 +1224,7 @@ function ConnectedSourceWorkspace({
         <div className="p-4 space-y-4">
           <div className="grid grid-cols-2 gap-2">
             <button type="button" onClick={copySelectedComponent} className="h-9 rounded-lg border border-slate-700 bg-slate-900 text-[10px] font-bold text-slate-200 cursor-pointer">Copy</button>
-            <button type="button" onClick={addBelowSelected} className="h-9 rounded-lg bg-blue-600 text-[10px] font-extrabold text-white cursor-pointer">+ Add below</button>
+            <button type="button" onClick={addBelowSelected} className="h-9 rounded-lg bg-blue-600 text-[10px] font-extrabold text-white cursor-pointer">{selectedRegion.type === "runtime-component" && selectedRegion.componentType === "button" ? "+ Add beside" : "+ Add below"}</button>
           </div>
           {selectedRegion.type === "text" && (
             <>

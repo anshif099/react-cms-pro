@@ -1183,6 +1183,9 @@ export function RuntimeRenderer({
     ...callbacks,
   }), [callbacks, locale, mode, responsiveMode]);
 
+  const buttonRow = transparentBackground
+    && tree.children.length > 0
+    && tree.children.every((node) => node.type === 'button');
   const themeStyle = {
     '--rcms-color-primary': theme?.colors?.primary || '#2563eb',
     '--rcms-color-secondary': theme?.colors?.secondary || '#1e293b',
@@ -1192,6 +1195,11 @@ export function RuntimeRenderer({
     '--rcms-button-radius': theme?.buttons?.borderRadius || '10px',
     '--rcms-button-weight': theme?.buttons?.fontWeight || '700',
     width: '100%',
+    display: buttonRow ? 'flex' : undefined,
+    flexWrap: buttonRow ? 'wrap' : undefined,
+    justifyContent: buttonRow ? 'center' : undefined,
+    alignItems: buttonRow ? 'center' : undefined,
+    gap: buttonRow ? '12px' : undefined,
     minHeight: transparentBackground ? undefined : '100%',
     color: 'var(--rcms-color-text)',
     background: transparentBackground ? 'transparent' : 'var(--rcms-color-background)',
