@@ -24,6 +24,18 @@ import Input from "../ui/Input";
 
 const BlockFields = lazy(() => import("../blocks/BlockFields"));
 
+const FONT_FAMILIES = [
+  ["Arial", "Arial, Helvetica, sans-serif"],
+  ["Verdana", "Verdana, Geneva, sans-serif"],
+  ["Tahoma", "Tahoma, Geneva, sans-serif"],
+  ["Trebuchet MS", '"Trebuchet MS", Helvetica, sans-serif'],
+  ["Georgia", "Georgia, serif"],
+  ["Times New Roman", '"Times New Roman", Times, serif'],
+  ["Courier New", '"Courier New", Courier, monospace'],
+  ["Comic Sans MS", '"Comic Sans MS", "Comic Sans", cursive'],
+  ["Impact", "Impact, Haettenschweiler, sans-serif"]
+];
+
 function FieldLabel({ children }) {
   return <label className="block text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-600 mb-1.5">{children}</label>;
 }
@@ -271,7 +283,15 @@ export function NativeInspector({
           <>
             <InspectorGroup title="Typography" icon={Type}>
               <ColorPicker label="Text Color" value={activeStyles.color || "#0f172a"} onChange={(value) => updateStyle("color", value)} />
-              <Input label="Font Family" value={activeStyles.fontFamily || ""} placeholder="Inter, sans-serif" onChange={(event) => updateStyle("fontFamily", event.target.value)} />
+              <SelectField label="Font Family" value={activeStyles.fontFamily || ""} onChange={(value) => updateStyle("fontFamily", value)}>
+                <option value="">Site default</option>
+                {activeStyles.fontFamily && !FONT_FAMILIES.some(([, value]) => value === activeStyles.fontFamily) && (
+                  <option value={activeStyles.fontFamily}>{activeStyles.fontFamily}</option>
+                )}
+                {FONT_FAMILIES.map(([label, value]) => (
+                  <option key={label} value={value}>{label}</option>
+                ))}
+              </SelectField>
               <div className="grid grid-cols-2 gap-3">
                 <Input label="Font Size" type="number" value={Number.parseFloat(activeStyles.fontSize) || ""} onChange={(event) => updateStyle("fontSize", `${event.target.value}px`)} />
                 <SelectField label="Weight" value={activeStyles.fontWeight || "400"} onChange={(value) => updateStyle("fontWeight", value)}>
