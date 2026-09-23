@@ -455,10 +455,9 @@ function ConnectedSourceWorkspace({
       return undefined;
     }
 
-    const canvasUrl = (connectedUrl) => {
-      if (isPreview) return connectedUrl;
-      return buildConnectedCanvasProxyUrl(connectedUrl, "edit") || connectedUrl;
-    };
+    const canvasUrl = (connectedUrl) => (
+      buildConnectedCanvasProxyUrl(connectedUrl, isPreview ? "preview" : "edit") || connectedUrl
+    );
 
     let requestedPath = "/";
     try {
@@ -595,7 +594,7 @@ function ConnectedSourceWorkspace({
   }, []);
 
   const hydrateConnectedDraft = useCallback((readyRuntimeWebsiteId) => {
-    if (isPreview || !visualOnly || !websiteId || !pageKey) {
+    if (!visualOnly || !websiteId || !pageKey) {
       connectedDraftHydratedRef.current = true;
       return;
     }

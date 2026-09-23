@@ -283,6 +283,7 @@ export async function verifyExistingLiveRouting(website) {
     bootstrapResponse.ok
     && bootstrapSource.includes("data-reactcms-route-bootstrap")
     && bootstrapSource.includes("data-reactcms-deleted-route")
+    && bootstrapSource.includes("await routeExists(pageKey, page)")
   );
   if (!deletionGuardConfigured) {
     throw new Error(
@@ -428,6 +429,23 @@ async function fetchPublishedPage(pageKey) {
   if (!websiteId || !databaseUrl) return null;
   const response = await fetch(publishedPageUrl(pageKey), { cache: "no-store" });
   return response.ok ? await response.json() : null;
+}
+
+async function routeExists(pageKey, publishedPage) {
+  if (pageKey === "home" || publishedPage) return true;
+  if (!websiteId || !databaseUrl) return true;
+  const url = databaseUrl + "/registry/" + encodeURIComponent(websiteId) + "/routes.json";
+  const response = await fetch(url, { cache: "no-store" });
+  if (!response.ok) return true;
+  const routes = await response.json();
+  if (!routes || typeof routes !== "object") return false;
+  return Object.values(routes).some((route) => {
+    const path = String(route?.path || "").replace(/^\\/+|\\/+$/g, "");
+    if (path === pageKey) return true;
+    if (!path.includes("*")) return false;
+    const prefix = path.split("*")[0].replace(/\\/+$/, "");
+    return !prefix || pageKey === prefix || pageKey.startsWith(prefix + "/");
+  });
 }
 
 function pageRegions(page) {
@@ -659,7 +677,7 @@ async function start() {
   if (websiteId && databaseUrl) {
     try {
       page = await fetchPublishedPage(pageKey);
-      if (page?.deleted === true) {
+      if (page?.deleted === true || !(await routeExists(pageKey, page))) {
         showDeletedPage();
         return;
       }

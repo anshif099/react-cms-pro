@@ -106,6 +106,7 @@ describe("connected source providers", () => {
 
     expect(() => new Function(source)).not.toThrow();
     expect(source).toContain('page?.deleted === true');
+    expect(source).toContain('await routeExists(pageKey, page)');
     expect(source).toContain('data-reactcms-deleted-route');
     expect(source).toContain('data-reactcms-published-section-styles');
     expect(source).toContain('data-reactcms-runtime-style-v2');
@@ -509,7 +510,7 @@ describe("connected source providers", () => {
         url: "https://triosis.in/reactcms-route-check-test"
       }))
       .mockResolvedValueOnce(new Response(
-        'document.querySelector("script[data-reactcms-route-bootstrap]"); data-reactcms-deleted-route data-reactcms-published-section-styles data-reactcms-runtime-style-v2',
+        'document.querySelector("script[data-reactcms-route-bootstrap]"); data-reactcms-deleted-route await routeExists(pageKey, page) data-reactcms-published-section-styles data-reactcms-runtime-style-v2',
         { status: 200, headers: { "Content-Type": "text/javascript" } }
       ));
     vi.stubGlobal("fetch", fetchMock);
@@ -559,7 +560,7 @@ describe("connected source providers", () => {
     vi.stubGlobal("fetch", vi.fn()
       .mockResolvedValueOnce(jsonResponse({ ok: true, status: 200 }))
       .mockResolvedValueOnce(new Response(
-        'data-reactcms-route-bootstrap data-reactcms-deleted-route',
+        'data-reactcms-route-bootstrap data-reactcms-deleted-route await routeExists(pageKey, page)',
         { status: 200 }
       ))
     );
