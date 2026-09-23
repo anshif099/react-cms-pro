@@ -13,6 +13,27 @@ function pointer(target: EventTarget, type: string, x: number, y: number) {
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); document.body.innerHTML = ''; });
 
 describe('rendered button drag wiring', () => {
+  it('keeps a single positioned button out of the flex row and resets offsets for button rows', () => {
+    vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+    const host = document.createElement('div');
+    document.body.append(host);
+    const first = { id: 'first', type: 'button', props: { horizontalPosition: .8 } };
+    const second = { id: 'second', type: 'button', props: {} };
+    const tree = { id: 'buttons', type: 'page', version: 2, children: [first] } as PageComponentTree;
+    const root = createRoot(host);
+    act(() => root.render(<RuntimeRenderer tree={tree} transparentBackground />));
+    const canvas = host.querySelector<HTMLElement>('[data-rcms-page-tree="buttons"]')!;
+    expect(canvas.dataset.rcmsButtonRow).toBeUndefined();
+    expect(canvas.style.display).not.toBe('flex');
+    expect(host.querySelector<HTMLElement>('[data-rcms-node="first"]')!.style.left).toBe('80%');
+
+    act(() => root.render(<RuntimeRenderer tree={{ ...tree, children: [first, second] } as PageComponentTree} transparentBackground />));
+    expect(canvas.dataset.rcmsButtonRow).toBe('true');
+    expect(canvas.style.display).toBe('flex');
+    expect(canvas.querySelector('style')?.textContent).toContain('left: auto !important');
+    act(() => root.unmount());
+  });
+
   it('drags the button label, not its section, and emits the saved image placement', () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     const host = document.createElement('div');

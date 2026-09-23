@@ -1184,7 +1184,7 @@ export function RuntimeRenderer({
   }), [callbacks, locale, mode, responsiveMode]);
 
   const buttonRow = transparentBackground
-    && tree.children.length > 0
+    && tree.children.length > 1
     && tree.children.every((node) => node.type === 'button');
   const themeStyle = {
     '--rcms-color-primary': theme?.colors?.primary || '#2563eb',
@@ -1212,12 +1212,18 @@ export function RuntimeRenderer({
     <div
       data-rcms-page-tree={tree.id}
       data-rcms-renderer-version="2"
+      data-rcms-button-row={buttonRow ? 'true' : undefined}
       style={themeStyle}
     >
       <style>{`
         @keyframes rcms-fade-in { from { opacity: 0; } to { opacity: 1; } }
         @keyframes rcms-slide-up { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes rcms-scale-in { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: scale(1); } }
+        [data-rcms-button-row="true"] > [data-rcms-type="button"] {
+          left: auto !important;
+          translate: none !important;
+          margin-left: 0 !important;
+        }
       `}</style>
       {(tree.children || []).map((node) => (
         <RenderNode key={node.id} node={node} renderer={renderer} />
