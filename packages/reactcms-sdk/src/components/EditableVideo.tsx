@@ -59,9 +59,9 @@ export function EditableVideo({
 
   if (!editMode) {
     if (isEmbed) {
-      return <iframe src={videoUrl} title={label} className={className} style={style} allowFullScreen />;
+      return <iframe src={videoUrl} title={label} className={className} style={style} data-rcms-region={regionId} allowFullScreen />;
     }
-    return <video src={videoUrl} controls className={className} style={style} />;
+    return <video src={videoUrl} controls className={className} style={style} data-rcms-region={regionId} />;
   }
 
   return (

@@ -434,7 +434,7 @@ export function EditableText({
 
   if (!editMode) {
     return (
-      <RenderComponent ref={elementRef} className={className} style={{ ...style, ...textStyle }}>
+      <RenderComponent ref={elementRef} className={className} style={{ ...style, ...textStyle }} data-rcms-region={regionId}>
         {displayValue}
       </RenderComponent>
     );

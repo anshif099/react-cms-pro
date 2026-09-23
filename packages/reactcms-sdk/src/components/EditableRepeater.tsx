@@ -49,7 +49,7 @@ export function EditableRepeater<T = unknown>({
   };
 
   if (!editMode) {
-    return <div className={className} style={style}>{children(items)}</div>;
+    return <div className={className} style={style} data-rcms-region={regionId}>{children(items)}</div>;
   }
 
   return (

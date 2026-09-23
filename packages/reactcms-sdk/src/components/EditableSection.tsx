@@ -74,7 +74,7 @@ export function EditableSection({
   };
 
   if (!editMode) {
-    return <Component className={className} style={sectionStyle}>{children}</Component>;
+    return <Component className={className} style={sectionStyle} data-rcms-region={regionId}>{children}</Component>;
   }
 
   return (

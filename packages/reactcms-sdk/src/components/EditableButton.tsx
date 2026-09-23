@@ -166,7 +166,7 @@ export function EditableButton({
 
   if (!editMode) {
     return (
-      <Tag {...tagProps} className={className} style={buttonStyle} onClick={onClick}>
+      <Tag {...tagProps} className={className} style={buttonStyle} onClick={onClick} data-rcms-region={regionId}>
         {renderedContent}
       </Tag>
     );
