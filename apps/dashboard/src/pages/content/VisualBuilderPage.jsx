@@ -1922,7 +1922,7 @@ function ConnectedSourceWorkspace({
         onAIToggle={() => setAIOpen((value) => !value)}
         aiOpen={aiOpen}
         showSettings={false}
-        publishLabel={visualOnly ? "Publish" : isGitHub ? "Update Git" : isSftp ? "Update StackCP" : "Update cPanel"}
+        publishLabel={isGitHub ? "Commit & Push" : visualOnly ? "Publish" : isSftp ? "Update StackCP" : "Update cPanel"}
       />
 
       <div className="h-11 px-4 border-b border-slate-800 bg-[#0a101d] flex items-center gap-3">
