@@ -594,7 +594,7 @@ function ConnectedSourceWorkspace({
   }, []);
 
   const hydrateConnectedDraft = useCallback((readyRuntimeWebsiteId) => {
-    if (!visualOnly || !websiteId || !pageKey) {
+    if (!websiteId || !pageKey) {
       connectedDraftHydratedRef.current = true;
       return;
     }
@@ -612,21 +612,10 @@ function ConnectedSourceWorkspace({
     })
       .then((draftRegions) => {
         if (connectedDraftHydrationRunRef.current !== hydrationRun) return;
-        const entries = Object.entries(draftRegions || {}).filter(([, value]) => (
+        const entries = Object.entries(draftRegions || {}).filter(([regionId, value]) => (
           value !== null && value !== undefined
+          && (visualOnly || regionId === RUNTIME_ADDITIONS_REGION)
         ));
-        const resolvedRuntimeWebsiteId = readyRuntimeWebsiteId || runtimeWebsiteIdFallback;
-
-        entries.forEach(([regionId, value]) => {
-          onVisualChange({
-            regionId,
-            pageId: canvasRuntimePageId,
-            runtimeWebsiteId: resolvedRuntimeWebsiteId,
-            runtimeWebsiteIds: [runtimeWebsiteIdFallback],
-            value
-          });
-        });
-
         const draftValues = new Map(entries);
         const hydratedSelection = selectedRegionsRef.current.map((region) => (
           draftValues.has(region.regionId)
@@ -3232,6 +3221,7 @@ export function VisualBuilderPage() {
 
     setSourcePublishing(true);
     try {
+      await Promise.all(Array.from(connectedWritesRef.current));
       const dirtyPaths = Array.from(sourceDirtyPathsRef.current);
       const provider = sourceWebsite.connection?.provider;
       const directHostingProvider = provider === "sftp" || provider === "cpanel";
@@ -3304,6 +3294,28 @@ export function VisualBuilderPage() {
   };
 
   const patchSourceFromVisual = useCallback((change) => {
+    if (change.regionId === RUNTIME_ADDITIONS_REGION && isPageComponentTree(change.value)) {
+      const targets = connectedDraftTargets({
+        websiteId,
+        pageKey,
+        runtimeWebsiteId: change.runtimeWebsiteId,
+        runtimeWebsiteIds: change.runtimeWebsiteIds,
+        runtimePageId: change.pageId,
+        pageAliases: [pageId, selectedPage?.id, selectedPage?.routeId, selectedPage?.slug, selectedPage?.route],
+        regionId: change.regionId
+      });
+      const write = visualBuilderService.persistRegionTargets(
+        targets,
+        RUNTIME_ADDITIONS_REGION,
+        change.value
+      );
+      connectedWritesRef.current.add(write);
+      write.catch((error) => {
+        console.error(error);
+        toast.error(error.message || "The added section could not be saved.");
+      }).finally(() => connectedWritesRef.current.delete(write));
+      return { changed: true };
+    }
     for (const [path, content] of Object.entries(sourceFilesRef.current)) {
       const result = patchEditableRegionSource(
         content,
@@ -3332,7 +3344,7 @@ export function VisualBuilderPage() {
       changed: false,
       error: `Region "${change.regionId}" was not found in the loaded page components.`
     };
-  }, [selectedPage?.sourceFile]);
+  }, [pageId, pageKey, selectedPage?.id, selectedPage?.route, selectedPage?.routeId, selectedPage?.slug, selectedPage?.sourceFile, toast, websiteId]);
 
   const persistConnectedRegion = useCallback((change) => {
     if (!websiteId || !pageKey || !change.regionId) {
