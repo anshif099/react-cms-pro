@@ -1,6 +1,7 @@
 import React, {
   createElement,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -61,6 +62,7 @@ function InlineText({
   editable,
   selected,
   style,
+  textOverrides,
   className,
   onCommit,
   nodeId,
@@ -72,6 +74,7 @@ function InlineText({
   editable: boolean;
   selected: boolean;
   style?: React.CSSProperties;
+  textOverrides?: React.CSSProperties;
   className?: string;
   onCommit: (value: string) => void;
   nodeId: string;
@@ -79,6 +82,7 @@ function InlineText({
 }) {
   const [editing, setEditing] = useState(false);
   const [display, setDisplay] = useState(String(value ?? ''));
+  const richTextId = useId().replace(/[^a-zA-Z0-9_-]/g, '');
   const ref = useRef<HTMLElement | null>(null);
   const Tag = as as any;
 
@@ -144,7 +148,15 @@ function InlineText({
   };
 
   if (html && !editing) {
-    return <Tag {...common} dangerouslySetInnerHTML={{ __html: cleanHtml(display) }} />;
+    const inheritedStyles = [
+      'color', 'fontFamily', 'fontSize', 'fontWeight', 'letterSpacing', 'lineHeight',
+    ].filter((key) => textOverrides?.[key as keyof React.CSSProperties] !== undefined)
+      .map((key) => `${key.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}: inherit !important;`)
+      .join(' ');
+    return <>
+      {inheritedStyles && <style>{`[data-rcms-rich-text="${richTextId}"] * { ${inheritedStyles} }`}</style>}
+      <Tag {...common} data-rcms-rich-text={richTextId} dangerouslySetInnerHTML={{ __html: cleanHtml(display) }} />
+    </>;
   }
   return <Tag {...common}>{display}</Tag>;
 }
@@ -277,6 +289,7 @@ function BuiltinComponent({
       editable={edit && !node.locked}
       selected={selected}
       style={{ ...style, ...typography }}
+      textOverrides={typography}
       onCommit={(value) => mutate(inlinePath(locale, key), value)}
       nodeId={node.id}
       field={key}
