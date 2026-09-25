@@ -18,6 +18,7 @@ export interface ButtonValue {
   iconImage?: string;
   iconPosition?: 'left' | 'right';
   iconSize?: number;
+  iconOnly?: boolean;
   offsetX?: number;
   offsetY?: number;
 }
@@ -152,6 +153,7 @@ export function EditableButton({
     ? children(value || defaultBtnObj)
     : (children !== undefined ? children : btnText);
   const iconSize = typeof value === 'object' ? value?.iconSize || 18 : 18;
+  const iconOnly = typeof value === 'object' && Boolean(value?.iconOnly && (value?.iconImage || (value?.icon && value.icon !== 'none')));
   const customIcon = typeof value === 'object' && value?.iconImage ? (
     <img src={value.iconImage} alt="" aria-hidden="true" style={{ width: iconSize, height: iconSize, objectFit: 'contain', flex: '0 0 auto' }} />
   ) : null;
@@ -165,7 +167,7 @@ export function EditableButton({
     </span>
   ) : null;
   const buttonIcon = customIcon || presetIcon;
-  const renderedContent = children !== undefined ? providedContent : (
+  const renderedContent = iconOnly ? buttonIcon : children !== undefined ? providedContent : (
     <>
       {typeof value === 'object' && value?.iconPosition !== 'right' ? buttonIcon : null}
       {providedContent}
@@ -173,9 +175,20 @@ export function EditableButton({
     </>
   );
 
+  if (iconOnly) {
+    Object.assign(buttonStyle, {
+      width: 'max-content', height: 'auto', minHeight: 0, padding: 0,
+      border: 0, background: 'transparent', backgroundColor: 'transparent',
+      boxShadow: 'none', lineHeight: 1,
+    });
+  } else {
+    buttonStyle.flexWrap = 'nowrap';
+    buttonStyle.whiteSpace = 'nowrap';
+  }
+
   if (!editMode) {
     return (
-      <Tag {...tagProps} className={className} style={buttonStyle} onClick={onClick} data-rcms-region={regionId}>
+      <Tag {...tagProps} className={className} style={buttonStyle} onClick={onClick} data-rcms-region={regionId} aria-label={iconOnly ? btnText || label : undefined}>
         {renderedContent}
       </Tag>
     );
@@ -243,6 +256,7 @@ export function EditableButton({
       data-rcms-region={regionId}
       data-rcms-type="button"
       data-rcms-label={label}
+      aria-label={iconOnly ? btnText || label : undefined}
     >
       {renderedContent}
       <span

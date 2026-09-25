@@ -161,7 +161,7 @@ function InlineText({
   return <Tag {...common}>{display}</Tag>;
 }
 
-function buttonStyle(node: ComponentNode): React.CSSProperties {
+function buttonStyle(node: ComponentNode, iconOnly = false): React.CSSProperties {
   const props = node.props || {};
   const color = props.color || 'var(--rcms-color-primary, #2563eb)';
   const isOutline = props.variant === 'outline';
@@ -181,8 +181,16 @@ function buttonStyle(node: ComponentNode): React.CSSProperties {
     if (typeof value === 'string' && /^\d+(?:\.\d+)?$/.test(value.trim())) return `${value.trim()}px`;
     return typeof value === 'string' ? value || undefined : undefined;
   };
+  if (iconOnly) return {
+    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+    width: 'max-content', height: 'auto', minHeight: 0, padding: 0,
+    border: 0, background: 'transparent', boxShadow: 'none',
+    color, lineHeight: 1, textDecoration: 'none', cursor: 'pointer',
+  };
   return {
     display: 'inline-flex',
+    flexWrap: 'nowrap',
+    whiteSpace: 'nowrap',
     boxSizing: 'border-box',
     alignItems: 'center',
     justifyContent: 'center',
@@ -397,11 +405,12 @@ function BuiltinComponent({
       }, true);
     case 'button': {
       const buttonIcon = <ButtonIcon name={props.icon} src={props.iconImage} size={props.iconSize || 18} />;
+      const iconOnly = Boolean(props.iconOnly && (props.iconImage || (props.icon && props.icon !== 'none')));
       const href = buttonHref(props);
       const buttonContent = (
         <>
           {props.iconPosition !== 'right' ? buttonIcon : null}
-          {inline('label', 'Learn More', 'span', { cursor: mode === 'edit' ? 'grab' : undefined })}
+          {!iconOnly ? inline('label', 'Learn More', 'span', { cursor: mode === 'edit' ? 'grab' : undefined, whiteSpace: 'nowrap', flexShrink: 0 }) : null}
           {props.iconPosition === 'right' ? buttonIcon : null}
         </>
       );
@@ -412,11 +421,12 @@ function BuiltinComponent({
               href={mode === 'edit' ? undefined : href}
               target={props.newTab ? '_blank' : undefined}
               rel={props.newTab ? 'noopener noreferrer' : undefined}
-              style={buttonStyle(node)}
+              aria-label={iconOnly ? String(text('label', 'Button')) : undefined}
+              style={buttonStyle(node, iconOnly)}
             >
               {buttonContent}
             </a>
-          ) : <span style={buttonStyle(node)}>{buttonContent}</span>}
+          ) : <span aria-label={iconOnly ? String(text('label', 'Button')) : undefined} style={buttonStyle(node, iconOnly)}>{buttonContent}</span>}
         </div>
       );
     }

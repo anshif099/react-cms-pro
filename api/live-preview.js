@@ -365,6 +365,15 @@ function runtimeBootstrap(baseUrl, route, proxyOrigin) {
           var label = frame && frame.querySelector('[data-rcms-field="label"]');
           var button = label && label.parentElement;
           if (button) {
+            var iconOnly = !!(node.props.iconOnly &&
+              (node.props.iconImage || (node.props.icon && node.props.icon !== "none")));
+            setBridgedStyle(label, "display", "none", iconOnly);
+            setBridgedStyle(button, "background", "transparent", iconOnly);
+            setBridgedStyle(button, "border", "0", iconOnly);
+            setBridgedStyle(button, "box-shadow", "none", iconOnly);
+            setBridgedStyle(button, "padding", "0", iconOnly);
+            setBridgedStyle(button, "width", "max-content", iconOnly);
+            setBridgedStyle(button, "white-space", "nowrap", !iconOnly);
             var size = Number(node.props.iconSize);
             var icon = button.querySelector('[aria-hidden="true"]');
             if (icon && Number.isFinite(size) && size > 0) {
@@ -376,11 +385,14 @@ function runtimeBootstrap(baseUrl, route, proxyOrigin) {
                 setBridgedStyle(icon, "flex", "0 0 auto", true);
               }
             }
-            if (node.props.height) {
+            if (node.props.height && !iconOnly) {
               var height = String(node.props.height).trim();
               if (/^\d+(?:\.\d+)?$/.test(height)) height += "px";
               setBridgedStyle(button, "height", height, true);
               setBridgedStyle(button, "min-height", "0px", true);
+            } else {
+              setBridgedStyle(button, "height", "auto", iconOnly);
+              setBridgedStyle(button, "min-height", "0px", iconOnly);
             }
           }
         }

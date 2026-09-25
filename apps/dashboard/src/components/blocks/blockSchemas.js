@@ -415,6 +415,7 @@ export const BLOCK_SCHEMAS = [
       { key: "radius", label: "Corner Radius", type: "number", localized: false, defaultValue: 10 },
       { key: "iconImage", label: "Upload Custom Icon", type: "image", localized: false },
       { key: "iconSize", label: "Icon Size (px)", type: "number", localized: false, defaultValue: 18 },
+      { key: "iconOnly", label: "Icon Only (no label or button background)", type: "boolean", localized: false, defaultValue: false },
       {
         key: "icon", label: "Icon", type: "select", localized: false, defaultValue: "none",
         options: [

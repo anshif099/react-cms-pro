@@ -54,6 +54,14 @@ describe('button inspector values on the connected canvas', () => {
     expect(updatedLink.style.height).toBe('12px');
     expect(updatedLink.style.minHeight).toBe('');
     expect(updatedLink.style.boxShadow).toBe('none');
+    const iconOnly = { ...changed, props: { ...changed.props, iconOnly: true } };
+    act(() => root.render(<RuntimeRenderer tree={{ ...tree, children: [iconOnly] } as PageComponentTree} locale="en" mode="runtime" />));
+    const iconLink = host.querySelector<HTMLAnchorElement>('[data-rcms-node="action"] a')!;
+    expect(iconLink.querySelector('[data-rcms-field="label"]')).toBeNull();
+    expect(iconLink.style.background).toBe('transparent');
+    expect(iconLink.style.height).toBe('auto');
+    expect(iconLink.style.padding).toBe('0px');
+    expect(iconLink.getAttribute('aria-label')).toBe('Contact us');
     act(() => root.unmount());
   });
 });

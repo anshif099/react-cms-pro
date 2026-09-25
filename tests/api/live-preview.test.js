@@ -82,6 +82,19 @@ describe("live preview HTML rewriting", () => {
     icon.style.setProperty("width", "18px");
     await new Promise((resolve) => window.requestAnimationFrame(resolve));
     expect(icon.style.getPropertyValue("width")).toBe("218px");
+    window.dispatchEvent(new window.MessageEvent("message", {
+      source: window,
+      data: {
+        rcms: true, version: "v1", type: "rcms/v1/field-update",
+        payload: { regionId: "__rcms_runtime_additions__", value: {
+          children: [{ id: "action", type: "button", props: { icon: "mail", iconSize: 218, iconOnly: true, height: "12px" } }]
+        } }
+      }
+    }));
+    await new Promise((resolve) => window.requestAnimationFrame(resolve));
+    expect(window.document.querySelector('[data-rcms-field="label"]').style.display).toBe("none");
+    expect(button.style.background).toBe("transparent");
+    expect(button.style.height).toBe("auto");
     dom.window.close();
   });
 
