@@ -242,6 +242,8 @@ function runtimeBootstrap(baseUrl, route, proxyOrigin) {
   var areaSelectionArmed = false;
   var bridgeWebsiteId = "";
   var liveRegionValues = Object.create(null);
+  var runtimeAdditionsTree = null;
+  var runtimeButtonPreviewQueued = false;
   var bridgedElementStyles = typeof WeakMap === "function" ? new WeakMap() : null;
   // The upstream <base> is injected before this bootstrap so its assets keep
   // resolving against the connected site. Resolve the virtual page route from
@@ -348,6 +350,55 @@ function runtimeBootstrap(baseUrl, route, proxyOrigin) {
     if (!regionId || !document.querySelectorAll) return;
     document.querySelectorAll("[data-rcms-region]").forEach(function (element) {
       if (element.getAttribute("data-rcms-region") === regionId) applyLiveRegionValue(element);
+    });
+  }
+
+  function applyRuntimeButtonPreview() {
+    if (!runtimeAdditionsTree || !Array.isArray(runtimeAdditionsTree.children)) return;
+    var frames = document.querySelectorAll('[data-rcms-node][data-rcms-type="button"]');
+    function visit(nodes) {
+      nodes.forEach(function (node) {
+        if (node && node.type === "button" && node.props) {
+          var frame = Array.prototype.find.call(frames, function (candidate) {
+            return candidate.getAttribute("data-rcms-node") === node.id;
+          });
+          var label = frame && frame.querySelector('[data-rcms-field="label"]');
+          var button = label && label.parentElement;
+          if (button) {
+            var size = Number(node.props.iconSize);
+            var icon = button.querySelector('[aria-hidden="true"]');
+            if (icon && Number.isFinite(size) && size > 0) {
+              setBridgedStyle(icon, "width", size + "px", true);
+              setBridgedStyle(icon, "height", size + "px", true);
+              if (icon.tagName !== "IMG") {
+                setBridgedStyle(icon, "font-size", size + "px", true);
+                setBridgedStyle(icon, "line-height", "1", true);
+                setBridgedStyle(icon, "flex", "0 0 auto", true);
+              }
+            }
+            if (node.props.height) {
+              var height = String(node.props.height).trim();
+              if (/^\d+(?:\.\d+)?$/.test(height)) height += "px";
+              setBridgedStyle(button, "height", height, true);
+              setBridgedStyle(button, "min-height", "0px", true);
+            }
+          }
+        }
+        if (node && Array.isArray(node.children)) visit(node.children);
+      });
+    }
+    visit(runtimeAdditionsTree.children);
+  }
+
+  function scheduleRuntimeButtonPreview() {
+    if (runtimeButtonPreviewQueued) return;
+    runtimeButtonPreviewQueued = true;
+    var schedule = typeof requestAnimationFrame === "function"
+      ? requestAnimationFrame
+      : function (callback) { setTimeout(callback, 0); };
+    schedule(function () {
+      runtimeButtonPreviewQueued = false;
+      applyRuntimeButtonPreview();
     });
   }
 
@@ -539,6 +590,10 @@ function runtimeBootstrap(baseUrl, route, proxyOrigin) {
     if (!payload || typeof payload.regionId !== "string") return;
     liveRegionValues[payload.regionId] = payload.value;
     applyLiveRegion(payload.regionId);
+    if (payload.regionId === "__rcms_runtime_additions__") {
+      runtimeAdditionsTree = payload.value;
+      scheduleRuntimeButtonPreview();
+    }
     if (typeof requestAnimationFrame === "function") {
       requestAnimationFrame(function () { applyLiveRegion(payload.regionId); });
     }
@@ -669,11 +724,16 @@ function runtimeBootstrap(baseUrl, route, proxyOrigin) {
           // the changed element; walking its whole subtree here can saturate the
           // main thread on animated connected sites.
           repairElement(mutation.target);
+          if (runtimeAdditionsTree && mutation.target.closest
+            && mutation.target.closest('[data-rcms-node][data-rcms-type="button"]')) {
+            scheduleRuntimeButtonPreview();
+          }
           return;
         }
         mutation.addedNodes.forEach(function (node) {
           repairTree(node);
           hideEmbeddedEditorToolbar(node);
+          if (runtimeAdditionsTree) scheduleRuntimeButtonPreview();
         });
       });
     }).observe(document.documentElement, {

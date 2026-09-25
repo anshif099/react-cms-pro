@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
+import { JSDOM } from "jsdom";
 import livePreviewHandler, {
   previewAssetUrl,
   rewritePreviewCss,
@@ -51,6 +52,37 @@ describe("live preview HTML rewriting", () => {
       `src="${previewOrigin}${previewAssetUrl("/assets/app.js", "https://triosis.vercel.app/")}"`
     );
     expect(result.indexOf("previewRoute")).toBeLessThan(result.indexOf('type="module"'));
+  });
+
+  it("previews runtime button icon size and explicit height with an older connected runtime", async () => {
+    const html = rewritePreviewHtml(
+      '<html><head></head><body><div data-rcms-node="action" data-rcms-type="button"><div><div><span style="min-height:42px"><span data-rcms-field="label">test</span><span aria-hidden="true">✉</span></span></div></div></div></body></html>',
+      "https://triosis.vercel.app/",
+      "/?rcms_edit=1",
+      previewOrigin
+    );
+    const dom = new JSDOM(html, { runScripts: "dangerously", url: `${previewOrigin}/`, pretendToBeVisual: true });
+    const { window } = dom;
+    window.dispatchEvent(new window.MessageEvent("message", {
+      source: window,
+      data: {
+        rcms: true, version: "v1", type: "rcms/v1/field-update",
+        payload: { regionId: "__rcms_runtime_additions__", value: {
+          children: [{ id: "action", type: "button", props: { icon: "mail", iconSize: 218, height: "12px" } }]
+        } }
+      }
+    }));
+    await new Promise((resolve) => window.requestAnimationFrame(resolve));
+    const icon = window.document.querySelector('[aria-hidden="true"]');
+    const button = window.document.querySelector('[data-rcms-field="label"]').parentElement;
+    expect(icon.style.getPropertyValue("width")).toBe("218px");
+    expect(icon.style.getPropertyPriority("font-size")).toBe("important");
+    expect(button.style.getPropertyValue("height")).toBe("12px");
+    expect(button.style.getPropertyValue("min-height")).toBe("0px");
+    icon.style.setProperty("width", "18px");
+    await new Promise((resolve) => window.requestAnimationFrame(resolve));
+    expect(icon.style.getPropertyValue("width")).toBe("218px");
+    dom.window.close();
   });
 
   it("keeps the deleted-route bootstrap app import on the connected origin", () => {
