@@ -18,6 +18,9 @@ export interface ButtonValue {
   iconImage?: string;
   iconPosition?: 'left' | 'right';
   iconSize?: number;
+  iconWidth?: number;
+  iconHeight?: number;
+  iconColor?: string;
   iconOnly?: boolean;
   offsetX?: number;
   offsetY?: number;
@@ -153,16 +156,28 @@ export function EditableButton({
     ? children(value || defaultBtnObj)
     : (children !== undefined ? children : btnText);
   const iconSize = typeof value === 'object' ? value?.iconSize || 18 : 18;
+  const iconWidth = typeof value === 'object' && Number(value?.iconWidth) > 0 ? Number(value.iconWidth) : iconSize;
+  const iconHeight = typeof value === 'object' && Number(value?.iconHeight) > 0 ? Number(value.iconHeight) : iconSize;
+  const iconColor = typeof value === 'object' ? value?.iconColor : undefined;
   const iconOnly = typeof value === 'object' && Boolean(value?.iconOnly && (value?.iconImage || (value?.icon && value.icon !== 'none')));
-  const customIcon = typeof value === 'object' && value?.iconImage ? (
-    <img src={value.iconImage} alt="" aria-hidden="true" style={{ width: iconSize, height: iconSize, objectFit: 'contain', flex: '0 0 auto' }} />
+  const customIcon = typeof value === 'object' && value?.iconImage ? iconColor ? (
+    <span data-rcms-button-icon="true" aria-hidden="true" style={{
+      display: 'inline-block', width: iconWidth, height: iconHeight, flex: '0 0 auto',
+      backgroundColor: iconColor,
+      maskImage: `url(${JSON.stringify(value.iconImage)})`,
+      WebkitMaskImage: `url(${JSON.stringify(value.iconImage)})`,
+      maskSize: 'contain', WebkitMaskSize: 'contain', maskPosition: 'center',
+      WebkitMaskPosition: 'center', maskRepeat: 'no-repeat', WebkitMaskRepeat: 'no-repeat',
+    }} />
+  ) : (
+    <img data-rcms-button-icon="true" src={value.iconImage} alt="" aria-hidden="true" style={{ width: iconWidth, height: iconHeight, objectFit: 'contain', flex: '0 0 auto' }} />
   ) : null;
   const symbol = typeof value === 'object' ? ({
     'arrow-right': '→', whatsapp: 'WA', phone: '☎', mail: '✉',
     'external-link': '↗', download: '↓',
   } as Record<string, string>)[value?.icon || ''] : '';
   const presetIcon = !customIcon && symbol ? (
-    <span aria-hidden="true" style={{ display: 'inline-grid', placeItems: 'center', width: iconSize, height: iconSize, flex: '0 0 auto', fontSize: typeof value === 'object' && value?.icon === 'whatsapp' ? iconSize * .68 : iconSize, lineHeight: 1 }}>
+    <span data-rcms-button-icon="true" aria-hidden="true" style={{ display: 'inline-grid', placeItems: 'center', width: iconWidth, height: iconHeight, flex: '0 0 auto', fontSize: typeof value === 'object' && value?.icon === 'whatsapp' ? iconSize * .68 : iconSize, lineHeight: 1, color: iconColor }}>
       {symbol}
     </span>
   ) : null;

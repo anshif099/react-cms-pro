@@ -7,8 +7,8 @@ const PRESET_COLORS = [
   "#D1D5DB", "#F3F4F6", "#FFFFFF", "#6366F1"
 ];
 
-export function ColorPicker({ label, value, onChange, className }) {
-  const activeColor = value || "#000000";
+export function ColorPicker({ label, value, onChange, className, allowEmpty = false }) {
+  const activeColor = value || (allowEmpty ? "" : "#000000");
 
   return (
     <div className={cn("flex flex-col gap-1.5 w-full text-left", className)}>
@@ -21,20 +21,20 @@ export function ColorPicker({ label, value, onChange, className }) {
         <div className="relative w-10 h-10 rounded-lg overflow-hidden border border-admin-border dark:border-slate-700 flex-shrink-0 cursor-pointer">
           <input
             type="color"
-            value={activeColor}
+            value={activeColor || "#000000"}
             onChange={(e) => onChange && onChange(e.target.value)}
             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
           />
           <div 
             className="w-full h-full" 
-            style={{ backgroundColor: activeColor }}
+            style={{ backgroundColor: activeColor || "transparent" }}
           />
         </div>
         <input
           type="text"
           value={activeColor}
           onChange={(e) => onChange && onChange(e.target.value)}
-          placeholder="#000000"
+          placeholder={allowEmpty ? "Original colors" : "#000000"}
           maxLength={7}
           className="text-sm py-2 px-3 rounded-lg border border-admin-border bg-white text-admin-text dark:bg-slate-800 dark:border-slate-700 outline-none w-28 uppercase"
         />

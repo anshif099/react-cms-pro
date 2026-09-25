@@ -99,12 +99,19 @@ export function BlockFields({ block, onChange, locale = "en" }) {
 
       case "color":
         return (
-          <ColorPicker
-            key={key}
-            label={field.label}
-            value={value || ""}
-            onChange={(val) => updateFieldValue(key, val, isLoc)}
-          />
+          <div key={key}>
+            <ColorPicker
+              label={field.label}
+              value={value || ""}
+              allowEmpty={key === "iconColor"}
+              onChange={(val) => updateFieldValue(key, val, isLoc)}
+            />
+            {key === "iconColor" && (
+              <button type="button" onClick={() => updateFieldValue(key, "", isLoc)} className="mt-1 text-xs text-blue-400 hover:text-blue-300">
+                Use original image colors
+              </button>
+            )}
+          </div>
         );
 
       case "select":

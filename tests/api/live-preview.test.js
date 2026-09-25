@@ -68,20 +68,23 @@ describe("live preview HTML rewriting", () => {
       data: {
         rcms: true, version: "v1", type: "rcms/v1/field-update",
         payload: { regionId: "__rcms_runtime_additions__", value: {
-          children: [{ id: "action", type: "button", props: { icon: "mail", iconSize: 218, height: "12px" } }]
+          children: [{ id: "action", type: "button", props: { icon: "mail", iconSize: 218, iconWidth: 44, iconHeight: 33, iconColor: "#16a34a", height: "12px" } }]
         } }
       }
     }));
     await new Promise((resolve) => window.requestAnimationFrame(resolve));
     const icon = window.document.querySelector('[aria-hidden="true"]');
     const button = window.document.querySelector('[data-rcms-field="label"]').parentElement;
-    expect(icon.style.getPropertyValue("width")).toBe("218px");
+    expect(icon.style.getPropertyValue("width")).toBe("44px");
+    expect(icon.style.getPropertyValue("height")).toBe("33px");
+    expect(icon.style.getPropertyValue("font-size")).toBe("218px");
+    expect(icon.style.getPropertyValue("color")).toBe("rgb(22, 163, 74)");
     expect(icon.style.getPropertyPriority("font-size")).toBe("important");
     expect(button.style.getPropertyValue("height")).toBe("12px");
     expect(button.style.getPropertyValue("min-height")).toBe("0px");
     icon.style.setProperty("width", "18px");
     await new Promise((resolve) => window.requestAnimationFrame(resolve));
-    expect(icon.style.getPropertyValue("width")).toBe("218px");
+    expect(icon.style.getPropertyValue("width")).toBe("44px");
     window.dispatchEvent(new window.MessageEvent("message", {
       source: window,
       data: {

@@ -374,15 +374,18 @@ function runtimeBootstrap(baseUrl, route, proxyOrigin) {
             setBridgedStyle(button, "padding", "0", iconOnly);
             setBridgedStyle(button, "width", "max-content", iconOnly);
             setBridgedStyle(button, "white-space", "nowrap", !iconOnly);
-            var size = Number(node.props.iconSize);
-            var icon = button.querySelector('[aria-hidden="true"]');
+            var size = Number(node.props.iconSize) > 0 ? Number(node.props.iconSize) : 18;
+            var icon = button.querySelector('[data-rcms-button-icon], [aria-hidden="true"]');
             if (icon && Number.isFinite(size) && size > 0) {
-              setBridgedStyle(icon, "width", size + "px", true);
-              setBridgedStyle(icon, "height", size + "px", true);
+              var iconWidth = Number(node.props.iconWidth);
+              var iconHeight = Number(node.props.iconHeight);
+              setBridgedStyle(icon, "width", (iconWidth > 0 ? iconWidth : size) + "px", true);
+              setBridgedStyle(icon, "height", (iconHeight > 0 ? iconHeight : size) + "px", true);
               if (icon.tagName !== "IMG") {
                 setBridgedStyle(icon, "font-size", size + "px", true);
                 setBridgedStyle(icon, "line-height", "1", true);
                 setBridgedStyle(icon, "flex", "0 0 auto", true);
+                setBridgedStyle(icon, "color", node.props.iconColor, !!node.props.iconColor);
               }
             }
             if (node.props.height && !iconOnly) {

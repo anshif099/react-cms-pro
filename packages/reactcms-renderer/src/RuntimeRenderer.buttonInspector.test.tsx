@@ -23,7 +23,7 @@ describe('button inspector values on the connected canvas', () => {
         url: 'hello@example.com', linkType: 'email', variant: 'outline',
         size: 'lg', color: '#e11d48', width: '180', height: '48',
         offsetX: 12, offsetY: 7, radius: 16, icon: 'arrow-right',
-        iconSize: 42, iconPosition: 'right', alignment: 'right', shadow: 'large',
+        iconSize: 42, iconWidth: 48, iconHeight: 36, iconColor: '#16a34a', iconPosition: 'right', alignment: 'right', shadow: 'large',
       },
     };
     const tree = { id: 'page', type: 'page', version: 2, children: [button] } as PageComponentTree;
@@ -41,10 +41,13 @@ describe('button inspector values on the connected canvas', () => {
     expect(link.style.borderRadius).toBe('16px');
     expect(link.style.color).toBe('rgb(225, 29, 72)');
     expect(link.style.boxShadow).not.toBe('');
-    expect(icon.style.width).toBe('42px');
+    expect(icon.style.width).toBe('48px');
+    expect(icon.style.height).toBe('36px');
+    expect(icon.style.fontSize).toBe('42px');
+    expect(icon.style.color).toBe('rgb(22, 163, 74)');
     expect(link.lastElementChild).toBe(icon);
 
-    const changed = { ...button, props: { ...button.props, iconSize: 190, height: '12px', iconPosition: 'left', alignment: 'left', shadow: 'none' } };
+    const changed = { ...button, props: { ...button.props, iconSize: 190, iconWidth: 190, iconHeight: 190, height: '12px', iconPosition: 'left', alignment: 'left', shadow: 'none' } };
     act(() => root.render(<RuntimeRenderer tree={{ ...tree, children: [changed] } as PageComponentTree} locale="en" mode="runtime" />));
     const updatedFrame = host.querySelector<HTMLElement>('[data-rcms-node="action"]')!;
     const updatedLink = updatedFrame.querySelector<HTMLAnchorElement>('a')!;
@@ -62,6 +65,13 @@ describe('button inspector values on the connected canvas', () => {
     expect(iconLink.style.height).toBe('auto');
     expect(iconLink.style.padding).toBe('0px');
     expect(iconLink.getAttribute('aria-label')).toBe('Contact us');
+    const customImage = { ...iconOnly, props: { ...iconOnly.props, iconImage: 'https://example.com/icon.png' } };
+    act(() => root.render(<RuntimeRenderer tree={{ ...tree, children: [customImage] } as PageComponentTree} locale="en" mode="runtime" />));
+    const tintedIcon = host.querySelector<HTMLElement>('[data-rcms-node="action"] [data-rcms-button-icon]')!;
+    expect(tintedIcon.tagName).toBe('SPAN');
+    expect(tintedIcon.style.backgroundColor).toBe('rgb(22, 163, 74)');
+    expect(tintedIcon.style.width).toBe('190px');
+    expect(tintedIcon.style.maskImage).toContain('icon.png');
     act(() => root.unmount());
   });
 });

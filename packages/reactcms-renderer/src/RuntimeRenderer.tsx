@@ -212,14 +212,26 @@ function buttonStyle(node: ComponentNode, iconOnly = false): React.CSSProperties
   };
 }
 
-function ButtonIcon({ name, src, size = 18 }: { name?: string; src?: string; size?: number }) {
+function ButtonIcon({ name, src, size = 18, width, height, color }: { name?: string; src?: string; size?: number; width?: number; height?: number; color?: string }) {
+  const iconWidth = Number(width) > 0 ? Number(width) : size;
+  const iconHeight = Number(height) > 0 ? Number(height) : size;
   if (src) {
+    if (color) {
+      const mask = `url(${JSON.stringify(src)})`;
+      return <span data-rcms-button-icon="true" aria-hidden="true" style={{
+        display: 'inline-block', width: `${iconWidth}px`, height: `${iconHeight}px`,
+        flex: '0 0 auto', backgroundColor: color,
+        maskImage: mask, WebkitMaskImage: mask, maskSize: 'contain', WebkitMaskSize: 'contain',
+        maskPosition: 'center', WebkitMaskPosition: 'center', maskRepeat: 'no-repeat', WebkitMaskRepeat: 'no-repeat',
+      }} />;
+    }
     return (
       <img
+        data-rcms-button-icon="true"
         src={src}
         alt=""
         aria-hidden="true"
-        style={{ width: `${size}px`, height: `${size}px`, objectFit: 'contain', flex: '0 0 auto' }}
+        style={{ width: `${iconWidth}px`, height: `${iconHeight}px`, objectFit: 'contain', flex: '0 0 auto' }}
       />
     );
   }
@@ -229,7 +241,7 @@ function ButtonIcon({ name, src, size = 18 }: { name?: string; src?: string; siz
     'external-link': '↗', download: '↓',
   };
   return (
-    <span aria-hidden="true" style={{ display: 'inline-grid', placeItems: 'center', width: `${size}px`, height: `${size}px`, flex: '0 0 auto', fontSize: `${name === 'whatsapp' ? size * .68 : size}px`, lineHeight: 1, fontWeight: 800 }}>
+    <span data-rcms-button-icon="true" aria-hidden="true" style={{ display: 'inline-grid', placeItems: 'center', width: `${iconWidth}px`, height: `${iconHeight}px`, flex: '0 0 auto', fontSize: `${name === 'whatsapp' ? size * .68 : size}px`, lineHeight: 1, fontWeight: 800, color }}>
       {symbols[name] || '•'}
     </span>
   );
@@ -404,7 +416,7 @@ function BuiltinComponent({
         ...typography,
       }, true);
     case 'button': {
-      const buttonIcon = <ButtonIcon name={props.icon} src={props.iconImage} size={props.iconSize || 18} />;
+      const buttonIcon = <ButtonIcon name={props.icon} src={props.iconImage} size={props.iconSize || 18} width={props.iconWidth} height={props.iconHeight} color={props.iconColor} />;
       const iconOnly = Boolean(props.iconOnly && (props.iconImage || (props.icon && props.icon !== 'none')));
       const href = buttonHref(props);
       const buttonContent = (
