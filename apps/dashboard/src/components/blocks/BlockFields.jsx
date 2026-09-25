@@ -47,7 +47,8 @@ export function BlockFields({ block, onChange, locale = "en" }) {
 
   // Render a single field based on schema type
   const renderField = (field) => {
-    const value = getFieldValue(field.key, field.localized);
+    const storedValue = getFieldValue(field.key, field.localized);
+    const value = storedValue ?? field.defaultValue;
     const key = field.key;
     const isLoc = field.localized;
 
@@ -242,6 +243,11 @@ export function BlockFields({ block, onChange, locale = "en" }) {
   return (
     <div className="space-y-4">
       {schema.fields.map((field) => renderField(field))}
+      {block.type === "button" && !block.iconImage && (!block.icon || block.icon === "none") && (
+        <p className="text-xs text-admin-secondary">
+          Choose an icon or upload one to preview icon size and position.
+        </p>
+      )}
     </div>
   );
 }

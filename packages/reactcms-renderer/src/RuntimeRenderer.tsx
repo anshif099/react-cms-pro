@@ -167,19 +167,27 @@ function buttonStyle(node: ComponentNode): React.CSSProperties {
   const isOutline = props.variant === 'outline';
   const isGhost = props.variant === 'ghost';
   const isSecondary = props.variant === 'secondary';
+  const fill = isSecondary && !props.color
+    ? 'var(--rcms-color-secondary, #0f172a)'
+    : color;
   const shadows: Record<string, string> = {
     none: 'none',
     small: '0 5px 14px rgba(15,23,42,.12)',
     medium: '0 12px 28px rgba(15,23,42,.16)',
     large: '0 20px 45px rgba(15,23,42,.22)',
   };
+  const dimension = (value: unknown): string | undefined => {
+    if (typeof value === 'number') return `${value}px`;
+    if (typeof value === 'string' && /^\d+(?:\.\d+)?$/.test(value.trim())) return `${value.trim()}px`;
+    return typeof value === 'string' ? value || undefined : undefined;
+  };
   return {
     display: 'inline-flex',
     boxSizing: 'border-box',
     alignItems: 'center',
     justifyContent: 'center',
-    width: props.width || undefined,
-    height: props.height || undefined,
+    width: dimension(props.width),
+    height: dimension(props.height),
     minHeight: props.size === 'lg' ? '50px' : props.size === 'sm' ? '36px' : '42px',
     padding: props.size === 'lg' ? '0 26px' : props.size === 'sm' ? '0 14px' : '0 20px',
     borderRadius: props.radius !== undefined
@@ -187,8 +195,8 @@ function buttonStyle(node: ComponentNode): React.CSSProperties {
       : 'var(--rcms-button-radius, 10px)',
     gap: '9px',
     cursor: 'pointer',
-    background: isOutline || isGhost ? 'transparent' : isSecondary ? '#0f172a' : color,
-    border: isGhost ? '1px solid transparent' : `1px solid ${isSecondary ? '#0f172a' : color}`,
+    background: isOutline || isGhost ? 'transparent' : fill,
+    border: isGhost ? '1px solid transparent' : `1px solid ${fill}`,
     color: isOutline || isGhost ? color : '#fff',
     boxShadow: shadows[props.shadow || 'medium'] || props.shadow,
     fontWeight: props.weight || 'var(--rcms-button-weight, 700)',
@@ -213,10 +221,22 @@ function ButtonIcon({ name, src, size = 18 }: { name?: string; src?: string; siz
     'external-link': '↗', download: '↓',
   };
   return (
-    <span aria-hidden="true" style={{ display: 'inline-grid', placeItems: 'center', minWidth: '1.1em', fontSize: name === 'whatsapp' ? '.68em' : '1.05em', fontWeight: 800 }}>
+    <span aria-hidden="true" style={{ display: 'inline-grid', placeItems: 'center', width: `${size}px`, height: `${size}px`, flex: '0 0 auto', fontSize: `${name === 'whatsapp' ? size * .68 : size}px`, lineHeight: 1, fontWeight: 800 }}>
       {symbols[name] || '•'}
     </span>
   );
+}
+
+function buttonHref(props: Record<string, any>): string {
+  const url = String(props.url || '').trim();
+  if (!url) return '';
+  if (props.linkType === 'phone') return url.startsWith('tel:') ? url : `tel:${url}`;
+  if (props.linkType === 'email') return url.startsWith('mailto:') ? url : `mailto:${url}`;
+  if (props.linkType === 'whatsapp') {
+    if (/^https?:\/\//i.test(url)) return url;
+    return `https://wa.me/${url.replace(/\D/g, '')}`;
+  }
+  return url;
 }
 
 function cards(items: any[], bodyKey = 'description') {
@@ -377,6 +397,7 @@ function BuiltinComponent({
       }, true);
     case 'button': {
       const buttonIcon = <ButtonIcon name={props.icon} src={props.iconImage} size={props.iconSize || 18} />;
+      const href = buttonHref(props);
       const buttonContent = (
         <>
           {props.iconPosition !== 'right' ? buttonIcon : null}
@@ -386,9 +407,9 @@ function BuiltinComponent({
       );
       return (
         <div style={{ textAlign: props.alignment || 'center' }}>
-          {props.url ? (
+          {href ? (
             <a
-              href={mode === 'edit' ? undefined : props.url}
+              href={mode === 'edit' ? undefined : href}
               target={props.newTab ? '_blank' : undefined}
               rel={props.newTab ? 'noopener noreferrer' : undefined}
               style={buttonStyle(node)}
@@ -688,7 +709,7 @@ function NodeFrame({
   const offsetY = Number(node.props?.offsetY) || 0;
   const shellStyle: React.CSSProperties = {
     position: 'relative',
-    display: node.hidden ? 'none' : compactButton && horizontalPosition === null && buttonAlignment !== 'right' ? 'inline-block' : 'block',
+    display: node.hidden ? 'none' : compactButton && horizontalPosition === null && buttonAlignment !== 'right' && buttonAlignment !== 'left' ? 'inline-block' : 'block',
     left: horizontalPosition !== null ? `${horizontalPosition * 100}%` : undefined,
     translate: horizontalPosition !== null ? `${-horizontalPosition * 100}% 0` : undefined,
     verticalAlign: compactButton ? 'top' : undefined,
@@ -700,7 +721,7 @@ function NodeFrame({
     height: resizePreview ? `${resizePreview.height}px` : undefined,
     maxWidth: compactButton ? '100%' : undefined,
     marginLeft: horizontalPosition !== null ? 0 : buttonAlignment === 'right' ? 'auto' : compactButton && offsetX ? `${offsetX}px` : undefined,
-    marginRight: horizontalPosition !== null ? 0 : undefined,
+    marginRight: horizontalPosition !== null ? 0 : buttonAlignment === 'left' ? 'auto' : undefined,
     marginTop: compactButton && offsetY ? `${offsetY}px` : undefined,
     background: compactButton ? 'transparent' : design.background,
     padding: compactButton

@@ -15,7 +15,6 @@ import {
   X
 } from "lucide-react";
 import {
-  blockToComponentNode,
   componentNodeToBlock
 } from "@anshif.rainhopes/reactcms-renderer";
 import BLOCK_SCHEMAS from "../blocks/blockSchemas";
@@ -187,11 +186,17 @@ export function NativeInspector({
   };
 
   const handleBlockChange = (block) => {
-    const converted = blockToComponentNode(block);
+    const { id, type, children, metadata, hidden, locked, ...props } = block;
+    if (node.type === "button" && (
+      props.offsetX !== node.props?.offsetX
+      || props.alignment !== node.props?.alignment
+    )) {
+      delete props.horizontalPosition;
+    }
     onUpdate({
       ...node,
-      label: converted.label || node.label,
-      props: converted.props,
+      label: node.label,
+      props,
       children: node.children,
       styles: node.styles,
       metadata: node.metadata
