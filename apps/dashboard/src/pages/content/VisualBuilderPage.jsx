@@ -1098,7 +1098,10 @@ function ConnectedSourceWorkspace({
     ) ? findNode(value, selectedRegion.componentId) : null;
     const runtimeTextNode = runtimeNode && ["heading", "paragraph"].includes(runtimeNode.type)
       ? runtimeNode : null;
-    if (runtimeNode && !runtimeTextNode) {
+    const inspectorType = runtimeTextNode ? "text"
+      : runtimeNode && ["button", "image", "video"].includes(runtimeNode.type)
+        ? runtimeNode.type : selectedRegion.type;
+    if (runtimeNode && !["text", "button", "image", "video"].includes(inspectorType)) {
         return (
           <Suspense fallback={<aside className="w-full p-4 text-xs text-slate-500">Loading component editor…</aside>}>
             <NativeInspector
@@ -1118,6 +1121,37 @@ function ConnectedSourceWorkspace({
           </Suspense>
         );
     }
+    const runtimeProps = runtimeNode?.props || {};
+    const inspectorValue = runtimeNode ? {
+      ...runtimeProps,
+      text: runtimeProps.locales?.[locale]?.label ?? runtimeProps.locales?.en?.label ?? runtimeProps.text ?? "",
+      href: runtimeProps.url || "",
+      alt: runtimeProps.locales?.[locale]?.alt ?? runtimeProps.locales?.en?.alt ?? runtimeProps.alt ?? "",
+      caption: runtimeProps.locales?.[locale]?.caption ?? runtimeProps.locales?.en?.caption ?? runtimeProps.caption ?? ""
+    } : value;
+    const updateInspectorField = (field, nextFieldValue) => {
+      if (!runtimeNode) {
+        updateSelectedField(field, nextFieldValue);
+        return;
+      }
+      const localizedField = field === "text" ? "label"
+        : field === "alt" || field === "caption" ? field : null;
+      const nextProps = localizedField ? {
+        ...runtimeProps,
+        locales: {
+          ...(runtimeProps.locales || {}),
+          [locale]: {
+            ...(runtimeProps.locales?.[locale] || {}),
+            [localizedField]: nextFieldValue
+          }
+        }
+      } : { ...runtimeProps, [field === "href" ? "url" : field]: nextFieldValue };
+      const nextNode = { ...runtimeNode, props: nextProps };
+      applyVisualValue(selectedRegion, {
+        ...value,
+        children: updateTreeNode(value.children, runtimeNode.id, () => nextNode)
+      });
+    };
     const runtimeRawText = runtimeTextNode?.props?.locales?.[locale]?.text
       ?? runtimeTextNode?.props?.locales?.en?.text
       ?? runtimeTextNode?.props?.text
@@ -1284,11 +1318,10 @@ function ConnectedSourceWorkspace({
       const selectedRuntimeNode = selectedTree
         ? (selectedRegion.componentId ? findNode(selectedTree, selectedRegion.componentId) : lastTreeNode(selectedTree.children))
         : null;
-      const besideButton = selectedRuntimeNode?.type === "button";
-      const nodeId = `${besideButton ? "button" : "section"}_${Date.now().toString(36)}`;
+      const nodeId = `section_${Date.now().toString(36)}`;
       const placeholder = {
-        id: nodeId, type: besideButton ? "button" : "section", label: besideButton ? "Button" : "Section",
-        props: { locales: { [locale]: besideButton ? { label: "New button" } : { title: "New section" } } }, children: [],
+        id: nodeId, type: "section", label: "Section",
+        props: { locales: { [locale]: { title: "New section" } } }, children: [],
         metadata: selectedRuntimeNode?.metadata
           ? structuredClone(selectedRuntimeNode.metadata)
           : { runtimePlacement: { anchorRegionId: selectedRegion.regionId, position: "after" } }
@@ -1310,19 +1343,19 @@ function ConnectedSourceWorkspace({
         <div className="h-12 px-4 border-b border-slate-800 flex items-center">
           <div className="min-w-0">
             <p className="text-[10px] uppercase tracking-wider font-bold text-blue-400">
-              {runtimeTextNode ? "text" : selectedRegion.type || "region"}
+              {inspectorType || "region"}
             </p>
             <p className="text-xs font-semibold text-white truncate">
-              {runtimeTextNode ? runtimeTextNode.label || runtimeTextNode.id : selectedRegion.regionId}
+              {runtimeNode ? runtimeNode.label || runtimeNode.id : selectedRegion.regionId}
             </p>
           </div>
         </div>
         <div className="p-4 space-y-4">
           <div className="grid grid-cols-2 gap-2">
             <button type="button" onClick={copySelectedComponent} className="h-9 rounded-lg border border-slate-700 bg-slate-900 text-[10px] font-bold text-slate-200 cursor-pointer">Copy</button>
-            <button type="button" onClick={addBelowSelected} className="h-9 rounded-lg bg-blue-600 text-[10px] font-extrabold text-white cursor-pointer">{selectedRegion.type === "runtime-component" && selectedRegion.componentType === "button" ? "+ Add beside" : "+ Add below"}</button>
+            <button type="button" onClick={addBelowSelected} className="h-9 rounded-lg bg-blue-600 text-[10px] font-extrabold text-white cursor-pointer">+ Add below</button>
           </div>
-          {(selectedRegion.type === "text" || runtimeTextNode) && (
+          {inspectorType === "text" && (
             <>
               <label className="block">
                 <span className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-500">
@@ -1514,15 +1547,15 @@ function ConnectedSourceWorkspace({
             </label>
           )}
 
-          {selectedRegion.type === "button" && (
+          {inspectorType === "button" && (
             <>
               <label className="block">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
                   Label
                 </span>
                 <input
-                  value={value?.text || ""}
-                  onChange={(event) => updateSelectedField("text", event.target.value)}
+                  value={inspectorValue?.text || ""}
+                  onChange={(event) => updateInspectorField("text", event.target.value)}
                   className="mt-2 h-9 w-full rounded-lg border border-slate-800 bg-[#070b14] px-3 text-xs text-slate-200 outline-none focus:border-blue-500"
                 />
               </label>
@@ -1531,8 +1564,8 @@ function ConnectedSourceWorkspace({
                   URL
                 </span>
                 <input
-                  value={value?.href || ""}
-                  onChange={(event) => updateSelectedField("href", event.target.value)}
+                  value={inspectorValue?.href || ""}
+                  onChange={(event) => updateInspectorField("href", event.target.value)}
                   className="mt-2 h-9 w-full rounded-lg border border-slate-800 bg-[#070b14] px-3 text-xs text-slate-200 outline-none focus:border-blue-500"
                 />
               </label>
@@ -1545,13 +1578,13 @@ function ConnectedSourceWorkspace({
                   <div className="mt-1.5 flex gap-2">
                     <input
                       type="color"
-                      value={/^#[0-9a-f]{6}$/i.test(value?.color || "") ? value.color : "#2563eb"}
-                      onChange={(event) => updateSelectedField("color", event.target.value)}
+                      value={/^#[0-9a-f]{6}$/i.test(inspectorValue?.color || "") ? inspectorValue.color : "#2563eb"}
+                      onChange={(event) => updateInspectorField("color", event.target.value)}
                       className="h-9 w-11 cursor-pointer rounded-lg border border-slate-700 bg-[#070b14] p-1"
                     />
                     <input
-                      value={value?.color || ""}
-                      onChange={(event) => updateSelectedField("color", event.target.value)}
+                      value={inspectorValue?.color || ""}
+                      onChange={(event) => updateInspectorField("color", event.target.value)}
                       placeholder="#2563eb"
                       className="h-9 min-w-0 flex-1 rounded-lg border border-slate-800 bg-[#070b14] px-3 font-mono text-xs text-slate-200 outline-none focus:border-blue-500"
                     />
@@ -1560,42 +1593,42 @@ function ConnectedSourceWorkspace({
                 <div className="grid grid-cols-2 gap-3">
                   <label className="block">
                     <span className="text-[10px] font-semibold text-slate-500">Width</span>
-                    <input value={value?.width || ""} onChange={(event) => updateSelectedField("width", event.target.value)} placeholder="auto / 180px" className="mt-1.5 h-9 w-full rounded-lg border border-slate-800 bg-[#070b14] px-3 text-xs text-slate-200 outline-none focus:border-blue-500" />
+                    <input value={inspectorValue?.width || ""} onChange={(event) => updateInspectorField("width", event.target.value)} placeholder="auto / 180px" className="mt-1.5 h-9 w-full rounded-lg border border-slate-800 bg-[#070b14] px-3 text-xs text-slate-200 outline-none focus:border-blue-500" />
                   </label>
                   <label className="block">
                     <span className="text-[10px] font-semibold text-slate-500">Height</span>
-                    <input value={value?.height || ""} onChange={(event) => updateSelectedField("height", event.target.value)} placeholder="auto / 48px" className="mt-1.5 h-9 w-full rounded-lg border border-slate-800 bg-[#070b14] px-3 text-xs text-slate-200 outline-none focus:border-blue-500" />
+                    <input value={inspectorValue?.height || ""} onChange={(event) => updateInspectorField("height", event.target.value)} placeholder="auto / 48px" className="mt-1.5 h-9 w-full rounded-lg border border-slate-800 bg-[#070b14] px-3 text-xs text-slate-200 outline-none focus:border-blue-500" />
                   </label>
                 </div>
                 <ImagePicker
                   label="Custom icon image"
-                  value={value?.iconImage || ""}
-                  onChange={(url) => updateSelectedField("iconImage", url)}
+                  value={inspectorValue?.iconImage || ""}
+                  onChange={(url) => updateInspectorField("iconImage", url)}
                   placeholder="Upload, browse, or paste an icon URL"
                 />
                 <div className="grid grid-cols-2 gap-3">
                   <label className="block">
                     <span className="text-[10px] font-semibold text-slate-500">Icon position</span>
-                    <select value={value?.iconPosition || "left"} onChange={(event) => updateSelectedField("iconPosition", event.target.value)} className="mt-1.5 h-9 w-full rounded-lg border border-slate-800 bg-[#070b14] px-3 text-xs text-slate-200 outline-none focus:border-blue-500">
+                    <select value={inspectorValue?.iconPosition || "left"} onChange={(event) => updateInspectorField("iconPosition", event.target.value)} className="mt-1.5 h-9 w-full rounded-lg border border-slate-800 bg-[#070b14] px-3 text-xs text-slate-200 outline-none focus:border-blue-500">
                       <option value="left">Left</option>
                       <option value="right">Right</option>
                     </select>
                   </label>
                   <label className="block">
                     <span className="text-[10px] font-semibold text-slate-500">Icon size</span>
-                    <input type="number" min="8" max="128" value={value?.iconSize || 18} onChange={(event) => updateSelectedField("iconSize", Number(event.target.value))} className="mt-1.5 h-9 w-full rounded-lg border border-slate-800 bg-[#070b14] px-3 text-xs text-slate-200 outline-none focus:border-blue-500" />
+                    <input type="number" min="1" value={inspectorValue?.iconSize || 18} onChange={(event) => updateInspectorField("iconSize", Number(event.target.value))} className="mt-1.5 h-9 w-full rounded-lg border border-slate-800 bg-[#070b14] px-3 text-xs text-slate-200 outline-none focus:border-blue-500" />
                   </label>
                 </div>
               </div>
             </>
           )}
 
-          {selectedRegion.type === "image" && (
+          {inspectorType === "image" && (
             <>
               <ImagePicker
                 label="Image URL"
-                value={typeof value === "string" ? value : value?.src || ""}
-                onChange={(url) => updateSelectedField("src", url)}
+                value={typeof inspectorValue === "string" ? inspectorValue : inspectorValue?.src || ""}
+                onChange={(url) => updateInspectorField("src", url)}
                 placeholder="Enter URL or choose/upload an image"
               />
               <label className="block">
@@ -1603,19 +1636,23 @@ function ConnectedSourceWorkspace({
                   Alt text
                 </span>
                 <input
-                  value={typeof value === "object" ? value?.alt || "" : ""}
-                  onChange={(event) => updateSelectedField("alt", event.target.value)}
+                  value={typeof inspectorValue === "object" ? inspectorValue?.alt || "" : ""}
+                  onChange={(event) => updateInspectorField("alt", event.target.value)}
                   className="mt-2 h-9 w-full rounded-lg border border-slate-800 bg-[#070b14] px-3 text-xs text-slate-200 outline-none focus:border-blue-500"
                 />
               </label>
+              {runtimeNode && <label className="block">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Caption</span>
+                <input value={inspectorValue?.caption || ""} onChange={(event) => updateInspectorField("caption", event.target.value)} className="mt-2 h-9 w-full rounded-lg border border-slate-800 bg-[#070b14] px-3 text-xs text-slate-200 outline-none focus:border-blue-500" />
+              </label>}
               <div className="grid grid-cols-2 gap-3">
                 <label className="block">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
                     Width
                   </span>
                   <input
-                    value={typeof value === "object" ? value?.width || "" : ""}
-                    onChange={(event) => updateSelectedField("width", event.target.value)}
+                    value={typeof inspectorValue === "object" ? inspectorValue?.width || "" : ""}
+                    onChange={(event) => updateInspectorField("width", event.target.value)}
                     placeholder="100% or 320px"
                     className="mt-2 h-9 w-full rounded-lg border border-slate-800 bg-[#070b14] px-3 text-xs text-slate-200 outline-none focus:border-blue-500"
                   />
@@ -1625,8 +1662,8 @@ function ConnectedSourceWorkspace({
                     Height
                   </span>
                   <input
-                    value={typeof value === "object" ? value?.height || "" : ""}
-                    onChange={(event) => updateSelectedField("height", event.target.value)}
+                    value={typeof inspectorValue === "object" ? inspectorValue?.height || "" : ""}
+                    onChange={(event) => updateInspectorField("height", event.target.value)}
                     placeholder="auto or 240px"
                     className="mt-2 h-9 w-full rounded-lg border border-slate-800 bg-[#070b14] px-3 text-xs text-slate-200 outline-none focus:border-blue-500"
                   />
@@ -1637,8 +1674,8 @@ function ConnectedSourceWorkspace({
                   Image fit
                 </span>
                 <select
-                  value={typeof value === "object" ? value?.objectFit || "" : ""}
-                  onChange={(event) => updateSelectedField("objectFit", event.target.value)}
+                  value={typeof inspectorValue === "object" ? inspectorValue?.objectFit || "" : ""}
+                  onChange={(event) => updateInspectorField("objectFit", event.target.value)}
                   className="mt-2 h-9 w-full rounded-lg border border-slate-800 bg-[#070b14] px-3 text-xs text-slate-200 outline-none focus:border-blue-500"
                 >
                   <option value="">Default</option>
@@ -1651,15 +1688,15 @@ function ConnectedSourceWorkspace({
             </>
           )}
 
-          {selectedRegion.type === "video" && (
+          {inspectorType === "video" && (
             <>
               <label className="block">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
                   Video URL
                 </span>
                 <input
-                  value={typeof value === "string" ? value : value?.url || ""}
-                  onChange={(event) => updateSelectedField("url", event.target.value)}
+                  value={typeof inspectorValue === "string" ? inspectorValue : inspectorValue?.url || ""}
+                  onChange={(event) => updateInspectorField("url", event.target.value)}
                   placeholder="Video, YouTube, or Vimeo URL"
                   className="mt-2 h-9 w-full rounded-lg border border-slate-800 bg-[#070b14] px-3 text-xs text-slate-200 outline-none focus:border-blue-500"
                 />
@@ -1669,11 +1706,15 @@ function ConnectedSourceWorkspace({
                   Title
                 </span>
                 <input
-                  value={typeof value === "object" ? value?.title || "" : ""}
-                  onChange={(event) => updateSelectedField("title", event.target.value)}
+                  value={typeof inspectorValue === "object" ? inspectorValue?.title || "" : ""}
+                  onChange={(event) => updateInspectorField("title", event.target.value)}
                   className="mt-2 h-9 w-full rounded-lg border border-slate-800 bg-[#070b14] px-3 text-xs text-slate-200 outline-none focus:border-blue-500"
                 />
               </label>
+              {runtimeNode && <label className="block">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Caption</span>
+                <input value={inspectorValue?.caption || ""} onChange={(event) => updateInspectorField("caption", event.target.value)} className="mt-2 h-9 w-full rounded-lg border border-slate-800 bg-[#070b14] px-3 text-xs text-slate-200 outline-none focus:border-blue-500" />
+              </label>}
             </>
           )}
 
@@ -1735,7 +1776,7 @@ function ConnectedSourceWorkspace({
             "video",
             "section",
             "repeater"
-          ].includes(selectedRegion.type) && (
+          ].includes(inspectorType) && (
             <p className="rounded-lg border border-slate-800 bg-slate-950/40 p-3 text-[11px] leading-5 text-slate-500">
               This element does not expose editable ReactCMS source metadata.
               Wrap it with an Editable component before changing it visually.

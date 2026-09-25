@@ -61,8 +61,7 @@ describe("live preview HTML rewriting", () => {
       "/?rcms_edit=1",
       previewOrigin
     );
-    expect(result).toContain('[data-rcms-type="heading"] [data-rcms-add-section]');
-    expect(result).toContain('[data-rcms-type="paragraph"] [data-rcms-add-section]');
+    expect(result).toContain('[data-rcms-runtime-additions-host] [data-rcms-add-section]');
   });
 
   it("previews runtime button icon size and explicit height with an older connected runtime", async () => {
