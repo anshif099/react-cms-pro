@@ -680,6 +680,7 @@ function NodeFrame({
     parallax: 'rcms-slide-up',
   };
   const compactButton = node.type === 'button';
+  const buttonAlignment = compactButton ? node.props?.alignment : undefined;
   const horizontalPosition = compactButton && typeof node.props?.horizontalPosition === 'number'
     && Number.isFinite(node.props.horizontalPosition)
     ? Math.max(0, Math.min(1, node.props.horizontalPosition)) : null;
@@ -687,7 +688,7 @@ function NodeFrame({
   const offsetY = Number(node.props?.offsetY) || 0;
   const shellStyle: React.CSSProperties = {
     position: 'relative',
-    display: node.hidden ? 'none' : compactButton && horizontalPosition === null ? 'inline-block' : 'block',
+    display: node.hidden ? 'none' : compactButton && horizontalPosition === null && buttonAlignment !== 'right' ? 'inline-block' : 'block',
     left: horizontalPosition !== null ? `${horizontalPosition * 100}%` : undefined,
     translate: horizontalPosition !== null ? `${-horizontalPosition * 100}% 0` : undefined,
     verticalAlign: compactButton ? 'top' : undefined,
@@ -698,7 +699,7 @@ function NodeFrame({
         : undefined,
     height: resizePreview ? `${resizePreview.height}px` : undefined,
     maxWidth: compactButton ? '100%' : undefined,
-    marginLeft: horizontalPosition !== null ? 0 : compactButton && offsetX ? `${offsetX}px` : undefined,
+    marginLeft: horizontalPosition !== null ? 0 : buttonAlignment === 'right' ? 'auto' : compactButton && offsetX ? `${offsetX}px` : undefined,
     marginRight: horizontalPosition !== null ? 0 : undefined,
     marginTop: compactButton && offsetY ? `${offsetY}px` : undefined,
     background: compactButton ? 'transparent' : design.background,
@@ -1222,7 +1223,6 @@ export function RuntimeRenderer({
         [data-rcms-button-row="true"] > [data-rcms-type="button"] {
           left: auto !important;
           translate: none !important;
-          margin-left: 0 !important;
         }
       `}</style>
       {(tree.children || []).map((node) => (
