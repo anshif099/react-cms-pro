@@ -188,7 +188,7 @@ function buttonStyle(node: ComponentNode): React.CSSProperties {
     justifyContent: 'center',
     width: dimension(props.width),
     height: dimension(props.height),
-    minHeight: props.size === 'lg' ? '50px' : props.size === 'sm' ? '36px' : '42px',
+    minHeight: dimension(props.height) ? undefined : props.size === 'lg' ? '50px' : props.size === 'sm' ? '36px' : '42px',
     padding: props.size === 'lg' ? '0 26px' : props.size === 'sm' ? '0 14px' : '0 20px',
     borderRadius: props.radius !== undefined
       ? `${props.radius}px`

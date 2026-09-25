@@ -92,6 +92,11 @@ export function EditableButton({
           ? '8px 14px'
           : '11px 20px';
     }
+    if (value.height) {
+      buttonStyle.paddingTop = 0;
+      buttonStyle.paddingBottom = 0;
+      buttonStyle.minHeight = 0;
+    }
     if (value.shadow) {
       buttonStyle.boxShadow = value.shadow === 'none'
         ? 'none'
@@ -154,7 +159,11 @@ export function EditableButton({
     'arrow-right': '→', whatsapp: 'WA', phone: '☎', mail: '✉',
     'external-link': '↗', download: '↓',
   } as Record<string, string>)[value?.icon || ''] : '';
-  const presetIcon = !customIcon && symbol ? <span aria-hidden="true">{symbol}</span> : null;
+  const presetIcon = !customIcon && symbol ? (
+    <span aria-hidden="true" style={{ display: 'inline-grid', placeItems: 'center', width: iconSize, height: iconSize, flex: '0 0 auto', fontSize: typeof value === 'object' && value?.icon === 'whatsapp' ? iconSize * .68 : iconSize, lineHeight: 1 }}>
+      {symbol}
+    </span>
+  ) : null;
   const buttonIcon = customIcon || presetIcon;
   const renderedContent = children !== undefined ? providedContent : (
     <>

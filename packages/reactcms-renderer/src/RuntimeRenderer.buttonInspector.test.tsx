@@ -44,13 +44,15 @@ describe('button inspector values on the connected canvas', () => {
     expect(icon.style.width).toBe('42px');
     expect(link.lastElementChild).toBe(icon);
 
-    const changed = { ...button, props: { ...button.props, iconSize: 24, iconPosition: 'left', alignment: 'left', shadow: 'none' } };
+    const changed = { ...button, props: { ...button.props, iconSize: 190, height: '12px', iconPosition: 'left', alignment: 'left', shadow: 'none' } };
     act(() => root.render(<RuntimeRenderer tree={{ ...tree, children: [changed] } as PageComponentTree} locale="en" mode="runtime" />));
     const updatedFrame = host.querySelector<HTMLElement>('[data-rcms-node="action"]')!;
     const updatedLink = updatedFrame.querySelector<HTMLAnchorElement>('a')!;
     expect(updatedFrame.style.marginRight).toBe('auto');
     expect(updatedLink.firstElementChild?.getAttribute('aria-hidden')).toBe('true');
-    expect(updatedLink.querySelector<HTMLElement>('[aria-hidden="true"]')?.style.width).toBe('24px');
+    expect(updatedLink.querySelector<HTMLElement>('[aria-hidden="true"]')?.style.width).toBe('190px');
+    expect(updatedLink.style.height).toBe('12px');
+    expect(updatedLink.style.minHeight).toBe('');
     expect(updatedLink.style.boxShadow).toBe('none');
     act(() => root.unmount());
   });
