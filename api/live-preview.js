@@ -808,9 +808,6 @@ html[data-rcms-connected-canvas="edit"] [data-custom-cursor] {
 html[data-rcms-connected-canvas="edit"] [data-rcms-region] {
   outline-style: solid !important;
 }
-html[data-rcms-connected-canvas="edit"] [data-rcms-runtime-additions-host] [data-rcms-add-section] {
-  display: none !important;
-}
 html[data-rcms-connected-canvas="edit"] .preloader,
 html[data-rcms-connected-canvas="edit"] .preloader-overlay,
 html[data-rcms-connected-canvas="edit"] #preloader,

@@ -54,16 +54,6 @@ describe("live preview HTML rewriting", () => {
     expect(result.indexOf("previewRoute")).toBeLessThan(result.indexOf('type="module"'));
   });
 
-  it("hides duplicate add-section handles for connected text additions", () => {
-    const result = rewritePreviewHtml(
-      '<html><head></head><body></body></html>',
-      "https://triosis.vercel.app/",
-      "/?rcms_edit=1",
-      previewOrigin
-    );
-    expect(result).toContain('[data-rcms-runtime-additions-host] [data-rcms-add-section]');
-  });
-
   it("previews runtime button icon size and explicit height with an older connected runtime", async () => {
     const html = rewritePreviewHtml(
       '<html><head></head><body><div data-rcms-node="action" data-rcms-type="button"><div><div><span style="min-height:42px"><span data-rcms-field="label">test</span><span aria-hidden="true">✉</span></span></div></div></div></body></html>',
