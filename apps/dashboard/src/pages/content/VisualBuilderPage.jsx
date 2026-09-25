@@ -167,6 +167,12 @@ function updateTreeNode(nodes = [], nodeId, updater) {
     : { ...node, children: updateTreeNode(node.children || [], nodeId, updater) });
 }
 
+function insertAfterTreeNode(nodes = [], nodeId, addition) {
+  return nodes.flatMap((node) => node.id === nodeId
+    ? [node, addition]
+    : [{ ...node, children: insertAfterTreeNode(node.children || [], nodeId, addition) }]);
+}
+
 function lastTreeNode(nodes = []) {
   for (let index = nodes.length - 1; index >= 0; index -= 1) {
     const nested = lastTreeNode(nodes[index]?.children || []);
@@ -1085,13 +1091,14 @@ function ConnectedSourceWorkspace({
 
     const value = selectedRegion.value;
 
-    if (
+    const runtimeNode = (
       selectedRegion.type === "runtime-component"
       && selectedRegion.componentId
       && isPageComponentTree(value)
-    ) {
-      const runtimeNode = findNode(value, selectedRegion.componentId);
-      if (runtimeNode) {
+    ) ? findNode(value, selectedRegion.componentId) : null;
+    const runtimeTextNode = runtimeNode && ["heading", "paragraph"].includes(runtimeNode.type)
+      ? runtimeNode : null;
+    if (runtimeNode && !runtimeTextNode) {
         return (
           <Suspense fallback={<aside className="w-full p-4 text-xs text-slate-500">Loading component editor…</aside>}>
             <NativeInspector
@@ -1110,12 +1117,28 @@ function ConnectedSourceWorkspace({
             />
           </Suspense>
         );
-      }
     }
-    const textValue = typeof value === "object" && value !== null
+    const runtimeRawText = runtimeTextNode?.props?.locales?.[locale]?.text
+      ?? runtimeTextNode?.props?.locales?.en?.text
+      ?? runtimeTextNode?.props?.text
+      ?? "";
+    const runtimeTextValue = runtimeTextNode?.type === "paragraph"
+      ? String(runtimeRawText).replace(/<br\s*\/?\s*>/gi, "\n").replace(/<[^>]*>/g, "")
+      : String(runtimeRawText);
+    const textValue = runtimeTextNode ? runtimeTextValue : typeof value === "object" && value !== null
       ? value.text || ""
       : value || "";
-    const textStyleValue = typeof value === "object" && value !== null ? value : {};
+    const runtimeBaseStyle = runtimeTextNode?.styles?.base || {};
+    const textStyleValue = runtimeTextNode ? {
+      ...runtimeBaseStyle,
+      fontSizeTablet: runtimeTextNode.styles?.tablet?.fontSize,
+      fontSizeMobile: runtimeTextNode.styles?.mobile?.fontSize,
+      lineHeightTablet: runtimeTextNode.styles?.tablet?.lineHeight,
+      lineHeightMobile: runtimeTextNode.styles?.mobile?.lineHeight,
+      letterSpacingTablet: runtimeTextNode.styles?.tablet?.letterSpacing,
+      letterSpacingMobile: runtimeTextNode.styles?.mobile?.letterSpacing,
+      htmlTag: runtimeTextNode.type === "heading" ? runtimeTextNode.props?.level || "h2" : runtimeTextNode.props?.htmlTag || "p"
+    } : typeof value === "object" && value !== null ? value : {};
     const selectedComputedStyle = selectedRegion.computedStyle || {};
     const selectedHtmlTag = String(
       textStyleValue.htmlTag || selectedRegion.elementTag || "span"
@@ -1129,7 +1152,75 @@ function ConnectedSourceWorkspace({
       h6: { fontSize: "20px", fontSizeTablet: "19px", fontSizeMobile: "18px", lineHeight: "1.35" },
       p: { fontSize: "16px", fontSizeTablet: "16px", fontSizeMobile: "16px", lineHeight: "1.6" }
     };
+    const runtimeTextHtml = (text, tag = "p") => {
+      const escaped = String(text).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+      return `<${tag}>${escaped.replaceAll("\n", "<br />")}</${tag}>`;
+    };
+    const updateInspectorTextField = (field, nextFieldValue) => {
+      if (!runtimeTextNode) {
+        updateSelectedField(field, nextFieldValue);
+        return;
+      }
+      const nextNode = { ...runtimeTextNode };
+      if (field === "text") {
+        nextNode.props = {
+          ...runtimeTextNode.props,
+          locales: {
+            ...(runtimeTextNode.props?.locales || {}),
+            [locale]: {
+              ...(runtimeTextNode.props?.locales?.[locale] || {}),
+              text: runtimeTextNode.type === "paragraph"
+                ? runtimeTextHtml(nextFieldValue, runtimeTextNode.props?.htmlTag || "p")
+                : nextFieldValue
+            }
+          }
+        };
+      } else {
+        const match = field.match(/^(fontSize|lineHeight|letterSpacing)(Tablet|Mobile)?$/);
+        const mode = match?.[2]?.toLowerCase() || "base";
+        const styleKey = match?.[1] || field;
+        nextNode.styles = {
+          ...(runtimeTextNode.styles || {}),
+          [mode]: { ...(runtimeTextNode.styles?.[mode] || {}), [styleKey]: nextFieldValue }
+        };
+      }
+      applyVisualValue(selectedRegion, {
+        ...value,
+        children: updateTreeNode(value.children, runtimeTextNode.id, () => nextNode)
+      });
+    };
     const updateSelectedTextTag = (htmlTag) => {
+      if (runtimeTextNode) {
+        const heading = /^h[1-6]$/.test(htmlTag);
+        const typography = textTagTypography[htmlTag] || {};
+        const nextNode = {
+          ...runtimeTextNode,
+          type: heading ? "heading" : "paragraph",
+          props: {
+            ...runtimeTextNode.props,
+            level: heading ? htmlTag : undefined,
+            htmlTag: heading ? undefined : htmlTag,
+            locales: {
+              ...(runtimeTextNode.props?.locales || {}),
+              [locale]: {
+                ...(runtimeTextNode.props?.locales?.[locale] || {}),
+                text: heading ? textValue : runtimeTextHtml(textValue, htmlTag)
+              }
+            }
+          },
+          styles: {
+            ...(runtimeTextNode.styles || {}),
+            base: { ...(runtimeTextNode.styles?.base || {}), fontSize: typography.fontSize, lineHeight: typography.lineHeight },
+            tablet: { ...(runtimeTextNode.styles?.tablet || {}), fontSize: typography.fontSizeTablet },
+            mobile: { ...(runtimeTextNode.styles?.mobile || {}), fontSize: typography.fontSizeMobile }
+          }
+        };
+        applyVisualValue(selectedRegion, {
+          ...value,
+          children: updateTreeNode(value.children, runtimeTextNode.id, () => nextNode)
+        });
+        return;
+      }
       const baseValue = typeof value === "object" && value !== null
         ? { ...value }
         : { text: String(value || "") };
@@ -1202,7 +1293,12 @@ function ConnectedSourceWorkspace({
           ? structuredClone(selectedRuntimeNode.metadata)
           : { runtimePlacement: { anchorRegionId: selectedRegion.regionId, position: "after" } }
       };
-      const nextTree = { ...tree, children: [...tree.children, placeholder] };
+      const nextTree = {
+        ...tree,
+        children: selectedRuntimeNode
+          ? insertAfterTreeNode(tree.children, selectedRuntimeNode.id, placeholder)
+          : [...tree.children, placeholder]
+      };
       setPendingRuntimeInsert({ tree: nextTree, nodeId, payload: { regionId: RUNTIME_ADDITIONS_REGION, pageId: canvasRuntimePageId, value: nextTree } });
     };
 
@@ -1214,10 +1310,10 @@ function ConnectedSourceWorkspace({
         <div className="h-12 px-4 border-b border-slate-800 flex items-center">
           <div className="min-w-0">
             <p className="text-[10px] uppercase tracking-wider font-bold text-blue-400">
-              {selectedRegion.type || "region"}
+              {runtimeTextNode ? "text" : selectedRegion.type || "region"}
             </p>
             <p className="text-xs font-semibold text-white truncate">
-              {selectedRegion.regionId}
+              {runtimeTextNode ? runtimeTextNode.label || runtimeTextNode.id : selectedRegion.regionId}
             </p>
           </div>
         </div>
@@ -1226,7 +1322,7 @@ function ConnectedSourceWorkspace({
             <button type="button" onClick={copySelectedComponent} className="h-9 rounded-lg border border-slate-700 bg-slate-900 text-[10px] font-bold text-slate-200 cursor-pointer">Copy</button>
             <button type="button" onClick={addBelowSelected} className="h-9 rounded-lg bg-blue-600 text-[10px] font-extrabold text-white cursor-pointer">{selectedRegion.type === "runtime-component" && selectedRegion.componentType === "button" ? "+ Add beside" : "+ Add below"}</button>
           </div>
-          {selectedRegion.type === "text" && (
+          {(selectedRegion.type === "text" || runtimeTextNode) && (
             <>
               <label className="block">
                 <span className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-500">
@@ -1262,7 +1358,7 @@ function ConnectedSourceWorkspace({
                 </span>
                 <textarea
                   value={textValue}
-                  onChange={(event) => updateSelectedField("text", event.target.value)}
+                  onChange={(event) => updateInspectorTextField("text", event.target.value)}
                   rows="5"
                   className="mt-2 w-full resize-y rounded-lg border border-slate-800 bg-[#070b14] p-3 text-xs leading-5 text-slate-200 outline-none focus:border-blue-500"
                 />
@@ -1270,7 +1366,7 @@ function ConnectedSourceWorkspace({
               <button
                 type="button"
                 disabled={!textValue}
-                onClick={() => updateSelectedField("text", "")}
+                onClick={() => updateInspectorTextField("text", "")}
                 className="h-9 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 text-[10px] font-bold text-rose-300 disabled:opacity-40"
               >
                 Delete selected text
@@ -1287,13 +1383,13 @@ function ConnectedSourceWorkspace({
                       <input
                         type="color"
                         value={safeTextColor}
-                        onChange={(event) => updateSelectedField("color", event.target.value)}
+                        onChange={(event) => updateInspectorTextField("color", event.target.value)}
                         className="h-9 w-11 cursor-pointer rounded-lg border border-slate-700 bg-[#070b14] p-1"
                         title="Choose text colour"
                       />
                       <input
                         value={textStyleValue.color || selectedComputedStyle.color || ""}
-                        onChange={(event) => updateSelectedField("color", event.target.value)}
+                        onChange={(event) => updateInspectorTextField("color", event.target.value)}
                         placeholder="#ff4f4f"
                         className="h-9 min-w-0 flex-1 rounded-lg border border-slate-800 bg-[#070b14] px-3 font-mono text-xs text-slate-200 outline-none focus:border-blue-500"
                       />
@@ -1314,7 +1410,7 @@ function ConnectedSourceWorkspace({
                         max="3"
                         step="0.05"
                         value={numericLineHeight}
-                        onChange={(event) => updateSelectedField(
+                        onChange={(event) => updateInspectorTextField(
                           lineHeightField,
                           event.target.value || ""
                         )}
@@ -1328,7 +1424,7 @@ function ConnectedSourceWorkspace({
                       max="3"
                       step="0.05"
                       value={Math.min(3, Math.max(0.8, Number(numericLineHeight) || 1.2))}
-                      onChange={(event) => updateSelectedField(lineHeightField, event.target.value)}
+                      onChange={(event) => updateInspectorTextField(lineHeightField, event.target.value)}
                       className="mt-2 h-1.5 w-full cursor-pointer accent-blue-500"
                     />
                   </label>
@@ -1347,7 +1443,7 @@ function ConnectedSourceWorkspace({
                         max="240"
                         step="1"
                         value={numericFontSize}
-                        onChange={(event) => updateSelectedField(
+                        onChange={(event) => updateInspectorTextField(
                           fontSizeField,
                           event.target.value ? `${event.target.value}px` : ""
                         )}
@@ -1361,7 +1457,7 @@ function ConnectedSourceWorkspace({
                       max="120"
                       step="1"
                       value={Math.min(120, Math.max(8, Number(numericFontSize) || 16))}
-                      onChange={(event) => updateSelectedField(fontSizeField, `${event.target.value}px`)}
+                      onChange={(event) => updateInspectorTextField(fontSizeField, `${event.target.value}px`)}
                       className="mt-2 h-1.5 w-full cursor-pointer accent-blue-500"
                     />
                   </label>
@@ -1380,7 +1476,7 @@ function ConnectedSourceWorkspace({
                         max="30"
                         step="0.1"
                         value={numericLetterSpacing}
-                        onChange={(event) => updateSelectedField(
+                        onChange={(event) => updateInspectorTextField(
                           letterSpacingField,
                           event.target.value ? `${event.target.value}px` : ""
                         )}
@@ -1394,7 +1490,7 @@ function ConnectedSourceWorkspace({
                       max="30"
                       step="0.1"
                       value={Math.min(30, Math.max(-10, Number(numericLetterSpacing) || 0))}
-                      onChange={(event) => updateSelectedField(letterSpacingField, `${event.target.value}px`)}
+                      onChange={(event) => updateInspectorTextField(letterSpacingField, `${event.target.value}px`)}
                       className="mt-2 h-1.5 w-full cursor-pointer accent-blue-500"
                     />
                   </label>
