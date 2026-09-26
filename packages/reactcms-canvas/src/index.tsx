@@ -1,5 +1,6 @@
 import React, {
   forwardRef,
+  useEffect,
   useImperativeHandle,
   useRef,
   useState,
@@ -98,6 +99,7 @@ export const NativeCanvas = forwardRef<NativeCanvasHandle, NativeCanvasProps>(fu
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const pageRef = useRef<HTMLDivElement | null>(null);
   const [internalZoom, setInternalZoom] = useState(1);
+  const [autoFit, setAutoFit] = useState(true);
   const [pan, setPan] = useState<Point>({ x: 0, y: 0 });
   const [panning, setPanning] = useState(false);
   const [panStart, setPanStart] = useState<Point | null>(null);
@@ -110,17 +112,32 @@ export const NativeCanvas = forwardRef<NativeCanvasHandle, NativeCanvasProps>(fu
     : CANVAS_DEVICE_WIDTHS[responsiveMode];
 
   const setZoom = (next: number) => {
+    setAutoFit(false);
     const clamped = Math.max(.25, Math.min(2, Number(next.toFixed(2))));
     if (controlledZoom === undefined) setInternalZoom(clamped);
     onZoomChange?.(clamped);
   };
 
+  useEffect(() => {
+    if (!autoFit || !viewportRef.current) return undefined;
+    const viewport = viewportRef.current;
+    const fitToViewport = () => {
+      const next = Math.min(1, Math.max(.25, (viewport.clientWidth - 64) / width));
+      if (controlledZoom === undefined) setInternalZoom(next);
+      onZoomChange?.(next);
+      setPan({ x: 0, y: 0 });
+    };
+    const observer = new ResizeObserver(fitToViewport);
+    observer.observe(viewport);
+    fitToViewport();
+    return () => observer.disconnect();
+  }, [autoFit, controlledZoom, onZoomChange, width]);
+
   useImperativeHandle(forwardedRef, () => ({
     zoomIn: () => setZoom(zoom + .1),
     zoomOut: () => setZoom(zoom - .1),
     fit: () => {
-      const available = viewportRef.current?.clientWidth || width;
-      setZoom(Math.min(1, Math.max(.25, (available - 64) / width)));
+      setAutoFit(true);
       setPan({ x: 0, y: 0 });
     },
     resetPan: () => setPan({ x: 0, y: 0 }),
@@ -260,7 +277,8 @@ export const NativeCanvas = forwardRef<NativeCanvasHandle, NativeCanvasProps>(fu
             flex: '0 0 auto',
             width: `${width}px`,
             minHeight: 'calc(100vh - 180px)',
-            transform: `translate(${pan.x}px,${pan.y}px) scale(${zoom})`,
+            zoom,
+            transform: `translate(${pan.x}px,${pan.y}px)`,
             transformOrigin: 'top center',
             background: '#fff',
             borderRadius: responsiveMode === 'mobile' ? '24px' : '10px',
@@ -352,7 +370,7 @@ export const NativeCanvas = forwardRef<NativeCanvasHandle, NativeCanvasProps>(fu
         <button type="button" onClick={() => setZoom(zoom - .1)} style={{ border: 0, background: 'transparent', color: 'inherit', cursor: 'pointer' }}>−</button>
         <span style={{ minWidth: 42, textAlign: 'center' }}>{Math.round(zoom * 100)}%</span>
         <button type="button" onClick={() => setZoom(zoom + .1)} style={{ border: 0, background: 'transparent', color: 'inherit', cursor: 'pointer' }}>+</button>
-        <button type="button" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }} style={{ border: 0, background: 'transparent', color: '#94a3b8', cursor: 'pointer', font: 'inherit' }}>Reset</button>
+        <button type="button" onClick={() => { setAutoFit(true); setPan({ x: 0, y: 0 }); }} style={{ border: 0, background: 'transparent', color: '#94a3b8', cursor: 'pointer', font: 'inherit' }}>Fit</button>
       </div>
     </div>
   );
