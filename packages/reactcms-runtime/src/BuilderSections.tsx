@@ -366,13 +366,24 @@ function RuntimeAdditionsPortal({
   }, [onTreeChange, pageId, websiteId]);
 
   const addNode = useCallback((componentType = 'section', targetId = '', position: DropPosition = 'after', content?: InsertContentData) => {
+    if (componentType === '__open_content_form__') {
+      MessageBus.send('rcms/v1/request-insert-content', websiteId, {
+        pageId,
+        regionId: RUNTIME_ADDITIONS_REGION,
+        value: tree,
+        targetId,
+        position,
+        placement,
+      });
+      return;
+    }
     const addition = makeRuntimeNode(componentType, locale, placement, content);
     const children = targetId
       ? insertNode(tree.children, targetId, position, addition)
       : [...tree.children, addition];
     commit({ ...tree, children });
     setSelectedIds([addition.id]);
-  }, [commit, locale, placement, tree]);
+  }, [commit, locale, pageId, placement, tree, websiteId]);
 
   const handleMutation = useCallback((mutation: RendererMutation) => {
     // Moving a nested button to a source-site region must also detach it from

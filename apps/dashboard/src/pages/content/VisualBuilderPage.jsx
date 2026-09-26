@@ -161,6 +161,13 @@ function replaceTreeNode(nodes = [], nodeId, replacement) {
   });
 }
 
+function insertTreeNode(nodes = [], targetId, position, addition) {
+  return nodes.flatMap((node) => {
+    if (node.id === targetId) return position === "before" ? [addition, node] : [node, addition];
+    return [{ ...node, children: insertTreeNode(node.children || [], targetId, position, addition) }];
+  });
+}
+
 function updateTreeNode(nodes = [], nodeId, updater) {
   return nodes.map((node) => node.id === nodeId
     ? updater(node)
@@ -176,7 +183,7 @@ function lastTreeNode(nodes = []) {
   return null;
 }
 
-function ConnectedInsertContentModal({ locale, pages = [], clipboard, insertBelow = false, onCancel, onSubmit }) {
+function ConnectedInsertContentModal({ locale, pages = [], clipboard, insertPosition, onCancel, onSubmit }) {
   const [type, setType] = useState("paragraph");
   const [text, setText] = useState("");
   const [textType, setTextType] = useState("paragraph");
@@ -239,7 +246,7 @@ function ConnectedInsertContentModal({ locale, pages = [], clipboard, insertBelo
         }}
       >
         <div className="flex items-start justify-between gap-4">
-          <div><h2 className="text-lg font-extrabold text-white">Add content</h2><p className="mt-1 text-xs text-slate-400">{insertBelow ? "This content will be added below the selected element." : "This content will replace the new empty section."}</p></div>
+          <div><h2 className="text-lg font-extrabold text-white">Add content</h2><p className="mt-1 text-xs text-slate-400">{insertPosition ? `This content will be added ${insertPosition} the selected element.` : "This content will replace the new empty section."}</p></div>
           <button type="button" onClick={onCancel} className="h-8 w-8 rounded-lg bg-slate-800 text-lg text-slate-300 cursor-pointer">×</button>
         </div>
         <div className="my-5 grid grid-cols-4 gap-2">
@@ -901,6 +908,30 @@ function ConnectedSourceWorkspace({
 
       if (!isPreview && message.type === "rcms/v1/seo-scan") {
         setCanvasSEOScan(message.payload || null);
+        return;
+      }
+
+      if (!isPreview && message.type === "rcms/v1/request-insert-content") {
+        const payload = message.payload || {};
+        const tree = isPageComponentTree(payload.value)
+          ? payload.value
+          : runtimeAdditionsRef.current;
+        if (!isPageComponentTree(tree) || !payload.targetId) return;
+        const anchor = findNode(tree, payload.targetId);
+        if (!anchor) return;
+        runtimeAdditionsRef.current = tree;
+        setPendingRuntimeInsert({
+          tree,
+          insertBelow: true,
+          targetId: payload.targetId,
+          position: payload.position === "before" ? "before" : "after",
+          metadata: structuredClone(anchor.metadata || { runtimePlacement: payload.placement || {} }),
+          payload: {
+            regionId: RUNTIME_ADDITIONS_REGION,
+            pageId: payload.pageId || canvasRuntimePageId,
+            value: tree
+          }
+        });
         return;
       }
 
@@ -2243,7 +2274,7 @@ function ConnectedSourceWorkspace({
           locale={locale}
           pages={pages}
           clipboard={connectedClipboard}
-          insertBelow={pendingRuntimeInsert.insertBelow}
+          insertPosition={pendingRuntimeInsert.insertBelow ? pendingRuntimeInsert.position || "below" : undefined}
           onCancel={() => {
             if (pendingRuntimeInsert.insertBelow) {
               setPendingRuntimeInsert(null);
@@ -2265,7 +2296,10 @@ function ConnectedSourceWorkspace({
                 children: node.children || [],
                 metadata: pendingRuntimeInsert.metadata
               };
-              const nextTree = { ...pendingRuntimeInsert.tree, children: [...pendingRuntimeInsert.tree.children, added] };
+              const children = pendingRuntimeInsert.targetId
+                ? insertTreeNode(pendingRuntimeInsert.tree.children, pendingRuntimeInsert.targetId, pendingRuntimeInsert.position, added)
+                : [...pendingRuntimeInsert.tree.children, added];
+              const nextTree = { ...pendingRuntimeInsert.tree, children };
               if (applyVisualValue(pendingRuntimeInsert.payload, nextTree)) setPendingRuntimeInsert(null);
               return;
             }
@@ -2696,7 +2730,7 @@ function NativeBuilderWorkspace({
           locale={locale}
           pages={pages}
           clipboard={nativeClipboard}
-          insertBelow={pendingNativeInsert.position === "after"}
+          insertPosition={pendingNativeInsert.position === "before" ? "before" : "below"}
           onCancel={() => setPendingNativeInsert(null)}
           onSubmit={(node) => {
             addNode(node.type, pendingNativeInsert.targetId, pendingNativeInsert.position, {

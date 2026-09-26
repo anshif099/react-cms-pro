@@ -329,6 +329,19 @@ describe("live preview HTML rewriting", () => {
     expect(result).toContain('setBridgedStyle(element, "font-size", responsiveFontSize, hasFontSize)');
   });
 
+  it("routes old canvas add-section clicks to the dashboard content form", () => {
+    const result = rewritePreviewHtml(
+      "<html><head></head><body><div id=\"root\"></div></body></html>",
+      "https://example.com/",
+      "/ad?rcms_edit=1"
+    );
+
+    expect(result).toContain('event.target.closest("[data-rcms-add-section]")');
+    expect(result).toContain('button.closest("[data-rcms-node]")');
+    expect(result).toContain('type: "rcms/v1/request-insert-content"');
+    expect(result).toContain('event.stopImmediatePropagation()');
+  });
+
   it("bridges one-shot AI area selection from an opaque sandbox", () => {
     const result = rewritePreviewHtml(
       "<html><head></head><body><div id=\"root\"></div></body></html>",

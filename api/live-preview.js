@@ -255,6 +255,30 @@ function runtimeBootstrap(baseUrl, route, proxyOrigin) {
     history.replaceState(null, "", previewHistoryUrl.toString());
   } catch (_) {}
 
+  // Older connected-site bundles open their own small insertion dialog. Route
+  // the canvas action to the dashboard's existing content form instead.
+  if (previewRoute.indexOf("rcms_edit=1") !== -1) {
+    document.addEventListener("click", function (event) {
+      var button = event.target && event.target.closest
+        ? event.target.closest("[data-rcms-add-section]") : null;
+      var frame = button && button.closest("[data-rcms-node]");
+      if (!frame || !window.parent || window.parent === window) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      window.parent.postMessage({
+        rcms: true,
+        version: "v1",
+        type: "rcms/v1/request-insert-content",
+        websiteId: bridgeWebsiteId,
+        payload: {
+          targetId: frame.getAttribute("data-rcms-node"),
+          position: button.getAttribute("data-rcms-add-section") === "before" ? "before" : "after",
+          value: runtimeAdditionsTree
+        }
+      }, "*");
+    }, true);
+  }
+
   function originalElementStyles(element) {
     if (!bridgedElementStyles) return null;
     var originals = bridgedElementStyles.get(element);
