@@ -929,7 +929,7 @@ function NodeFrame({
               onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
-                setInsertPosition(position);
+                onInsert?.('__open_content_form__', node.id, position);
               }}
               style={{
                 position: 'absolute',

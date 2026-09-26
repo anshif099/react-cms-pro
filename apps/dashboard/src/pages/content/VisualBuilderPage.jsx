@@ -2329,6 +2329,7 @@ function NativeBuilderWorkspace({
   pageKey,
   website,
   page,
+  pages,
   pageTitle,
   locale,
   device,
@@ -2361,6 +2362,11 @@ function NativeBuilderWorkspace({
   const editor = useNativeEditor();
   const isPreview = mode === "preview";
   const [aiOpen, setAIOpen] = useState(true);
+  const [pendingNativeInsert, setPendingNativeInsert] = useState(null);
+  const nativeClipboard = useMemo(() => {
+    try { return JSON.parse(localStorage.getItem(`reactcms_component_clipboard:${websiteId}`) || "null"); }
+    catch { return null; }
+  }, [websiteId]);
   const blocks = useMemo(() => pageTreeToBlocks(editor.tree), [editor.tree]);
   const importedSourceEmptyState = page?.isImported ? (
     <div className="max-w-lg px-8 py-10 text-center">
@@ -2384,6 +2390,10 @@ function NativeBuilderWorkspace({
   ) : null;
 
   const addNode = useCallback((type, targetId = null, position = "after", content) => {
+    if (type === "__open_content_form__") {
+      setPendingNativeInsert({ targetId, position });
+      return;
+    }
     const node = createVisualNode(type, locale);
     if (!node) return;
     if (content?.props) node.props = { ...(node.props || {}), ...content.props };
@@ -2616,7 +2626,7 @@ function NativeBuilderWorkspace({
             onMutation={editor.mutate}
             onMove={editor.move}
             onInsert={addNode}
-            clipboard={connectedClipboard}
+            clipboard={nativeClipboard}
             onCommand={editor.command}
             emptyState={importedSourceEmptyState}
             className="flex-1 min-h-0"
@@ -2679,6 +2689,23 @@ function NativeBuilderWorkspace({
             onRestoreRevision={onRestoreRevision}
           />
         </Suspense>
+      )}
+
+      {pendingNativeInsert && (
+        <ConnectedInsertContentModal
+          locale={locale}
+          pages={pages}
+          clipboard={nativeClipboard}
+          insertBelow={pendingNativeInsert.position === "after"}
+          onCancel={() => setPendingNativeInsert(null)}
+          onSubmit={(node) => {
+            addNode(node.type, pendingNativeInsert.targetId, pendingNativeInsert.position, {
+              props: node.props,
+              localized: node.props?.locales?.[locale]
+            });
+            setPendingNativeInsert(null);
+          }}
+        />
       )}
 
     </div>
@@ -3966,6 +3993,7 @@ export function VisualBuilderPage() {
         pageKey={pageKey}
         website={sourceWebsite}
         page={selectedPage}
+        pages={pages}
         pageTitle={pageSettings.title || selectedPage.title}
         locale={activeLocale}
         device={device}
