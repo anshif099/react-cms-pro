@@ -20,15 +20,16 @@ describe("live preview HTML rewriting", () => {
   });
 
   it("routes the Home canvas through the live preview function", () => {
-    const config = JSON.parse(
-      readFileSync(new URL("../../vercel.json", import.meta.url), "utf8")
-    );
-    const rootCanvasRewrite = config.rewrites.find(
-      (rewrite) => rewrite.source === "/"
-        && rewrite.has?.some((condition) => condition.key === "__rcms_canvas")
-    );
-
-    expect(rootCanvasRewrite?.destination).toBe("/api/live-preview?route=/");
+    for (const path of ["../../vercel.json", "../../apps/dashboard/vercel.json"]) {
+      const config = JSON.parse(readFileSync(new URL(path, import.meta.url), "utf8"));
+      const rootCanvasRewrite = config.rewrites.find(
+        (rewrite) => rewrite.source === "/"
+          && rewrite.has?.some((condition) => condition.key === "__rcms_canvas")
+      );
+      expect(rootCanvasRewrite?.destination).toBe("/api/live-preview?route=/");
+      expect(config.functions).toHaveProperty("api/sftp.js");
+      expect(config.functions).toHaveProperty("api/live-preview.js");
+    }
   });
 
   it("boots the requested route before the connected React bundle", () => {
@@ -194,6 +195,31 @@ describe("live preview HTML rewriting", () => {
     expect(response.headers["cross-origin-resource-policy"]).toBe("cross-origin");
     expect(response.headers["content-type"]).toBe("text/javascript");
     expect(Buffer.isBuffer(response.body)).toBe(true);
+  });
+
+  it("rejects an HTML fallback served for a missing stylesheet", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(
+      "<html><body>SPA fallback</body></html>",
+      { status: 200, headers: { "Content-Type": "text/html" } }
+    )));
+    const response = {
+      headers: {},
+      statusCode: 0,
+      body: null,
+      setHeader(name, value) { this.headers[name.toLowerCase()] = value; },
+      status(code) { this.statusCode = code; return this; },
+      json(value) { this.body = value; return this; }
+    };
+
+    await livePreviewHandler({
+      method: "GET",
+      query: { asset: "https://triosis.in/assets/missing.css" },
+      headers: {}
+    }, response);
+
+    expect(response.statusCode).toBe(502);
+    expect(response.body.error).toContain("returned HTML instead of the requested asset");
+    expect(response.headers["cache-control"]).toBe("private, no-store, max-age=0");
   });
 
   it("reports a missing SPA deep link so the dashboard can use a root fallback", async () => {

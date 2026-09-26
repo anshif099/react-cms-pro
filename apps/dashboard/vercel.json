@@ -1,6 +1,23 @@
 {
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "functions": {
+    "api/cpanel.js": { "maxDuration": 60 },
+    "api/sftp.js": { "maxDuration": 60 },
+    "api/live-preview.js": { "maxDuration": 30 },
+    "api/media.js": { "maxDuration": 30 }
+  },
   "rewrites": [
+    {
+      "source": "/",
+      "has": [{ "type": "query", "key": "__rcms_canvas", "value": "1" }],
+      "destination": "/api/live-preview?route=/"
+    },
+    {
+      "source": "/:previewPath*",
+      "has": [{ "type": "query", "key": "__rcms_canvas", "value": "1" }],
+      "destination": "/api/live-preview?route=/:previewPath*"
+    },
     { "source": "/:path*", "destination": "/index.html" }
   ]
 }
-
