@@ -1,1 +1,0 @@
-import{O as e}from"./index-BOD7jTAP.js";function t(){return e()}export{t};
