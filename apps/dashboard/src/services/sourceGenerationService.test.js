@@ -1,12 +1,25 @@
 import { describe, expect, it } from "vitest";
 import {
+  generateStaticPageSource,
   generateReactPageSource,
   patchReactStateRouter,
   reactPageComponentName,
-  reactPageSourcePath
+  reactPageSourcePath,
+  staticPageSourcePath
 } from "./sourceGenerationService";
 
 describe("connected React page generation", () => {
+  it("generates a hosted static page for StackCP and cPanel sites", () => {
+    const html = generateStaticPageSource({
+      title: "Case Studies",
+      slug: "case-studies",
+      tree: { id: "page", type: "page", children: [{ id: "heading-1", type: "heading", props: { text: "Selected work" }, children: [] }] }
+    });
+    expect(staticPageSourcePath("case-studies")).toBe("case-studies/index.html");
+    expect(html).toContain('<iframe id="rcms-shell" src="/"');
+    expect(html).toContain('"Selected work"');
+    expect(html).toContain('id="rcms-content"');
+  });
   it("generates a standalone React page from native blocks", () => {
     const source = generateReactPageSource({
       title: "Case Studies",

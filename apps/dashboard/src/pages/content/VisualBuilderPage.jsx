@@ -67,10 +67,12 @@ import {
   updateRegionFieldValue
 } from "../../services/sourceVisualPatchService";
 import {
+  generateStaticPageSource,
   generateReactPageSource,
   patchReactStateRouter,
   reactPageComponentName,
-  reactPageSourcePath
+  reactPageSourcePath,
+  staticPageSourcePath
 } from "../../services/sourceGenerationService";
 import visualBuilderService, {
   createVisualNode
@@ -3211,13 +3213,12 @@ export function VisualBuilderPage() {
 
       let providerResult = null;
       let generatedSourceFile = null;
+      let generatedRouterFile = null;
       if (sourceWebsite?.connection?.sourceMode === "provider") {
         const framework = String(sourceWebsite.framework || "").toLowerCase();
-        if (!framework.includes("react") && !framework.includes("vite")) {
-          throw new Error(
-            "Automatic new-page source generation currently supports connected React/Vite projects."
-          );
-        }
+        const reactSource = framework.includes("react") || framework.includes("vite");
+        const directHosting = ["sftp", "cpanel"].includes(sourceWebsite.connection.provider);
+        if (!reactSource && !directHosting) throw new Error("This source provider needs a React/Vite project to generate a new page.");
         const credentials = sourceCredentialService.get(websiteId);
         if (
           sourceWebsite.connection.provider === "github"
@@ -3228,37 +3229,39 @@ export function VisualBuilderPage() {
           );
         }
 
-        generatedSourceFile = reactPageSourcePath(
-          settingsRef.current.slug || page.slug
-        );
-        const component = reactPageComponentName(
-          settingsRef.current.slug || page.slug
-        );
-        const componentSource = generateReactPageSource({
-          title: settingsRef.current.title || page.title,
-          slug: settingsRef.current.slug || page.slug,
-          blocks: pageTreeToBlocks(treeRef.current),
-          locale: activeLocale
-        });
-        const routerFile = "src/App.jsx";
-        const router = await sourceProviderService.readFile(
-          sourceWebsite,
-          routerFile
-        );
-        const routerSource = patchReactStateRouter(router.content, {
-          title: settingsRef.current.title || page.title,
-          slug: settingsRef.current.slug || page.slug,
-          component,
-          importPath: `./pages/${component}.jsx`
-        });
-        providerResult = await sourceProviderService.writeFiles(
-          sourceWebsite,
-          [
+        if (reactSource && !directHosting) {
+          generatedSourceFile = reactPageSourcePath(settingsRef.current.slug || page.slug);
+          const component = reactPageComponentName(settingsRef.current.slug || page.slug);
+          const componentSource = generateReactPageSource({
+            title: settingsRef.current.title || page.title,
+            slug: settingsRef.current.slug || page.slug,
+            blocks: pageTreeToBlocks(treeRef.current),
+            locale: activeLocale
+          });
+          generatedRouterFile = "src/App.jsx";
+          const router = await sourceProviderService.readFile(sourceWebsite, generatedRouterFile);
+          const routerSource = patchReactStateRouter(router.content, {
+            title: settingsRef.current.title || page.title,
+            slug: settingsRef.current.slug || page.slug,
+            component,
+            importPath: `./pages/${component}.jsx`
+          });
+          providerResult = await sourceProviderService.writeFiles(sourceWebsite, [
             { path: generatedSourceFile, content: componentSource },
-            { path: routerFile, content: routerSource }
-          ],
-          `Publish ${settingsRef.current.title || page.title} from ReactCMS`
-        );
+            { path: generatedRouterFile, content: routerSource }
+          ], `Publish ${settingsRef.current.title || page.title} from ReactCMS`);
+        } else {
+          generatedSourceFile = staticPageSourcePath(settingsRef.current.slug || page.slug);
+          providerResult = await sourceProviderService.writeFiles(sourceWebsite, [{
+            path: generatedSourceFile,
+            content: generateStaticPageSource({
+              title: settingsRef.current.title || page.title,
+              slug: settingsRef.current.slug || page.slug,
+              tree: treeRef.current,
+              locale: activeLocale
+            })
+          }], `Publish ${settingsRef.current.title || page.title} from ReactCMS`);
+        }
       }
 
       await visualBuilderService.publish({
@@ -3271,7 +3274,7 @@ export function VisualBuilderPage() {
         await pageService.updateSourceMetadata(websiteId, pageId, {
           sourceProvider: providerResult.provider,
           sourceFile: generatedSourceFile,
-          sourceRouterFile: "src/App.jsx",
+          sourceRouterFile: generatedRouterFile,
           sourceRevision: providerResult.revision
         });
       }
@@ -3279,7 +3282,7 @@ export function VisualBuilderPage() {
         ...current,
         sourceProvider: providerResult?.provider || current.sourceProvider,
         sourceFile: generatedSourceFile || current.sourceFile,
-        sourceRouterFile: providerResult ? "src/App.jsx" : current.sourceRouterFile,
+        sourceRouterFile: generatedRouterFile || current.sourceRouterFile,
         sourceRevision: providerResult?.revision || current.sourceRevision,
         status: "published",
         publishedAt: Date.now()

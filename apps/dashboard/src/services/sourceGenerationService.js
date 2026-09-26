@@ -151,7 +151,7 @@ export function generateStaticPageSource({ title, slug, tree, locale = "en" }) {
     .replaceAll(">", "&gt;").replaceAll('"', "&quot;");
   return `<!doctype html>
 <html lang="${String(locale).replace(/[^a-zA-Z-]/g, "") || "en"}">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapedTitle}</title>
+<head><meta charset="utf-8"><base href="/"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapedTitle}</title>
 <style>body{margin:0;font-family:Inter,Arial,sans-serif;color:#0f172a}#rcms-shell{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}main{min-height:40vh}main img{max-width:100%;height:auto}.rcms-section{padding:48px 24px}.rcms-container{max-width:1200px;margin:auto}.rcms-button{display:inline-block;padding:12px 22px;border-radius:8px;background:#2563eb;color:white;text-decoration:none}</style></head>
 <body><header id="rcms-header"></header><main id="rcms-content"></main><footer id="rcms-footer"></footer><iframe id="rcms-shell" src="/" title="Site layout" aria-hidden="true"></iframe>
 <script id="rcms-page-data" type="application/json">${payload}</script>
