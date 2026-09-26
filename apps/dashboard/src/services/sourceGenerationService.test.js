@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { JSDOM } from "jsdom";
 import {
   generateStaticPageSource,
   generateReactPageSource,
@@ -19,6 +20,18 @@ describe("connected React page generation", () => {
     expect(html).toContain('<iframe id="rcms-shell" src="/"');
     expect(html).toContain('"Selected work"');
     expect(html).toContain('id="rcms-content"');
+  });
+  it("renders rich text as content without editor markers on the hosted page", () => {
+    const html = generateStaticPageSource({
+      title: "New page",
+      slug: "new-page",
+      tree: { children: [{ type: "paragraph", props: { text: "<p><strong>Hello</strong></p><script>alert(1)</script>" } }] }
+    });
+    const dom = new JSDOM(html, { runScripts: "dangerously", url: "https://example.com/new-page/" });
+    expect(dom.window.document.querySelector("#rcms-content strong")?.textContent).toBe("Hello");
+    expect(dom.window.document.querySelector("#rcms-content script")).toBeNull();
+    expect(dom.window.document.querySelector("[data-rcms-node]")).toBeNull();
+    dom.window.close();
   });
   it("generates a standalone React page from native blocks", () => {
     const source = generateReactPageSource({
