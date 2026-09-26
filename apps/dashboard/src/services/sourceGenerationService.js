@@ -140,9 +140,36 @@ export function reactPageComponentName(slug) {
   return componentName(slug);
 }
 
+export function staticPageSourcePath(slug) {
+  return `${cleanSlug(slug)}/index.html`;
+}
+
+export function generateStaticPageSource({ title, slug, tree, locale = "en" }) {
+  const payload = JSON.stringify({ tree, locale }).replace(/</g, "\\u003c");
+  const escapedTitle = String(title || "Untitled Page")
+    .replaceAll("&", "&amp;").replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+  return `<!doctype html>
+<html lang="${String(locale).replace(/[^a-zA-Z-]/g, "") || "en"}">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapedTitle}</title>
+<style>body{margin:0;font-family:Inter,Arial,sans-serif;color:#0f172a}#rcms-shell{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}main{min-height:40vh}main img{max-width:100%;height:auto}.rcms-section{padding:48px 24px}.rcms-container{max-width:1200px;margin:auto}.rcms-button{display:inline-block;padding:12px 22px;border-radius:8px;background:#2563eb;color:white;text-decoration:none}</style></head>
+<body><header id="rcms-header"></header><main id="rcms-content"></main><footer id="rcms-footer"></footer><iframe id="rcms-shell" src="/" title="Site layout" aria-hidden="true"></iframe>
+<script id="rcms-page-data" type="application/json">${payload}</script>
+<script>(function(){
+var data=JSON.parse(document.getElementById('rcms-page-data').textContent);
+var locale=data.locale||'en';
+function value(node,key){var props=node.props||{};var localized=props.locales&&(props.locales[locale]||props.locales.en);return localized&&localized[key]!==undefined?localized[key]:props[key]}
+function render(node){if(!node||node.hidden)return null;var type=node.type;var tags={section:'section',container:'div',columns:'div',column:'div',heading:'h2',paragraph:'div',text:'div',button:'a',image:'img',spacer:'div',divider:'hr',list:'ul'};var el=document.createElement(tags[type]||'div');el.setAttribute('data-rcms-node',node.id||'');if(type==='section')el.className='rcms-section';if(type==='container')el.className='rcms-container';if(type==='heading')el.textContent=value(node,'text')||value(node,'title')||'';if(type==='paragraph'||type==='text')el.textContent=value(node,'text')||'';if(type==='button'){el.className='rcms-button';el.textContent=value(node,'label')||'Learn more';el.href=value(node,'url')||'#'}if(type==='image'){el.src=value(node,'src')||value(node,'url')||'';el.alt=value(node,'alt')||''}if(type==='spacer')el.style.height=(Number(value(node,'height'))||64)+'px';var styles=Object.assign({},node.styles&&node.styles.base,node.styles&&node.styles.desktop);Object.keys(styles).forEach(function(key){if(typeof styles[key]==='string'||typeof styles[key]==='number')el.style[key]=styles[key]});(node.children||[]).forEach(function(child){var item=render(child);if(item)el.appendChild(item)});return el}
+(data.tree&&data.tree.children||[]).forEach(function(node){var item=render(node);if(item)document.getElementById('rcms-content').appendChild(item)});
+var frame=document.getElementById('rcms-shell');frame.addEventListener('load',function(){var doc;try{doc=frame.contentDocument}catch(e){return}var attempts=0;var timer=setInterval(function(){var header=doc.querySelector('header,[role="banner"],.site-header,#site-header');var footer=doc.querySelector('footer,[role="contentinfo"],.site-footer,#site-footer');if(header||footer){doc.querySelectorAll('link[rel="stylesheet"],style').forEach(function(style){document.head.appendChild(style.cloneNode(true))});if(header)document.getElementById('rcms-header').appendChild(header.cloneNode(true));if(footer)document.getElementById('rcms-footer').appendChild(footer.cloneNode(true));clearInterval(timer)}else if(++attempts>=40)clearInterval(timer)},150)})
+})();</script></body></html>`;
+}
+
 export default {
   generateReactPageSource,
   patchReactStateRouter,
   reactPageSourcePath,
-  reactPageComponentName
+  reactPageComponentName,
+  staticPageSourcePath,
+  generateStaticPageSource
 };
