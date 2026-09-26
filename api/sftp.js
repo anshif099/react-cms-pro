@@ -1,6 +1,5 @@
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
-import SftpClient from "ssh2-sftp-client";
 
 const ALLOWED_OPERATIONS = new Set(["list", "read", "write"]);
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
@@ -129,6 +128,15 @@ export default async function handler(request, response) {
     }
 
     const normalizedHost = await safeStackCpHost(host);
+    let SftpClient;
+    try {
+      ({ default: SftpClient } = await import("ssh2-sftp-client"));
+    } catch (error) {
+      console.error("StackCP SFTP dependency failed to load", error);
+      return response.status(503).json({
+        error: "The StackCP SFTP client is unavailable in this deployment. Redeploy ReactCMS with ssh2-sftp-client installed."
+      });
+    }
     client = new SftpClient("reactcms-stackcp");
     await client.connect({
       host: normalizedHost,

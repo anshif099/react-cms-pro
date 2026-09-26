@@ -1020,8 +1020,15 @@ function requestOrigin(request) {
 
 export default async function handler(request, response) {
   if (firstQueryValue(request.query?.sftp) === "1") {
-    const { default: sftpHandler } = await import("./sftp.js");
-    return sftpHandler(request, response);
+    try {
+      const { default: sftpHandler } = await import("./sftp.js");
+      return await sftpHandler(request, response);
+    } catch (error) {
+      console.error("StackCP SFTP dispatch failed", error);
+      return response.status(503).json({
+        error: "The StackCP SFTP service could not start. Check the ReactCMS Vercel function logs for the dispatch error."
+      });
+    }
   }
   if (request.method === "OPTIONS") {
     response.setHeader("Access-Control-Allow-Origin", "*");

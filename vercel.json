@@ -9,7 +9,8 @@
       "maxDuration": 60
     },
     "api/live-preview.js": {
-      "maxDuration": 60
+      "maxDuration": 60,
+      "includeFiles": "api/sftp.js"
     },
     "api/media.js": {
       "maxDuration": 30
