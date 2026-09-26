@@ -17,7 +17,9 @@ describe("connected React page generation", () => {
       tree: { id: "page", type: "page", children: [{ id: "heading-1", type: "heading", props: { text: "Selected work" }, children: [] }] }
     });
     expect(staticPageSourcePath("case-studies")).toBe("case-studies/index.html");
-    expect(html).toContain('<iframe id="rcms-shell" src="/"');
+    expect(html).toContain('<iframe id="rcms-header" class="rcms-site-shell" src="/"');
+    expect(html).toContain('<iframe id="rcms-footer" class="rcms-site-shell" src="/"');
+    expect(html).toContain("showSitePart(document.getElementById('rcms-header')");
     expect(html).toContain('"Selected work"');
     expect(html).toContain('id="rcms-content"');
   });
