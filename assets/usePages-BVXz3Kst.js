@@ -1,1 +1,0 @@
-import{O as e}from"./index-CGpDdY_C.js";function t(){return e()}export{t};
