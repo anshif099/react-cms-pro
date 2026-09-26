@@ -153,7 +153,7 @@ export function generateStaticPageSource({ title, slug, tree, locale = "en" }) {
 <html lang="${String(locale).replace(/[^a-zA-Z-]/g, "") || "en"}">
 <head><meta charset="utf-8"><base href="/"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapedTitle}</title>
 <style>body{margin:0;font-family:Inter,Arial,sans-serif;color:#0f172a}.rcms-site-shell{display:block;width:100%;height:0;border:0;overflow:hidden}#rcms-content{min-height:40vh}#rcms-content img{max-width:100%}#rcms-content .rcms-section{padding:48px 24px}#rcms-content .rcms-container{max-width:1200px;margin:auto}#rcms-content .rcms-button{display:inline-block;padding:12px 22px;border-radius:8px;background:#2563eb;color:white;text-decoration:none}</style></head>
-<body><iframe id="rcms-header" class="rcms-site-shell" src="/" title="Site header"></iframe><div id="rcms-content" role="main"></div><iframe id="rcms-footer" class="rcms-site-shell" src="/" title="Site footer"></iframe>
+<body><iframe id="rcms-header" class="rcms-site-shell" src="/?rcms_preview=1" title="Site header"></iframe><div id="rcms-content" role="main"></div><iframe id="rcms-footer" class="rcms-site-shell" src="/?rcms_preview=1" title="Site footer"></iframe>
 <script id="rcms-page-data" type="application/json">${payload}</script>
 <script>(function(){
 var data=JSON.parse(document.getElementById('rcms-page-data').textContent);
