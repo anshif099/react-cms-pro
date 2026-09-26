@@ -1,1 +1,0 @@
-import{O as e}from"./index-5DB9U-JA.js";function t(){return e()}export{t};
