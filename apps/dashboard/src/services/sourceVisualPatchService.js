@@ -599,6 +599,16 @@ export function shouldUseConnectedWebsiteCanvas(website, page) {
   );
 }
 
+export function isConnectedPageDraft(website, page) {
+  return Boolean(
+    page
+    && !page.isImported
+    && page.status === "draft"
+    && website?.sourceConnected
+    && website?.domain
+  );
+}
+
 export function buildConnectedPageUrl(website, page, mode = "preview") {
   const domain = String(website?.domain || "").trim();
   if (!domain) return "";

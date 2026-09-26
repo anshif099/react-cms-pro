@@ -56,6 +56,8 @@ export interface NativeCanvasProps {
   clipboard?: RuntimeRendererProps['clipboard'];
   onCommand?: RuntimeRendererProps['onCommand'];
   emptyState?: React.ReactNode;
+  beforeContent?: React.ReactNode;
+  afterContent?: React.ReactNode;
   className?: string;
 }
 
@@ -89,6 +91,8 @@ export const NativeCanvas = forwardRef<NativeCanvasHandle, NativeCanvasProps>(fu
   clipboard,
   onCommand,
   emptyState,
+  beforeContent,
+  afterContent,
   className,
 }, forwardedRef) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
@@ -266,6 +270,7 @@ export const NativeCanvas = forwardRef<NativeCanvasHandle, NativeCanvasProps>(fu
             transition: panning ? 'none' : 'width 220ms ease',
           }}
         >
+          {beforeContent}
           <RuntimeRenderer
             tree={tree}
             locale={locale}
@@ -311,6 +316,7 @@ export const NativeCanvas = forwardRef<NativeCanvasHandle, NativeCanvasProps>(fu
               {emptyState || 'This page has no published or draft components yet.'}
             </div>
           )}
+          {afterContent}
         </div>
       </div>
 

@@ -59,6 +59,7 @@ import {
   connectedRegionAliases,
   createRuntimeMessage,
   discoverLocalSourceImports,
+  isConnectedPageDraft,
   mergeRegionSelection,
   patchEditableRegionSource,
   selectGitContentRegions,
@@ -2368,6 +2369,49 @@ function buildInitialTree(page, document, locale, pageKey) {
   });
 }
 
+function ConnectedSiteShell({ website, part }) {
+  const frameRef = useRef(null);
+  const [height, setHeight] = useState(part === "header" ? 88 : 240);
+  const [unavailable, setUnavailable] = useState(false);
+  const src = useMemo(() => {
+    const homeUrl = buildConnectedPageUrl(website, { route: "/", slug: "home" }, "preview");
+    const proxyUrl = buildConnectedCanvasProxyUrl(homeUrl, "preview");
+    return proxyUrl ? `${proxyUrl}&shell=${part}` : "";
+  }, [part, website]);
+
+  useEffect(() => {
+    if (!src) return undefined;
+    const onMessage = (event) => {
+      if (event.source !== frameRef.current?.contentWindow) return;
+      const message = event.data;
+      if (!message || message.rcms !== true || message.version !== "v1" || message.part !== part) return;
+      if (message.type === "rcms/v1/site-shell-size") {
+        setHeight(Math.min(700, Math.max(40, Number(message.height) || 0)));
+        setUnavailable(false);
+      } else if (message.type === "rcms/v1/site-shell-unavailable") {
+        setUnavailable(true);
+      }
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [part, src]);
+
+  if (!src || unavailable) {
+    return <div className="border-b border-slate-200 bg-white px-6 py-3 text-xs text-slate-500">Connected site {part} unavailable</div>;
+  }
+  return (
+    <iframe
+      ref={frameRef}
+      src={src}
+      title={`Connected website ${part}`}
+      sandbox="allow-scripts allow-forms"
+      className="block w-full border-0 bg-white pointer-events-none"
+      style={{ height }}
+      tabIndex={-1}
+    />
+  );
+}
+
 function NativeBuilderWorkspace({
   mode,
   websiteId,
@@ -2407,8 +2451,21 @@ function NativeBuilderWorkspace({
 }) {
   const editor = useNativeEditor();
   const isPreview = mode === "preview";
-  const [aiOpen, setAIOpen] = useState(true);
+  const connectedDraft = isConnectedPageDraft(website, page);
+  const [aiOpen, setAIOpen] = useState(!connectedDraft);
+  const [layersOpen, setLayersOpen] = useState(!connectedDraft);
+  const [layersTab, setLayersTab] = useState("layers");
   const [pendingNativeInsert, setPendingNativeInsert] = useState(null);
+  useEffect(() => {
+    if (connectedDraft) {
+      setAIOpen(false);
+      setLayersOpen(false);
+    }
+  }, [connectedDraft]);
+  const openElementPicker = () => {
+    setLayersTab("elements");
+    setLayersOpen(true);
+  };
   const nativeClipboard = useMemo(() => {
     try { return JSON.parse(localStorage.getItem(`reactcms_component_clipboard:${websiteId}`) || "null"); }
     catch { return null; }
@@ -2585,8 +2642,10 @@ function NativeBuilderWorkspace({
       />
 
       <div className="flex-1 min-h-0 flex">
-        {!isPreview && (
+        {!isPreview && layersOpen && (
           <NativeLayersPanel
+            key={layersTab}
+            initialTab={layersTab}
             tree={editor.tree}
             pageTitle={pageTitle}
             selectedIds={editor.selectedIds}
@@ -2630,6 +2689,16 @@ function NativeBuilderWorkspace({
             )}
 
             <div className="ml-auto flex items-center gap-2">
+              {!isPreview && (
+                <>
+                  <button type="button" onClick={() => { setLayersTab("layers"); setLayersOpen((open) => !open); }} className="h-7 px-2.5 rounded-lg border border-slate-800 text-[9px] font-bold text-slate-400 hover:text-white cursor-pointer">
+                    {layersOpen ? "Hide Layers" : "Layers"}
+                  </button>
+                  <button type="button" onClick={openElementPicker} className="h-7 px-2.5 rounded-lg bg-blue-600 text-[9px] font-bold text-white hover:bg-blue-500 cursor-pointer">
+                    + Add Element
+                  </button>
+                </>
+              )}
               {device === "custom" && (
                 <label className="flex items-center gap-1.5">
                   <Ruler className="w-3 h-3 text-slate-600" />
@@ -2674,7 +2743,14 @@ function NativeBuilderWorkspace({
             onInsert={addNode}
             clipboard={nativeClipboard}
             onCommand={editor.command}
-            emptyState={importedSourceEmptyState}
+            emptyState={connectedDraft ? (
+              <div className="flex flex-col items-center gap-3 text-center">
+                <span className="text-sm font-semibold text-slate-700">This page is ready for your content</span>
+                {!isPreview && <button type="button" onClick={openElementPicker} className="rounded-lg bg-blue-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-blue-500 cursor-pointer">+ Add Element</button>}
+              </div>
+            ) : importedSourceEmptyState}
+            beforeContent={connectedDraft ? <ConnectedSiteShell website={website} part="header" /> : null}
+            afterContent={connectedDraft ? <ConnectedSiteShell website={website} part="footer" /> : null}
             className="flex-1 min-h-0"
           />
         </main>
@@ -2972,6 +3048,7 @@ export function VisualBuilderPage() {
 
   useEffect(() => {
     if (!selectedPage || selectedPage.id !== pageId || !websiteId || !pageKey) return;
+    if (!selectedPage.isImported && selectedPage.status === "draft" && sourceWebsiteLoading) return;
     const identity = `${websiteId}:${pageId}:${activeLocale}:${pageKey}`;
     if (loadedIdentityRef.current === identity) return;
     loadedIdentityRef.current = identity;
@@ -2999,7 +3076,17 @@ export function VisualBuilderPage() {
         ]);
         if (cancelled) return;
         const localeData = selectedPage.locales?.[activeLocale] || {};
-        const tree = buildInitialTree(selectedPage, draft, activeLocale, pageKey);
+        const startEmpty = isConnectedPageDraft(sourceWebsite, selectedPage)
+          && !selectedPage.copiedFromPageId
+          && !isPageComponentTree(draft.tree);
+        const tree = startEmpty
+          ? regionsToPageTree({}, {
+            id: pageKey,
+            title: localeData.title || selectedPage.title || "Untitled Page",
+            locale: activeLocale
+          })
+          : buildInitialTree(selectedPage, draft, activeLocale, pageKey);
+        const regions = startEmpty ? {} : draft.regions || {};
         const settings = {
           title: localeData.title || selectedPage.title || "Untitled Page",
           slug: localeData.slug || selectedPage.slug || "",
@@ -3009,10 +3096,10 @@ export function VisualBuilderPage() {
         };
 
         treeRef.current = tree;
-        regionsRef.current = draft.regions || {};
+        regionsRef.current = regions;
         settingsRef.current = settings;
         setInitialTree(tree);
-        setLegacyRegions(draft.regions || {});
+        setLegacyRegions(regions);
         setPageSettings(settings);
         changeVersionRef.current = 0;
         setSaveStatus("saved");
@@ -3034,7 +3121,7 @@ export function VisualBuilderPage() {
         loadedIdentityRef.current = "";
       }
     };
-  }, [activeLocale, pageId, pageKey, selectedPage, websiteId]);
+  }, [activeLocale, pageId, pageKey, selectedPage, sourceWebsite?.sourceConnected, sourceWebsiteLoading, websiteId]);
 
   const handleTreeChange = useCallback((tree) => {
     treeRef.current = tree;

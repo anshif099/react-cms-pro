@@ -11,6 +11,7 @@ import {
   patchEditableRegionSource,
   selectGitContentRegions,
   shouldUseConnectedWebsiteCanvas,
+  isConnectedPageDraft,
   updateRegionFieldValue
 } from "./sourceVisualPatchService";
 
@@ -318,6 +319,13 @@ describe("connected visual routes", () => {
       { sourceConnected: true, domain: "https://triosis.vercel.app/" },
       { source: "imported", isImported: true }
     )).toBe(false);
+  });
+
+  it("recognizes a new generated page as a connected draft", () => {
+    const website = { sourceConnected: true, domain: "https://triosis.in/" };
+    expect(isConnectedPageDraft(website, { source: "generated", status: "draft" })).toBe(true);
+    expect(isConnectedPageDraft(website, { source: "cms", status: "published" })).toBe(false);
+    expect(isConnectedPageDraft(website, { isImported: true, status: "draft" })).toBe(false);
   });
 
   it("loads the real deployed page route in preview mode", () => {

@@ -251,6 +251,7 @@ function LayerRow({
 }
 
 export function NativeLayersPanel({
+  initialTab = "layers",
   tree,
   pageTitle,
   selectedIds,
@@ -262,7 +263,7 @@ export function NativeLayersPanel({
   onToggleLocked,
   onAdd
 }) {
-  const [tab, setTab] = useState("layers");
+  const [tab, setTab] = useState(initialTab);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("all");
   const [expanded, setExpanded] = useState(() => new Set(["page"]));

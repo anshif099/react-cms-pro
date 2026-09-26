@@ -1005,6 +1005,49 @@ function firstQueryValue(value) {
   return Array.isArray(value) ? value[0] : value;
 }
 
+function previewSiteShell(html, part) {
+  const selectors = part === "header"
+    ? "header, [role='banner'], .site-header, #site-header, .header, #header"
+    : "footer, [role='contentinfo'], .site-footer, #site-footer, .footer, #footer";
+  const shell = `<style>html,body{height:auto!important;min-height:0!important;overflow:hidden!important}body{visibility:hidden!important;margin:0!important}body[data-rcms-shell-ready]{visibility:visible!important}</style><script>
+(function () {
+  var part = ${JSON.stringify(part)};
+  var selectors = ${JSON.stringify(selectors)};
+  var observer;
+  var timeout;
+  function send(type, height) {
+    window.parent.postMessage({ rcms: true, version: "v1", type: type, part: part, height: height }, "*");
+  }
+  function isolate() {
+    if (!document.body) return;
+    var target = document.body.querySelector(selectors);
+    if (!target) return;
+    observer.disconnect();
+    clearTimeout(timeout);
+    var copy = target.cloneNode(true);
+    copy.querySelectorAll("script").forEach(function (script) { script.remove(); });
+    document.body.replaceChildren(copy);
+    document.body.setAttribute("data-rcms-shell-ready", "true");
+    function measure() {
+      send("rcms/v1/site-shell-size", Math.ceil(copy.getBoundingClientRect().height));
+    }
+    measure();
+    if (typeof ResizeObserver === "function") new ResizeObserver(measure).observe(copy);
+  }
+  observer = new MutationObserver(isolate);
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+  timeout = setTimeout(function () {
+    observer.disconnect();
+    send("rcms/v1/site-shell-unavailable", 0);
+  }, 8000);
+  isolate();
+})();
+</script>`;
+  return /<\/head>/i.test(html)
+    ? html.replace(/<\/head>/i, `${shell}</head>`)
+    : `${shell}${html}`;
+}
+
 function requestOrigin(request) {
   const forwardedHost = firstQueryValue(request.headers?.["x-forwarded-host"]);
   const hostHeader = forwardedHost || firstQueryValue(request.headers?.host);
@@ -1058,7 +1101,10 @@ export default async function handler(request, response) {
     targetUrl.search = "";
     targetUrl.hash = "";
     const { html, url } = await fetchPublicHtml(targetUrl);
-    const previewHtml = rewritePreviewHtml(html, url, route, requestOrigin(request));
+    const shell = firstQueryValue(request.query?.shell);
+    const previewHtml = shell === "header" || shell === "footer"
+      ? previewSiteShell(rewritePreviewHtml(html, url, route, requestOrigin(request)), shell)
+      : rewritePreviewHtml(html, url, route, requestOrigin(request));
 
     response.setHeader("Content-Type", "text/html; charset=utf-8");
     response.setHeader("Cache-Control", "private, no-store, max-age=0");

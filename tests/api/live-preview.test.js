@@ -243,6 +243,39 @@ describe("live preview HTML rewriting", () => {
     expect(Buffer.isBuffer(response.body)).toBe(true);
   });
 
+  it("isolates the connected site's header for a new page canvas", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(
+      '<html><head></head><body><div id="root"></div><script type="module" src="/assets/app.js"></script></body></html>',
+      { status: 200, headers: { "Content-Type": "text/html" } }
+    )));
+    const response = {
+      headers: {}, statusCode: 0, body: "",
+      setHeader(name, value) { this.headers[name.toLowerCase()] = value; },
+      status(code) { this.statusCode = code; return this; },
+      send(value) { this.body = value; return this; },
+      json(value) { this.body = value; return this; }
+    };
+    await livePreviewHandler({
+      method: "GET",
+      query: { target: "https://triosis.in/", route: "/?rcms_preview=1", shell: "header" },
+      headers: { host: "reactcms.example" }
+    }, response);
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain('var selectors = "header, [role=\'banner\']');
+    expect(response.body).toContain('send("rcms/v1/site-shell-size"');
+    expect(response.body).toContain('document.body.replaceChildren(copy)');
+    const dom = new JSDOM(response.body, {
+      runScripts: "dangerously",
+      url: `${previewOrigin}/api/live-preview?route=%2F`
+    });
+    const header = dom.window.document.createElement("header");
+    header.textContent = "Connected navigation";
+    dom.window.document.body.appendChild(header);
+    await new Promise((resolve) => dom.window.setTimeout(resolve, 0));
+    expect(dom.window.document.body.textContent).toBe("Connected navigation");
+    dom.window.close();
+  });
+
   it("rejects an HTML fallback served for a missing stylesheet", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(
       "<html><body>SPA fallback</body></html>",
