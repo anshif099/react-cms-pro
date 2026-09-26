@@ -448,12 +448,6 @@ async function routeExists(pageKey, publishedPage) {
   });
 }
 
-function isEmbeddedEditorCanvas() {
-  if (window.self === window.top) return false;
-  const parameters = new URLSearchParams(location.search);
-  return parameters.get("rcms_edit") === "1" || parameters.get("rcms_preview") === "1";
-}
-
 function pageRegions(page) {
   const raw = page?.regions && typeof page.regions === "object"
     ? page.regions
@@ -683,7 +677,7 @@ async function start() {
   if (websiteId && databaseUrl) {
     try {
       page = await fetchPublishedPage(pageKey);
-      if (!isEmbeddedEditorCanvas() && (page?.deleted === true || !(await routeExists(pageKey, page)))) {
+      if (page?.deleted === true || !(await routeExists(pageKey, page))) {
         showDeletedPage();
         return;
       }

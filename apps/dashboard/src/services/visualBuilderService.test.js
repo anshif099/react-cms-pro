@@ -87,6 +87,33 @@ describe("visualBuilderService draft persistence & hydration", () => {
     expect(regions.__rcms_runtime_additions__).toEqual(canonicalTree);
   });
 
+  it("does not revive a deleted page tombstone in a newly created draft", async () => {
+    firebaseMocks.get.mockImplementation((refObj) => {
+      const path = refObj.path || "";
+      if (path.endsWith("/published/pages/new-page")) {
+        return Promise.resolve({
+          exists: () => true,
+          val: () => ({
+            deleted: true,
+            tree: { id: "deleted-new-page", type: "page", version: 2, children: [] },
+            regions: { "old.heading": "Old content" }
+          })
+        });
+      }
+      if (path.endsWith("/draft/pages/new-page")) {
+        return Promise.resolve({
+          exists: () => true,
+          val: () => ({ regions: { "new-page.title": "New page" } })
+        });
+      }
+      return Promise.resolve({ exists: () => false });
+    });
+
+    const { draft } = await visualBuilderService.loadNativePage("website-1", "new-page");
+    expect(draft.tree).toBeNull();
+    expect(draft.regions).toEqual({ "new-page.title": "New page" });
+  });
+
   it("hydrates corrupted draft values from registered defaults", async () => {
     firebaseMocks.get.mockImplementation((refObj) => {
       const path = refObj.path || "";

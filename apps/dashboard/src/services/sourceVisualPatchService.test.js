@@ -304,6 +304,14 @@ describe("connected visual routes", () => {
   it("uses the real website canvas for CMS pages on source-connected sites", () => {
     expect(shouldUseConnectedWebsiteCanvas(
       { sourceConnected: true, domain: "https://triosis.vercel.app/" },
+      { source: "cms", status: "published", isImported: false }
+    )).toBe(true);
+    expect(shouldUseConnectedWebsiteCanvas(
+      { sourceConnected: true, domain: "https://triosis.vercel.app/" },
+      { source: "cms", status: "draft", isImported: false }
+    )).toBe(false);
+    expect(shouldUseConnectedWebsiteCanvas(
+      { sourceConnected: true, domain: "https://triosis.vercel.app/" },
       { source: "cms", isImported: false }
     )).toBe(true);
     expect(shouldUseConnectedWebsiteCanvas(
@@ -319,16 +327,6 @@ describe("connected visual routes", () => {
       "preview"
     )).toBe(
       "https://triosis.vercel.app/our-team?rcms_preview=1"
-    );
-  });
-
-  it("uses the root canvas for a new CMS draft without a published route", () => {
-    expect(buildConnectedPageUrl(
-      { domain: "https://triosis.in/" },
-      { route: "/best-marketing-agency-in-kerala", source: "cms", status: "draft" },
-      "edit"
-    )).toBe(
-      "https://triosis.in/?page=best-marketing-agency-in-kerala&rcms_edit=1"
     );
   });
 

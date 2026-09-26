@@ -275,7 +275,7 @@ export const visualBuilderService = {
     // them in reverse so stale page-id/route aliases can fill missing values
     // without overwriting a newer canonical draft.
     [...publishedSnapshots].reverse().forEach((snapshot) => {
-      if (snapshot.exists()) {
+      if (snapshot.exists() && snapshot.val()?.deleted !== true) {
         const decoded = decodePageDocument(snapshot.val());
         published = {
           ...published,

@@ -3937,6 +3937,7 @@ export function VisualBuilderPage() {
     selectedPage
     && !selectedPage.isImported
     && selectedPage.source === "cms"
+    && selectedPage.status !== "draft"
     && sourceWebsiteLoading
   ) {
     return (
