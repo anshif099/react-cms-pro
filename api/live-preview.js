@@ -1,5 +1,6 @@
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
+import sftpHandler from "./sftp.js";
 
 const MAX_HTML_BYTES = 2 * 1024 * 1024;
 const MAX_ASSET_BYTES = 4 * 1024 * 1024;
@@ -1021,7 +1022,6 @@ function requestOrigin(request) {
 export default async function handler(request, response) {
   if (firstQueryValue(request.query?.sftp) === "1") {
     try {
-      const { default: sftpHandler } = await import("./sftp.js");
       return await sftpHandler(request, response);
     } catch (error) {
       console.error("StackCP SFTP dispatch failed", error);
