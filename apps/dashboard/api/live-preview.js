@@ -233,6 +233,13 @@ export function rewritePreviewJavaScript(source, assetUrl) {
     );
 }
 
+export function rewriteLegacyRouteBootstrap(source) {
+  return String(source || "").replace(
+    /if\s*\(\s*page\?\.deleted\s*===\s*true\s*\|\|\s*!\(await routeExists\(pageKey,\s*page\)\)\s*\)\s*\{/g,
+    "if (window.self === window.top && (page?.deleted === true || !(await routeExists(pageKey, page)))) {"
+  );
+}
+
 function runtimeBootstrap(baseUrl, route, proxyOrigin) {
   return `<script>
 (function () {
@@ -984,8 +991,14 @@ async function proxyPreviewAsset(asset, response) {
     || normalizedType.includes("ecmascript")
     || /\.m?js$/.test(pathname)
   ) {
+    const source = new TextDecoder("utf-8").decode(bytes);
     body = new TextEncoder().encode(
-      rewritePreviewJavaScript(new TextDecoder("utf-8").decode(bytes), url)
+      rewritePreviewJavaScript(
+        pathname.endsWith("/reactcms-route-bootstrap.js")
+          ? rewriteLegacyRouteBootstrap(source)
+          : source,
+        url
+      )
     );
   } else if (normalizedType.includes("text/css") || pathname.endsWith(".css")) {
     body = new TextEncoder().encode(

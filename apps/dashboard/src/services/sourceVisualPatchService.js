@@ -599,6 +599,9 @@ export function shouldUseConnectedWebsiteCanvas(website, page) {
 }
 
 export function buildConnectedPageUrl(website, page, mode = "preview") {
+  if (page?.source === "cms" && page?.status === "draft") {
+    return buildConnectedPageFallbackUrl(website, page, mode);
+  }
   const domain = String(website?.domain || "").trim();
   if (!domain) return "";
 

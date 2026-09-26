@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { JSDOM } from "jsdom";
 import livePreviewHandler, {
   previewAssetUrl,
+  rewriteLegacyRouteBootstrap,
   rewritePreviewCss,
   rewritePreviewHtml,
   rewritePreviewJavaScript
@@ -17,6 +18,20 @@ const previewOrigin = "https://reactcms.example";
 describe("live preview HTML rewriting", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it("lets an older connected bootstrap show draft routes inside the editor", () => {
+    const source = `async function start() {
+      if (page?.deleted === true || !(await routeExists(pageKey, page))) {
+        showDeletedPage();
+        return;
+      }
+    }`;
+    const rewritten = rewriteLegacyRouteBootstrap(source);
+    expect(rewritten).toContain(
+      "window.self === window.top && (page?.deleted === true || !(await routeExists(pageKey, page)))"
+    );
+    expect(() => new Function(rewritten)).not.toThrow();
   });
 
   it("routes the Home canvas through the live preview function", () => {

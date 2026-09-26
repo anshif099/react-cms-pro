@@ -322,6 +322,16 @@ describe("connected visual routes", () => {
     );
   });
 
+  it("uses the root canvas for a new CMS draft without a published route", () => {
+    expect(buildConnectedPageUrl(
+      { domain: "https://triosis.in/" },
+      { route: "/best-marketing-agency-in-kerala", source: "cms", status: "draft" },
+      "edit"
+    )).toBe(
+      "https://triosis.in/?page=best-marketing-agency-in-kerala&rcms_edit=1"
+    );
+  });
+
   it("loads the deployed Home route instead of the proxy endpoint path", () => {
     expect(buildConnectedPageUrl(
       { domain: "https://triosis.vercel.app/" },

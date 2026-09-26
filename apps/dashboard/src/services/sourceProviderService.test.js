@@ -119,6 +119,7 @@ describe("connected source providers", () => {
     expect(() => new Function(source)).not.toThrow();
     expect(source).toContain('page?.deleted === true');
     expect(source).toContain('await routeExists(pageKey, page)');
+    expect(source).toContain('!isEmbeddedEditorCanvas() && (page?.deleted === true || !(await routeExists(pageKey, page)))');
     expect(source).toContain('data-reactcms-deleted-route');
     expect(source).toContain('data-reactcms-published-section-styles');
     expect(source).toContain('data-reactcms-runtime-style-v2');
