@@ -1,1 +1,0 @@
-import{O as e}from"./index-DtNI-t5p.js";function t(){return e()}export{t};
