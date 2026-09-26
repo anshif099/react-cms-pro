@@ -1,1 +1,0 @@
-import{O as e}from"./index-COKDnJsz.js";function t(){return e()}export{t};
