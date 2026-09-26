@@ -20,6 +20,8 @@ describe("connected React page generation", () => {
     expect(html).toContain('<iframe id="rcms-header" class="rcms-site-shell" src="/?rcms_preview=1"');
     expect(html).toContain('<iframe id="rcms-footer" class="rcms-site-shell" src="/?rcms_preview=1"');
     expect(html).toContain("showSitePart(document.getElementById('rcms-header')");
+    expect(html).toContain('title="Drag handle to resize text area width"');
+    expect(html).toContain('new frame.contentWindow.MutationObserver(hideHandles)');
     expect(html).toContain('"Selected work"');
     expect(html).toContain('id="rcms-content"');
   });
