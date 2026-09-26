@@ -112,7 +112,7 @@ describe("GitHub source authentication", () => {
     expect(imported.routes).toEqual([
       expect.objectContaining({ path: "/contact", title: "Contact Us" })
     ]);
-    expect(requests.every(({ url }) => url === "/api/sftp")).toBe(true);
+    expect(requests.every(({ url }) => url === "/api/live-preview?sftp=1")).toBe(true);
     expect(requests.every(({ request }) => (
       request.username === "example.com"
       && request.credential === "rotated-ftp-password"

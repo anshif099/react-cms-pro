@@ -1019,6 +1019,10 @@ function requestOrigin(request) {
 }
 
 export default async function handler(request, response) {
+  if (firstQueryValue(request.query?.sftp) === "1") {
+    const { default: sftpHandler } = await import("./sftp.js");
+    return sftpHandler(request, response);
+  }
   if (request.method === "OPTIONS") {
     response.setHeader("Access-Control-Allow-Origin", "*");
     response.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");

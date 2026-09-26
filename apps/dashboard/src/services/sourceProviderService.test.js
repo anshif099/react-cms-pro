@@ -344,7 +344,7 @@ describe("connected source providers", () => {
       revision: 4321,
       path: "public_html/index.html"
     }));
-    expect(fetchMock.mock.calls[0][0]).toBe("/api/sftp");
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/live-preview?sftp=1");
     const request = JSON.parse(fetchMock.mock.calls[0][1].body);
     expect(request).toEqual(expect.objectContaining({
       host: "ftp.stackcp.com",

@@ -108,7 +108,7 @@ async function cpanelRequest(credentials, operation, parameters = {}) {
 }
 
 async function sftpRequest(credentials, operation, parameters = {}) {
-  const response = await fetch("/api/sftp", {
+  const response = await fetch("/api/live-preview?sftp=1", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({

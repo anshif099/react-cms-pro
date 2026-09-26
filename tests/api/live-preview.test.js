@@ -42,6 +42,22 @@ describe("live preview HTML rewriting", () => {
     }
   });
 
+  it("dispatches SFTP requests through the preview function route", async () => {
+    const response = {
+      statusCode: 0,
+      body: null,
+      status(code) { this.statusCode = code; return this; },
+      json(value) { this.body = value; return this; }
+    };
+    await livePreviewHandler({
+      method: "POST",
+      query: { sftp: "1" },
+      body: { operation: "unsupported" }
+    }, response);
+    expect(response.statusCode).toBe(400);
+    expect(response.body.error).toBe("Unsupported StackCP SFTP operation.");
+  });
+
   it("reports failed proxied application assets to the dashboard", () => {
     const html = rewritePreviewHtml(
       '<html><head></head><body><div id="root"></div></body></html>',
