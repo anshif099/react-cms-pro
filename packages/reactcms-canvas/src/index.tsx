@@ -53,6 +53,7 @@ export interface NativeCanvasProps {
     position: DropPosition,
     content?: InsertContentData,
   ) => void;
+  clipboard?: RuntimeRendererProps['clipboard'];
   onCommand?: RuntimeRendererProps['onCommand'];
   emptyState?: React.ReactNode;
   className?: string;
@@ -85,6 +86,7 @@ export const NativeCanvas = forwardRef<NativeCanvasHandle, NativeCanvasProps>(fu
   onMutation,
   onMove,
   onInsert,
+  clipboard,
   onCommand,
   emptyState,
   className,
@@ -278,6 +280,7 @@ export const NativeCanvas = forwardRef<NativeCanvasHandle, NativeCanvasProps>(fu
             onMutation={onMutation}
             onMove={onMove}
             onInsert={(type, targetId, position, content) => onInsert?.(type, targetId, position, content)}
+            clipboard={clipboard}
             onCommand={onCommand}
           />
 

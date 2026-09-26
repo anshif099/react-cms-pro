@@ -2602,6 +2602,7 @@ function NativeBuilderWorkspace({
             onMutation={editor.mutate}
             onMove={editor.move}
             onInsert={addNode}
+            clipboard={connectedClipboard}
             onCommand={editor.command}
             emptyState={importedSourceEmptyState}
             className="flex-1 min-h-0"

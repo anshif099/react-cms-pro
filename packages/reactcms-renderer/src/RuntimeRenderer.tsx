@@ -679,6 +679,7 @@ function NodeFrame({
   onHover,
   onMove,
   onInsert,
+  clipboard,
   onCommand,
   onResize,
   onRelocate,
@@ -694,6 +695,7 @@ function NodeFrame({
   onHover?: RuntimeRendererProps['onHover'];
   onMove?: RuntimeRendererProps['onMove'];
   onInsert?: RuntimeRendererProps['onInsert'];
+  clipboard?: RuntimeRendererProps['clipboard'];
   onCommand?: RuntimeRendererProps['onCommand'];
   onResize?: (width: number, height: number) => void;
   onRelocate?: (anchorRegionId: string, position: 'before' | 'after', horizontalPosition?: number) => void;
@@ -702,7 +704,8 @@ function NodeFrame({
   children: React.ReactNode;
 }) {
   const [insertPosition, setInsertPosition] = useState<DropPosition | null>(null);
-  const [insertType, setInsertType] = useState<'paragraph' | 'image' | 'video'>('paragraph');
+  const [insertType, setInsertType] = useState<'paragraph' | 'button' | 'image' | 'video'>('paragraph');
+  const [insertTextType, setInsertTextType] = useState('paragraph');
   const [insertText, setInsertText] = useState('');
   const [insertUrl, setInsertUrl] = useState('');
   const [insertAlt, setInsertAlt] = useState('');
@@ -973,14 +976,18 @@ function NodeFrame({
               event.preventDefault();
               const url = insertUrl.trim();
               const value = insertText.trim();
-              if (insertType === 'paragraph' && !value) return;
+              if ((insertType === 'paragraph' || insertType === 'button') && !value) return;
               if (insertType !== 'paragraph' && !url) return;
               onInsert(
-                insertType,
+                insertType === 'paragraph' && insertTextType !== 'paragraph' ? 'heading' : insertType,
                 node.id,
                 insertPosition,
                 insertType === 'paragraph'
-                  ? { localized: { text: `<p>${value.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br />')}</p>` } }
+                  ? insertTextType === 'paragraph'
+                    ? { localized: { text: `<p>${value.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br />')}</p>` } }
+                    : { props: { level: insertTextType, alignment: 'left' }, localized: { text: value } }
+                  : insertType === 'button'
+                    ? { props: { url, linkType: /^https?:\/\//i.test(url) ? 'external' : 'internal', variant: 'primary', size: 'md' }, localized: { label: value } }
                   : insertType === 'image'
                     ? { props: { src: url, width: '100%', height: 'auto', objectFit: 'cover' }, localized: { alt: insertAlt.trim() } }
                     : { props: { url, controls: true }, localized: { caption: insertAlt.trim() } },
@@ -991,11 +998,13 @@ function NodeFrame({
               setInsertAlt('');
             }}
             style={{
-              width: 'min(520px, 100%)',
-              padding: '22px',
+              width: 'min(640px, 100%)',
+              maxHeight: 'calc(100vh - 40px)',
+              overflowY: 'auto',
+              padding: '30px',
               border: '1px solid #334155',
               borderRadius: '18px',
-              background: '#0f172a',
+              background: '#0a1933',
               color: '#f8fafc',
               boxShadow: '0 28px 80px rgba(0,0,0,.5)',
               font: '500 14px Inter,system-ui,sans-serif',
@@ -1004,22 +1013,22 @@ function NodeFrame({
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
               <div>
                 <div style={{ fontSize: '18px', fontWeight: 800 }}>Add content</div>
-                <div style={{ marginTop: '4px', color: '#94a3b8', fontSize: '12px' }}>It will be inserted {insertPosition} this section.</div>
+                <div style={{ marginTop: '8px', color: '#94a3b8', fontSize: '14px' }}>It will be inserted {insertPosition} this section.</div>
               </div>
               <button type="button" aria-label="Close" onClick={() => setInsertPosition(null)} style={{ width: '32px', height: '32px', border: 0, borderRadius: '8px', background: '#1e293b', color: '#cbd5e1', cursor: 'pointer', fontSize: '18px' }}>×</button>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', margin: '20px 0' }}>
-              {(['paragraph', 'image', 'video'] as const).map((type) => (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', margin: '26px 0' }}>
+              {(['paragraph', 'button', 'image', 'video'] as const).map((type) => (
                 <button
                   key={type}
                   type="button"
                   onClick={() => setInsertType(type)}
                   style={{
-                    height: '42px',
-                    border: `1px solid ${insertType === type ? '#60a5fa' : '#334155'}`,
+                    height: '50px',
+                    border: `1px solid ${insertType === type ? '#ef5349' : '#334155'}`,
                     borderRadius: '10px',
-                    background: insertType === type ? '#1d4ed8' : '#111827',
+                    background: insertType === type ? '#d9362e' : '#030d1d',
                     color: '#fff',
                     cursor: 'pointer',
                     fontWeight: 700,
@@ -1031,11 +1040,36 @@ function NodeFrame({
               ))}
             </div>
 
+            {clipboard && <button type="button" onClick={() => {
+              onInsert(clipboard.type, node.id, insertPosition, { props: structuredClone(clipboard.props || {}) });
+              setInsertPosition(null);
+            }} style={{ width: '100%', height: '54px', marginBottom: '22px', border: '1px solid #ef5349', borderRadius: '14px', background: '#4c1d95', color: '#fff', cursor: 'pointer', fontWeight: 800 }}>Paste copied component here</button>}
+
             {insertType === 'paragraph' ? (
-              <label style={{ display: 'grid', gap: '7px', color: '#cbd5e1', fontWeight: 700 }}>
+              <div style={{ display: 'grid', gap: '20px' }}>
+              <label style={{ display: 'grid', gap: '10px', color: '#cbd5e1', fontWeight: 700 }}>
                 Text
-                <textarea autoFocus required rows={6} value={insertText} onChange={(event) => setInsertText(event.target.value)} placeholder="Write the text to add to this page…" style={{ padding: '12px 14px', border: '1px solid #334155', borderRadius: '10px', background: '#020617', color: '#f8fafc', font: 'inherit', lineHeight: 1.6, resize: 'vertical' }} />
+                <textarea autoFocus required rows={7} value={insertText} onChange={(event) => setInsertText(event.target.value)} placeholder="Write the text to add..." style={{ minHeight: '210px', padding: '16px', border: '1px solid #ef5349', borderRadius: '14px', background: '#030d1d', color: '#f8fafc', font: 'inherit', lineHeight: 1.6, resize: 'vertical' }} />
               </label>
+              <label style={{ display: 'grid', gap: '10px', color: '#cbd5e1', fontWeight: 700 }}>
+                Text type
+                <select value={insertTextType} onChange={(event) => setInsertTextType(event.target.value)} style={{ height: '54px', padding: '0 16px', border: '1px solid #334155', borderRadius: '14px', background: '#030d1d', color: '#f8fafc', font: 'inherit' }}>
+                  <option value="paragraph">Paragraph - Normal text</option>
+                  <option value="h1">H1 - Main page heading</option>
+                  <option value="h2">H2 - Section heading</option>
+                  <option value="h3">H3 - Subsection heading</option>
+                  <option value="h4">H4 - Heading level 4</option>
+                  <option value="h5">H5 - Heading level 5</option>
+                  <option value="h6">H6 - Heading level 6</option>
+                </select>
+                <span style={{ color: '#64748b', fontSize: '12px', fontWeight: 400 }}>The selected heading level automatically uses its matching default size.</span>
+              </label>
+              </div>
+            ) : insertType === 'button' ? (
+              <div style={{ display: 'grid', gap: '14px' }}>
+                <label style={{ display: 'grid', gap: '7px', color: '#cbd5e1', fontWeight: 700 }}>Button label<input autoFocus required value={insertText} onChange={(event) => setInsertText(event.target.value)} placeholder="Contact us" style={{ height: '48px', padding: '0 14px', border: '1px solid #334155', borderRadius: '10px', background: '#030d1d', color: '#f8fafc', font: 'inherit' }} /></label>
+                <label style={{ display: 'grid', gap: '7px', color: '#cbd5e1', fontWeight: 700 }}>Destination<input required value={insertUrl} onChange={(event) => setInsertUrl(event.target.value)} placeholder="/about or https://example.com" style={{ height: '48px', padding: '0 14px', border: '1px solid #334155', borderRadius: '10px', background: '#030d1d', color: '#f8fafc', font: 'inherit' }} /></label>
+              </div>
             ) : (
               <div style={{ display: 'grid', gap: '14px' }}>
                 <label style={{ display: 'grid', gap: '7px', color: '#cbd5e1', fontWeight: 700 }}>
@@ -1051,7 +1085,7 @@ function NodeFrame({
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '9px', marginTop: '22px' }}>
               <button type="button" onClick={() => setInsertPosition(null)} style={{ height: '40px', padding: '0 16px', border: '1px solid #334155', borderRadius: '10px', background: 'transparent', color: '#cbd5e1', cursor: 'pointer', fontWeight: 700 }}>Cancel</button>
-              <button type="submit" style={{ height: '40px', padding: '0 18px', border: 0, borderRadius: '10px', background: '#2563eb', color: '#fff', cursor: 'pointer', fontWeight: 800 }}>Add to page</button>
+              <button type="submit" style={{ height: '48px', padding: '0 24px', border: 0, borderRadius: '10px', background: '#d9362e', color: '#fff', cursor: 'pointer', fontWeight: 800 }}>Add to page</button>
             </div>
           </form>
         </div>
@@ -1175,6 +1209,7 @@ function RenderNode({
       onHover={renderer.onHover}
       onMove={renderer.onMove}
       onInsert={renderer.onInsert}
+      clipboard={renderer.clipboard}
       onCommand={renderer.onCommand}
       onResize={(width, height) => {
         onMutation?.({

@@ -94,6 +94,7 @@ export interface RuntimeRendererProps {
     position: DropPosition,
     content?: InsertContentData,
   ) => void;
+  clipboard?: Pick<ComponentNode, 'type'> & Partial<ComponentNode> | null;
   onCommand?: (command: string, nodeId: string) => void;
 }
 
