@@ -42,6 +42,26 @@ describe("live preview HTML rewriting", () => {
     }
   });
 
+  it("reports failed proxied application assets to the dashboard", () => {
+    const html = rewritePreviewHtml(
+      '<html><head></head><body><div id="root"></div></body></html>',
+      "https://triosis.in/",
+      "/?rcms_preview=1",
+      previewOrigin
+    );
+    const dom = new JSDOM(html, { runScripts: "dangerously", url: `${previewOrigin}/` });
+    const postMessage = vi.spyOn(dom.window.parent, "postMessage");
+    const script = dom.window.document.createElement("script");
+    script.src = `${previewOrigin}/api/live-preview?asset=${encodeURIComponent("https://triosis.in/assets/missing.js")}`;
+    dom.window.document.body.appendChild(script);
+    script.dispatchEvent(new dom.window.Event("error"));
+    expect(postMessage).toHaveBeenCalledWith(expect.objectContaining({
+      type: "rcms/v1/preview-asset-error",
+      payload: { asset: "https://triosis.in/assets/missing.js" }
+    }), "*");
+    dom.window.close();
+  });
+
   it("boots the requested route before the connected React bundle", () => {
     const result = rewritePreviewHtml(
       '<html><head></head><body><script type="module" src="/assets/app.js"></script></body></html>',

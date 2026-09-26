@@ -245,6 +245,21 @@ function runtimeBootstrap(baseUrl, route, proxyOrigin) {
   var runtimeAdditionsTree = null;
   var runtimeButtonPreviewQueued = false;
   var bridgedElementStyles = typeof WeakMap === "function" ? new WeakMap() : null;
+  window.addEventListener("error", function (event) {
+    var resource = event.target;
+    var resourceUrl = resource && (resource.src || resource.href);
+    if (!resourceUrl || resourceUrl.indexOf(assetProxyPath) !== 0) return;
+    var asset = "";
+    try { asset = new URL(resourceUrl).searchParams.get("asset") || ""; } catch (_) {}
+    var assetPath = asset.split(/[?#]/)[0].toLowerCase();
+    if (!assetPath.endsWith(".css") && !assetPath.endsWith(".js") && !assetPath.endsWith(".mjs")) return;
+    window.parent.postMessage({
+      rcms: true,
+      version: "v1",
+      type: "rcms/v1/preview-asset-error",
+      payload: { asset: asset }
+    }, "*");
+  }, true);
   // The upstream <base> is injected before this bootstrap so its assets keep
   // resolving against the connected site. Resolve the virtual page route from
   // the iframe URL explicitly; otherwise "/" follows that cross-origin base,

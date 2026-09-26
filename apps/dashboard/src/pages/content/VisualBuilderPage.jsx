@@ -887,6 +887,18 @@ function ConnectedSourceWorkspace({
         || message.version !== "v1"
       ) return;
 
+      if (message.type === "rcms/v1/preview-asset-error") {
+        setFrameLoading(false);
+        setRuntimeConnected(false);
+        const assetPath = (() => {
+          try { return new URL(message.payload?.asset).pathname; } catch { return "a site asset"; }
+        })();
+        setLiveRouteError(
+          `The connected website is missing ${assetPath}. Publish its JavaScript and CSS build files together with index.html, then reload the preview.`
+        );
+        return;
+      }
+
       if (message.type === "rcms/v1/runtime-ready") {
         setFrameLoading(false);
         setLiveRouteError("");
