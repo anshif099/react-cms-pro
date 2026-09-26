@@ -32,6 +32,16 @@ describe("live preview HTML rewriting", () => {
     }
   });
 
+  it("keeps both Vercel project roots self-contained", () => {
+    for (const name of ["cpanel", "sftp", "live-preview", "media"]) {
+      const rootFunction = readFileSync(new URL(`../../api/${name}.js`, import.meta.url), "utf8");
+      const dashboardFunction = readFileSync(
+        new URL(`../../apps/dashboard/api/${name}.js`, import.meta.url), "utf8"
+      );
+      expect(rootFunction).toBe(dashboardFunction);
+    }
+  });
+
   it("boots the requested route before the connected React bundle", () => {
     const result = rewritePreviewHtml(
       '<html><head></head><body><script type="module" src="/assets/app.js"></script></body></html>',
