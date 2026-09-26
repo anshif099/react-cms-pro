@@ -41,6 +41,22 @@ describe("connected React page generation", () => {
     expect(dom.window.document.querySelector("[data-rcms-node]")).toBeNull();
     dom.window.close();
   });
+  it("publishes adjacent buttons in the same row with their saved styles", () => {
+    const html = generateStaticPageSource({
+      title: "Buttons", slug: "buttons",
+      tree: { children: [
+        { id: "one", type: "button", props: { label: "First", color: "#ff0000", offsetY: 40 } },
+        { id: "two", type: "button", props: { label: "Second", width: 200, offsetY: -20 } }
+      ] }
+    });
+    const dom = new JSDOM(html, { runScripts: "dangerously", url: "https://example.com/buttons/" });
+    const row = dom.window.document.querySelector("#rcms-content .rcms-button-row");
+    expect(row?.children.length).toBe(2);
+    expect(row?.children[0].style.background).toBe("rgb(255, 0, 0)");
+    expect(row?.children[1].style.width).toBe("200px");
+    expect(row?.children[0].style.marginTop).toBe("");
+    dom.window.close();
+  });
   it("generates a standalone React page from native blocks", () => {
     const source = generateReactPageSource({
       title: "Case Studies",

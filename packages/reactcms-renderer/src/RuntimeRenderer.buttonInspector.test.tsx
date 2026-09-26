@@ -11,6 +11,26 @@ afterEach(() => {
 });
 
 describe('button inspector values on the connected canvas', () => {
+  it('keeps adjacent page buttons in one centered row', () => {
+    vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createRoot(host);
+    const tree = {
+      id: 'page', type: 'page', version: 2,
+      children: [
+        { id: 'one', type: 'button', props: { label: 'First', offsetY: 40 }, children: [] },
+        { id: 'two', type: 'button', props: { label: 'Second', offsetY: -20 }, children: [] },
+      ],
+    } as PageComponentTree;
+    act(() => root.render(<RuntimeRenderer tree={tree} mode="edit" />));
+    const row = host.querySelector<HTMLElement>('[data-rcms-button-group="true"]');
+    expect(row?.style.display).toBe('flex');
+    expect(row?.children.length).toBe(2);
+    expect(row?.textContent).toContain('First');
+    expect(row?.textContent).toContain('Second');
+    act(() => root.unmount());
+  });
   it('renders edited button properties and updates them when the tree changes', () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     const host = document.createElement('div');

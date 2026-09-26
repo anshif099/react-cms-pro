@@ -1121,6 +1121,23 @@ export function RuntimeRenderer({
   const buttonRow = transparentBackground
     && tree.children.length > 1
     && tree.children.every((node) => node.type === 'button');
+  const renderedChildren: React.ReactNode[] = [];
+  for (let index = 0; index < tree.children.length;) {
+    if (tree.children[index].type !== 'button') {
+      const node = tree.children[index];
+      renderedChildren.push(<RenderNode key={node.id} node={node} renderer={renderer} />);
+      index += 1;
+      continue;
+    }
+    const start = index;
+    while (index < tree.children.length && tree.children[index].type === 'button') index += 1;
+    const buttons = tree.children.slice(start, index);
+    renderedChildren.push(buttons.length > 1 && !buttonRow
+      ? <div key={`button-row-${buttons[0].id}`} data-rcms-button-group="true" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '24px', maxWidth: '100%' }}>
+          {buttons.map((node) => <RenderNode key={node.id} node={node} renderer={renderer} />)}
+        </div>
+      : buttons.map((node) => <RenderNode key={node.id} node={node} renderer={renderer} />));
+  }
   const themeStyle = {
     '--rcms-color-primary': theme?.colors?.primary || '#2563eb',
     '--rcms-color-secondary': theme?.colors?.secondary || '#1e293b',
@@ -1158,10 +1175,14 @@ export function RuntimeRenderer({
           left: auto !important;
           translate: none !important;
         }
+        [data-rcms-button-group="true"] > [data-rcms-type="button"] {
+          left: auto !important;
+          translate: none !important;
+          margin: 0 !important;
+          flex: 0 1 auto;
+        }
       `}</style>
-      {(tree.children || []).map((node) => (
-        <RenderNode key={node.id} node={node} renderer={renderer} />
-      ))}
+      {renderedChildren}
     </div>
   );
 }
