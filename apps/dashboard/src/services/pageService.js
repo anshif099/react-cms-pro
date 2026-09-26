@@ -190,6 +190,7 @@ export const pageService = {
       sourceFile: data.sourceFile || null,
       sourceRouterFile: data.sourceRouterFile || null,
       sourceRevision: data.sourceRevision || null,
+      sourceContentBridgeVersion: data.sourceContentBridgeVersion || null,
       sourceWriteback: true,
       updatedAt: serverTimestamp()
     });

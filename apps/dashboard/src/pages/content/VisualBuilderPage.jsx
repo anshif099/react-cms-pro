@@ -3265,15 +3265,28 @@ export function VisualBuilderPage() {
           ], `Publish ${settingsRef.current.title || page.title} from ReactCMS`);
         } else {
           generatedSourceFile = staticPageSourcePath(settingsRef.current.slug || page.slug);
-          providerResult = await sourceProviderService.writeFiles(sourceWebsite, [{
-            path: generatedSourceFile,
-            content: generateStaticPageSource({
-              title: settingsRef.current.title || page.title,
-              slug: settingsRef.current.slug || page.slug,
-              tree: treeRef.current,
-              locale: activeLocale
-            })
-          }], `Publish ${settingsRef.current.title || page.title} from ReactCMS`);
+          const hostingConnected = directHosting && credentials.provider === sourceWebsite.connection.provider
+            && (sourceWebsite.connection.provider === "sftp"
+              ? credentials.host && credentials.username && credentials.credential
+              : credentials.endpoint && credentials.username && credentials.credential);
+          if (!hostingConnected) {
+            if (page.sourceFile !== generatedSourceFile || Number(page.sourceContentBridgeVersion) < 1) {
+              throw new Error("This page needs one publish from a browser connected to StackCP or cPanel before content editors can publish without hosting credentials.");
+            }
+            generatedSourceFile = null;
+          } else {
+            providerResult = await sourceProviderService.writeFiles(sourceWebsite, [{
+              path: generatedSourceFile,
+              content: generateStaticPageSource({
+                title: settingsRef.current.title || page.title,
+                slug: settingsRef.current.slug || page.slug,
+                tree: treeRef.current,
+                locale: activeLocale,
+                websiteId,
+                pageKey: currentPageKey
+              })
+            }], `Publish ${settingsRef.current.title || page.title} from ReactCMS`);
+          }
         }
       }
 
@@ -3288,7 +3301,8 @@ export function VisualBuilderPage() {
           sourceProvider: providerResult.provider,
           sourceFile: generatedSourceFile,
           sourceRouterFile: generatedRouterFile,
-          sourceRevision: providerResult.revision
+          sourceRevision: providerResult.revision,
+          sourceContentBridgeVersion: generatedSourceFile?.endsWith("/index.html") ? 1 : null
         });
       }
       setSelectedPage((current) => current ? {
@@ -3297,6 +3311,7 @@ export function VisualBuilderPage() {
         sourceFile: generatedSourceFile || current.sourceFile,
         sourceRouterFile: generatedRouterFile || current.sourceRouterFile,
         sourceRevision: providerResult?.revision || current.sourceRevision,
+        sourceContentBridgeVersion: generatedSourceFile?.endsWith("/index.html") ? 1 : current.sourceContentBridgeVersion,
         status: "published",
         publishedAt: Date.now()
       } : current);
@@ -3307,6 +3322,8 @@ export function VisualBuilderPage() {
             ? "Page source and route saved directly to cPanel."
             : providerResult?.provider === "sftp"
               ? "Page source and route saved directly to StackCP through SFTP."
+              : sourceWebsite?.connection?.provider === "sftp" || sourceWebsite?.connection?.provider === "cpanel"
+                ? "Page content published. The connected site will show it on refresh."
               : "Native page published. Connected runtimes will refresh automatically."
       );
     } catch (error) {

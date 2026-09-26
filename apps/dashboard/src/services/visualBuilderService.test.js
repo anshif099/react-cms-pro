@@ -176,6 +176,25 @@ describe("visualBuilderService draft persistence & hydration", () => {
     );
   });
 
+  it("removes optional undefined node properties from page updates", async () => {
+    await visualBuilderService.saveDraft({
+      websiteId: "website-1",
+      pageId: "page-1",
+      pageKey: "new-page",
+      locale: "en",
+      page: { slug: "new-page" },
+      tree: {
+        id: "page",
+        type: "page",
+        children: [{ id: "heading", type: "heading", props: { text: "Hello", optional: undefined }, children: [] }]
+      },
+      blocks: [{ type: "heading", text: "Hello", optional: undefined }]
+    });
+    const pageUpdate = firebaseMocks.update.mock.calls.find(([reference]) => reference.path === "pages/website-1/page-1");
+    expect(pageUpdate[1]["locales/en/componentTree"].children[0].props).toEqual({ text: "Hello" });
+    expect(pageUpdate[1]["locales/en/blocks"][0]).toEqual({ type: "heading", text: "Hello" });
+  });
+
   it("saves page SEO without overwriting connected page regions or source", async () => {
     await visualBuilderService.savePageSEO({
       websiteId: "website-1",

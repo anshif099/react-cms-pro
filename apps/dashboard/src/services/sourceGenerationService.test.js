@@ -14,6 +14,8 @@ describe("connected React page generation", () => {
     const html = generateStaticPageSource({
       title: "Case Studies",
       slug: "case-studies",
+      websiteId: "website-1",
+      pageKey: "case-studies",
       tree: { id: "page", type: "page", children: [{ id: "heading-1", type: "heading", props: { text: "Selected work" }, children: [] }] }
     });
     expect(staticPageSourcePath("case-studies")).toBe("case-studies/index.html");
@@ -24,6 +26,8 @@ describe("connected React page generation", () => {
     expect(html).toContain('new frame.contentWindow.MutationObserver(hideHandles)');
     expect(html).toContain('"Selected work"');
     expect(html).toContain('id="rcms-content"');
+    expect(html).toContain('"websiteId":"website-1"');
+    expect(html).toContain('/sync/published/pages/');
   });
   it("renders rich text as content without editor markers on the hosted page", () => {
     const html = generateStaticPageSource({

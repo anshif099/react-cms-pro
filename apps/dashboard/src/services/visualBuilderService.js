@@ -447,14 +447,20 @@ export const visualBuilderService = {
     const slug = pageSettings?.slug ?? page?.slug ?? "";
     const route = pageSettings?.route || (slug === "home" ? "/" : `/${slug}`);
     const seo = pageSettings?.seo || {};
+    // Firebase rejects undefined values in update() payloads, including nested
+    // optional component props. JSON serialization drops those properties while
+    // retaining the original keys needed by the in-memory editor tree.
+    const safeTree = tree == null ? tree : JSON.parse(JSON.stringify(tree));
+    const safeBlocks = JSON.parse(JSON.stringify(blocks));
+    const safeSeo = JSON.parse(JSON.stringify(seo));
     const draftPayload = {
       id: pageKey,
       title,
       slug,
-      [NATIVE_PAGE_TREE_FIELD]: tree,
+      [NATIVE_PAGE_TREE_FIELD]: safeTree,
       regions: {
         ...regions,
-        [BUILDER_BLOCKS_REGION]: blocks
+        [BUILDER_BLOCKS_REGION]: safeBlocks
       },
       updatedAt: Date.now()
     };
@@ -481,9 +487,9 @@ export const visualBuilderService = {
       layout: pageSettings?.layout || page?.layout || "default",
       [`locales/${locale}/title`]: title,
       [`locales/${locale}/slug`]: slug,
-      [`locales/${locale}/seo`]: seo,
-      [`locales/${locale}/blocks`]: blocks,
-      [`locales/${locale}/componentTree`]: tree
+      [`locales/${locale}/seo`]: safeSeo,
+      [`locales/${locale}/blocks`]: safeBlocks,
+      [`locales/${locale}/componentTree`]: safeTree
     };
 
     if (locale === "en") {
