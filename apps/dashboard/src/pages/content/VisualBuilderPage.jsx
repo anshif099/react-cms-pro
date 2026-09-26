@@ -2832,8 +2832,14 @@ export function VisualBuilderPage() {
   );
 
   useEffect(() => {
-    if (!websiteId || !pageId) return;
-    fetchPageById(websiteId, pageId);
+    if (!websiteId || !pageId) return undefined;
+    let cancelled = false;
+    void fetchPageById(websiteId, pageId).then((page) => {
+      if (!cancelled && !page) {
+        setLoadError("This page could not be loaded. Return to Pages and try opening it again.");
+      }
+    });
+    return () => { cancelled = true; };
   }, [fetchPageById, pageId, websiteId]);
 
   useEffect(() => {
@@ -2970,21 +2976,27 @@ export function VisualBuilderPage() {
     if (loadedIdentityRef.current === identity) return;
     loadedIdentityRef.current = identity;
     let cancelled = false;
+    let completed = false;
+    let timeoutId = 0;
 
     const loadNativeDocument = async () => {
       setNativeLoading(true);
       setLoadError("");
       try {
-        const { draft } = await visualBuilderService.loadNativePage(
-          websiteId,
-          pageKey,
-          {
+        const { draft } = await Promise.race([
+          visualBuilderService.loadNativePage(websiteId, pageKey, {
             pageId,
             routeId: selectedPage.routeId,
             slug: selectedPage.slug,
             route: selectedPage.route
-          }
-        );
+          }),
+          new Promise((_, reject) => {
+            timeoutId = window.setTimeout(
+              () => reject(new Error("The page draft took too long to load. Check your connection and reopen the page.")),
+              25000
+            );
+          })
+        ]);
         if (cancelled) return;
         const localeData = selectedPage.locales?.[activeLocale] || {};
         const tree = buildInitialTree(selectedPage, draft, activeLocale, pageKey);
@@ -3006,8 +3018,10 @@ export function VisualBuilderPage() {
         setSaveStatus("saved");
       } catch (error) {
         console.error(error);
-        setLoadError("ReactCMS could not load the native page document.");
+        if (!cancelled) setLoadError(error.message || "ReactCMS could not load the native page document.");
       } finally {
+        window.clearTimeout(timeoutId);
+        completed = true;
         if (!cancelled) setNativeLoading(false);
       }
     };
@@ -3015,6 +3029,10 @@ export function VisualBuilderPage() {
     loadNativeDocument();
     return () => {
       cancelled = true;
+      window.clearTimeout(timeoutId);
+      if (!completed && loadedIdentityRef.current === identity) {
+        loadedIdentityRef.current = "";
+      }
     };
   }, [activeLocale, pageId, pageKey, selectedPage, websiteId]);
 
@@ -3998,7 +4016,7 @@ export function VisualBuilderPage() {
     );
   }
 
-  if ((pageLoading || nativeLoading || !initialTree || selectedPage?.id !== pageId) && !loadError) {
+  if ((nativeLoading || !initialTree || selectedPage?.id !== pageId) && !loadError) {
     return (
       <div className="h-screen bg-[#070b14] text-slate-300 flex items-center justify-center">
         <div className="text-center">
