@@ -1,0 +1,1 @@
+import{O as e}from"./index-BKoa-Z44.js";function t(){return e()}export{t};

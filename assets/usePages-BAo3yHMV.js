@@ -1,1 +1,0 @@
-import{O as e}from"./index-BbxlflK6.js";function t(){return e()}export{t};
