@@ -176,31 +176,26 @@ function lastTreeNode(nodes = []) {
   return null;
 }
 
-function ConnectedInsertContentModal({ locale, pages = [], clipboard, initialNode, onCancel, onSubmit }) {
-  const initialProps = initialNode?.props || {};
-  const initialLocale = initialProps.locales?.[locale] || {};
-  const initialType = initialNode?.type || "paragraph";
-  const [type, setType] = useState(initialType === "heading" ? "paragraph" : initialType);
-  const [text, setText] = useState(() => initialType === "paragraph"
-    ? String(initialLocale.text || "").replace(/^<p>/, "").replace(/<\/p>$/, "").replaceAll("<br />", "\n")
-    : initialType === "heading" ? initialLocale.text || "" : initialLocale.label || "");
-  const [textType, setTextType] = useState(initialType === "heading" ? initialProps.level || "h2" : "paragraph");
-  const [url, setUrl] = useState(initialProps.url || initialProps.src || "");
-  const [description, setDescription] = useState(initialLocale.alt || initialLocale.caption || "");
-  const [linkType, setLinkType] = useState(initialProps.linkType || "internal");
-  const [variant, setVariant] = useState(initialProps.variant || "primary");
-  const [size, setSize] = useState(initialProps.size || "md");
-  const [color, setColor] = useState(initialProps.color || "#2563eb");
-  const [radius, setRadius] = useState(initialProps.radius ?? 10);
-  const [shadow, setShadow] = useState(initialProps.shadow || "medium");
-  const [icon, setIcon] = useState(initialProps.icon || "none");
-  const [iconImage, setIconImage] = useState(initialProps.iconImage || "");
-  const [iconSize, setIconSize] = useState(initialProps.iconSize ?? 18);
-  const [iconPosition, setIconPosition] = useState(initialProps.iconPosition || "left");
-  const [alignment, setAlignment] = useState(initialProps.alignment || "center");
-  const [buttonWidth, setButtonWidth] = useState(initialProps.width || "");
-  const [buttonHeight, setButtonHeight] = useState(initialProps.height || "");
-  const [newTab, setNewTab] = useState(Boolean(initialProps.newTab));
+function ConnectedInsertContentModal({ locale, pages = [], clipboard, insertBelow = false, onCancel, onSubmit }) {
+  const [type, setType] = useState("paragraph");
+  const [text, setText] = useState("");
+  const [textType, setTextType] = useState("paragraph");
+  const [url, setUrl] = useState("");
+  const [description, setDescription] = useState("");
+  const [linkType, setLinkType] = useState("internal");
+  const [variant, setVariant] = useState("primary");
+  const [size, setSize] = useState("md");
+  const [color, setColor] = useState("#2563eb");
+  const [radius, setRadius] = useState(10);
+  const [shadow, setShadow] = useState("medium");
+  const [icon, setIcon] = useState("none");
+  const [iconImage, setIconImage] = useState("");
+  const [iconSize, setIconSize] = useState(18);
+  const [iconPosition, setIconPosition] = useState("left");
+  const [alignment, setAlignment] = useState("center");
+  const [buttonWidth, setButtonWidth] = useState("");
+  const [buttonHeight, setButtonHeight] = useState("");
+  const [newTab, setNewTab] = useState(false);
 
   const fieldClass = "h-11 rounded-xl border border-slate-700 bg-slate-950 px-3 text-sm font-normal text-white outline-none focus:border-blue-500";
   const resolveButtonUrl = () => {
@@ -244,7 +239,7 @@ function ConnectedInsertContentModal({ locale, pages = [], clipboard, initialNod
         }}
       >
         <div className="flex items-start justify-between gap-4">
-          <div><h2 className="text-lg font-extrabold text-white">{initialNode ? "Edit content" : "Add content"}</h2><p className="mt-1 text-xs text-slate-400">{initialNode ? "Update this component on the page." : "This content will replace the new empty section."}</p></div>
+          <div><h2 className="text-lg font-extrabold text-white">Add content</h2><p className="mt-1 text-xs text-slate-400">{insertBelow ? "This content will be added below the selected element." : "This content will replace the new empty section."}</p></div>
           <button type="button" onClick={onCancel} className="h-8 w-8 rounded-lg bg-slate-800 text-lg text-slate-300 cursor-pointer">×</button>
         </div>
         <div className="my-5 grid grid-cols-4 gap-2">
@@ -296,7 +291,7 @@ function ConnectedInsertContentModal({ locale, pages = [], clipboard, initialNod
             <label className="grid gap-2 text-xs font-bold text-slate-300">{type === "image" ? "Alt text" : "Caption"} (optional)<input value={description} onChange={(event) => setDescription(event.target.value)} className="h-11 rounded-xl border border-slate-700 bg-slate-950 px-3 text-sm font-normal text-white outline-none focus:border-blue-500" /></label>
           </div>
         )}
-        <div className="mt-6 flex justify-end gap-2"><button type="button" onClick={onCancel} className="h-10 rounded-lg border border-slate-700 px-4 text-xs font-bold text-slate-300 cursor-pointer">Cancel</button><button type="submit" className="h-10 rounded-lg bg-blue-600 px-5 text-xs font-extrabold text-white cursor-pointer">{initialNode ? "Save changes" : "Add to page"}</button></div>
+        <div className="mt-6 flex justify-end gap-2"><button type="button" onClick={onCancel} className="h-10 rounded-lg border border-slate-700 px-4 text-xs font-bold text-slate-300 cursor-pointer">Cancel</button><button type="submit" className="h-10 rounded-lg bg-blue-600 px-5 text-xs font-extrabold text-white cursor-pointer">Add to page</button></div>
       </form>
     </div>
   );
@@ -369,7 +364,6 @@ function ConnectedSourceWorkspace({
   const [aiOpen, setAIOpen] = useState(true);
   const [canvasSEOScan, setCanvasSEOScan] = useState(null);
   const [pendingRuntimeInsert, setPendingRuntimeInsert] = useState(null);
-  const [pendingRuntimeEdit, setPendingRuntimeEdit] = useState(null);
   const runtimeAdditionsRef = useRef(createRuntimeAdditionsTree(pageKey || pageId, locale));
   const clipboardKey = `reactcms_component_clipboard:${websiteId}`;
   const [connectedClipboard, setConnectedClipboard] = useState(() => {
@@ -1099,10 +1093,6 @@ function ConnectedSourceWorkspace({
       const runtimeNode = findNode(value, selectedRegion.componentId);
       if (runtimeNode) {
         return (
-          <div className={embedded ? "w-full" : "w-[320px] flex-shrink-0 border-l border-slate-800 bg-[#0b1120]"}>
-          {["paragraph", "heading", "button", "image", "video"].includes(runtimeNode.type) && (
-            <button type="button" onClick={() => setPendingRuntimeEdit({ node: runtimeNode, tree: value, region: selectedRegion })} className="m-3 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white">Edit content</button>
-          )}
           <Suspense fallback={<aside className="w-full p-4 text-xs text-slate-500">Loading component editor…</aside>}>
             <NativeInspector
               embedded={embedded}
@@ -1119,7 +1109,6 @@ function ConnectedSourceWorkspace({
               onClose={clearConnectedSelection}
             />
           </Suspense>
-          </div>
         );
       }
     }
@@ -1204,17 +1193,14 @@ function ConnectedSourceWorkspace({
       const selectedRuntimeNode = selectedTree
         ? (selectedRegion.componentId ? findNode(selectedTree, selectedRegion.componentId) : lastTreeNode(selectedTree.children))
         : null;
-      const besideButton = selectedRuntimeNode?.type === "button";
-      const nodeId = `${besideButton ? "button" : "section"}_${Date.now().toString(36)}`;
-      const placeholder = {
-        id: nodeId, type: besideButton ? "button" : "section", label: besideButton ? "Button" : "Section",
-        props: { locales: { [locale]: besideButton ? { label: "New button" } : { title: "New section" } } }, children: [],
+      setPendingRuntimeInsert({
+        tree,
+        insertBelow: true,
         metadata: selectedRuntimeNode?.metadata
           ? structuredClone(selectedRuntimeNode.metadata)
-          : { runtimePlacement: { anchorRegionId: selectedRegion.regionId, position: "after" } }
-      };
-      const nextTree = { ...tree, children: [...tree.children, placeholder] };
-      setPendingRuntimeInsert({ tree: nextTree, nodeId, payload: { regionId: RUNTIME_ADDITIONS_REGION, pageId: canvasRuntimePageId, value: nextTree } });
+          : { runtimePlacement: { anchorRegionId: selectedRegion.regionId, position: "after" } },
+        payload: { regionId: RUNTIME_ADDITIONS_REGION, pageId: canvasRuntimePageId, value: tree }
+      });
     };
 
     return (
@@ -2257,7 +2243,12 @@ function ConnectedSourceWorkspace({
           locale={locale}
           pages={pages}
           clipboard={connectedClipboard}
+          insertBelow={pendingRuntimeInsert.insertBelow}
           onCancel={() => {
+            if (pendingRuntimeInsert.insertBelow) {
+              setPendingRuntimeInsert(null);
+              return;
+            }
             const nextTree = {
               ...pendingRuntimeInsert.tree,
               children: replaceTreeNode(pendingRuntimeInsert.tree.children, pendingRuntimeInsert.nodeId, null)
@@ -2266,6 +2257,18 @@ function ConnectedSourceWorkspace({
             setPendingRuntimeInsert(null);
           }}
           onSubmit={(node) => {
+            if (pendingRuntimeInsert.insertBelow) {
+              const added = {
+                ...node,
+                id: `${node.type}_${Date.now().toString(36)}`,
+                label: node.type === "paragraph" ? "Paragraph" : node.type === "heading" ? "Heading" : node.type === "image" ? "Image" : node.type === "button" ? "Button" : "Video",
+                children: node.children || [],
+                metadata: pendingRuntimeInsert.metadata
+              };
+              const nextTree = { ...pendingRuntimeInsert.tree, children: [...pendingRuntimeInsert.tree.children, added] };
+              if (applyVisualValue(pendingRuntimeInsert.payload, nextTree)) setPendingRuntimeInsert(null);
+              return;
+            }
             const replacement = {
               ...node,
               id: pendingRuntimeInsert.nodeId,
@@ -2279,32 +2282,6 @@ function ConnectedSourceWorkspace({
             };
             applyVisualValue(pendingRuntimeInsert.payload, nextTree, true, false);
             setPendingRuntimeInsert(null);
-          }}
-        />
-      )}
-      {pendingRuntimeEdit && (
-        <ConnectedInsertContentModal
-          locale={locale}
-          pages={pages}
-          clipboard={connectedClipboard}
-          initialNode={pendingRuntimeEdit.node}
-          onCancel={() => setPendingRuntimeEdit(null)}
-          onSubmit={(node) => {
-            const original = pendingRuntimeEdit.node;
-            const updatedNode = {
-              ...original,
-              ...node,
-              id: original.id,
-              label: node.type === "paragraph" ? "Paragraph" : node.type === "heading" ? "Heading" : node.type === "image" ? "Image" : node.type === "button" ? "Button" : "Video",
-              props: { ...original.props, ...node.props },
-              children: original.children || [],
-              metadata: original.metadata || {}
-            };
-            const nextTree = {
-              ...pendingRuntimeEdit.tree,
-              children: updateTreeNode(pendingRuntimeEdit.tree.children, original.id, () => updatedNode)
-            };
-            if (applyVisualValue(pendingRuntimeEdit.region, nextTree)) setPendingRuntimeEdit(null);
           }}
         />
       )}
