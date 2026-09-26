@@ -594,6 +594,7 @@ export function shouldUseConnectedWebsiteCanvas(website, page) {
     && !page.isImported
     && page.source === "cms"
     && page.status !== "draft"
+    && !page.sourceFile
     && website?.sourceConnected
     && website?.domain
   );
@@ -604,6 +605,16 @@ export function isConnectedPageDraft(website, page) {
     page
     && !page.isImported
     && page.status === "draft"
+    && website?.sourceConnected
+    && website?.domain
+  );
+}
+
+export function isConnectedNativePage(website, page) {
+  return Boolean(
+    page
+    && !page.isImported
+    && (page.status === "draft" || page.sourceFile)
     && website?.sourceConnected
     && website?.domain
   );

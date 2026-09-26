@@ -60,6 +60,7 @@ import {
   createRuntimeMessage,
   discoverLocalSourceImports,
   isConnectedPageDraft,
+  isConnectedNativePage,
   mergeRegionSelection,
   patchEditableRegionSource,
   selectGitContentRegions,
@@ -2453,7 +2454,7 @@ function NativeBuilderWorkspace({
 }) {
   const editor = useNativeEditor();
   const isPreview = mode === "preview";
-  const connectedDraft = isConnectedPageDraft(website, page);
+  const connectedDraft = isConnectedNativePage(website, page);
   const [aiOpen, setAIOpen] = useState(!connectedDraft);
   const [layersOpen, setLayersOpen] = useState(!connectedDraft);
   const [layersTab, setLayersTab] = useState("layers");
@@ -3210,6 +3211,18 @@ export function VisualBuilderPage() {
       if (!saved) return;
       const page = pageRef.current;
       const currentPageKey = visualBuilderService.resolvePageKey(page);
+      const desiredRoute = String(settingsRef.current.route || page.route || `/${settingsRef.current.slug || page.slug || ""}`)
+        .split("?")[0].replace(/\/+$/, "") || "/";
+      const existingPages = await pageService.getAll(websiteId);
+      const routeConflict = existingPages.find((candidate) => {
+        if (candidate.id === pageId || candidate.status === "deleted") return false;
+        const candidateRoute = String(candidate.route || `/${candidate.slug || ""}`)
+          .split("?")[0].replace(/\/+$/, "") || "/";
+        return candidateRoute.toLowerCase() === desiredRoute.toLowerCase();
+      });
+      if (routeConflict) {
+        throw new Error(`The route ${desiredRoute} is already used by "${routeConflict.title}". Choose a unique page slug before publishing.`);
+      }
 
       let providerResult = null;
       let generatedSourceFile = null;

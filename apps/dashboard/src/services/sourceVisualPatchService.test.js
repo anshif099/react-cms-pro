@@ -12,6 +12,7 @@ import {
   selectGitContentRegions,
   shouldUseConnectedWebsiteCanvas,
   isConnectedPageDraft,
+  isConnectedNativePage,
   updateRegionFieldValue
 } from "./sourceVisualPatchService";
 
@@ -316,6 +317,10 @@ describe("connected visual routes", () => {
       { source: "cms", isImported: false }
     )).toBe(true);
     expect(shouldUseConnectedWebsiteCanvas(
+      { sourceConnected: true, domain: "https://triosis.in/" },
+      { source: "cms", status: "published", sourceFile: "best-agency/index.html" }
+    )).toBe(false);
+    expect(shouldUseConnectedWebsiteCanvas(
       { sourceConnected: true, domain: "https://triosis.vercel.app/" },
       { source: "imported", isImported: true }
     )).toBe(false);
@@ -326,6 +331,7 @@ describe("connected visual routes", () => {
     expect(isConnectedPageDraft(website, { source: "generated", status: "draft" })).toBe(true);
     expect(isConnectedPageDraft(website, { source: "cms", status: "published" })).toBe(false);
     expect(isConnectedPageDraft(website, { isImported: true, status: "draft" })).toBe(false);
+    expect(isConnectedNativePage(website, { source: "cms", status: "published", sourceFile: "best-agency/index.html" })).toBe(true);
   });
 
   it("loads the real deployed page route in preview mode", () => {
