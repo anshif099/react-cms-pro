@@ -73,6 +73,7 @@ import {
   patchReactStateRouter,
   reactPageComponentName,
   reactPageSourcePath,
+  STATIC_PAGE_RUNTIME_VERSION,
   staticPageSourcePath
 } from "../../services/sourceGenerationService";
 import visualBuilderService, {
@@ -3270,7 +3271,7 @@ export function VisualBuilderPage() {
               ? credentials.host && credentials.username && credentials.credential
               : credentials.endpoint && credentials.username && credentials.credential);
           if (!hostingConnected) {
-            if (page.sourceFile !== generatedSourceFile || Number(page.sourceContentBridgeVersion) < 1) {
+            if (page.sourceFile !== generatedSourceFile || Number(page.sourceContentBridgeVersion) < STATIC_PAGE_RUNTIME_VERSION) {
               throw new Error("This page needs one publish from a browser connected to StackCP or cPanel before content editors can publish without hosting credentials.");
             }
             generatedSourceFile = null;
@@ -3302,7 +3303,7 @@ export function VisualBuilderPage() {
           sourceFile: generatedSourceFile,
           sourceRouterFile: generatedRouterFile,
           sourceRevision: providerResult.revision,
-          sourceContentBridgeVersion: generatedSourceFile?.endsWith("/index.html") ? 1 : null
+          sourceContentBridgeVersion: generatedSourceFile?.endsWith("/index.html") ? STATIC_PAGE_RUNTIME_VERSION : null
         });
       }
       setSelectedPage((current) => current ? {
@@ -3311,7 +3312,7 @@ export function VisualBuilderPage() {
         sourceFile: generatedSourceFile || current.sourceFile,
         sourceRouterFile: generatedRouterFile || current.sourceRouterFile,
         sourceRevision: providerResult?.revision || current.sourceRevision,
-        sourceContentBridgeVersion: generatedSourceFile?.endsWith("/index.html") ? 1 : current.sourceContentBridgeVersion,
+        sourceContentBridgeVersion: generatedSourceFile?.endsWith("/index.html") ? STATIC_PAGE_RUNTIME_VERSION : current.sourceContentBridgeVersion,
         status: "published",
         publishedAt: Date.now()
       } : current);

@@ -6,7 +6,8 @@ import {
   patchReactStateRouter,
   reactPageComponentName,
   reactPageSourcePath,
-  staticPageSourcePath
+  staticPageSourcePath,
+  STATIC_PAGE_RUNTIME_VERSION
 } from "./sourceGenerationService";
 
 describe("connected React page generation", () => {
@@ -19,6 +20,7 @@ describe("connected React page generation", () => {
       tree: { id: "page", type: "page", children: [{ id: "heading-1", type: "heading", props: { text: "Selected work" }, children: [] }] }
     });
     expect(staticPageSourcePath("case-studies")).toBe("case-studies/index.html");
+    expect(STATIC_PAGE_RUNTIME_VERSION).toBe(2);
     expect(html).toContain('<iframe id="rcms-header" class="rcms-site-shell" src="/?rcms_preview=1"');
     expect(html).toContain('<iframe id="rcms-footer" class="rcms-site-shell" src="/?rcms_preview=1"');
     expect(html).toContain("showSitePart(document.getElementById('rcms-header')");
@@ -55,6 +57,28 @@ describe("connected React page generation", () => {
     expect(row?.children[0].style.background).toBe("rgb(255, 0, 0)");
     expect(row?.children[1].style.width).toBe("200px");
     expect(row?.children[0].style.marginTop).toBe("");
+    dom.window.close();
+  });
+  it("replaces embedded content with the latest published tree", async () => {
+    const html = generateStaticPageSource({
+      title: "Buttons", slug: "buttons", websiteId: "site-1", pageKey: "buttons",
+      tree: { children: [{ id: "old", type: "button", props: { label: "Old" } }] }
+    });
+    const dom = new JSDOM(html, {
+      runScripts: "dangerously", url: "https://example.com/buttons/",
+      beforeParse(window) {
+        window.fetch = async () => ({ ok: true, json: async () => ({
+          title: "Updated buttons",
+          tree: { children: [
+            { id: "new-1", type: "button", props: { label: "WhatsApp" } },
+            { id: "new-2", type: "button", props: { label: "Audit" } }
+          ] }
+        }) });
+      }
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(Array.from(dom.window.document.querySelectorAll(".rcms-button-row a")).map((node) => node.textContent)).toEqual(["WhatsApp", "Audit"]);
+    expect(dom.window.document.title).toBe("Updated buttons");
     dom.window.close();
   });
   it("generates a standalone React page from native blocks", () => {
