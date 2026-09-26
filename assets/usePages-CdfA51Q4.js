@@ -1,0 +1,1 @@
+import{O as e}from"./index-DX8TPiDh.js";function t(){return e()}export{t};
