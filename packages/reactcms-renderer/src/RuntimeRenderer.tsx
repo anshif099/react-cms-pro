@@ -450,6 +450,9 @@ function BuiltinComponent({
             alt={text('alt', '')}
             style={{
               width: props.width || '100%',
+              maxWidth: '100%',
+              display: 'block',
+              margin: '0 auto',
               height: props.height || 'auto',
               objectFit: props.objectFit || 'cover',
               objectPosition: props.objectPosition || '50% 50%',
@@ -719,6 +722,7 @@ function NodeFrame({
     parallax: 'rcms-slide-up',
   };
   const compactButton = node.type === 'button';
+  const fullWidthImage = node.type === 'image' && String(node.props?.width || '').trim() === '100%';
   const buttonAlignment = compactButton ? node.props?.alignment : undefined;
   const horizontalPosition = compactButton && typeof node.props?.horizontalPosition === 'number'
     && Number.isFinite(node.props.horizontalPosition)
@@ -744,7 +748,7 @@ function NodeFrame({
     background: compactButton ? 'transparent' : design.background,
     padding: compactButton
       ? 0
-      : `${design.paddingY ?? (['spacer', 'divider'].includes(node.type) ? 0 : 36)}px 24px`,
+      : `${design.paddingY ?? (['spacer', 'divider'].includes(node.type) ? 0 : 36)}px ${fullWidthImage ? 0 : 24}px`,
     opacity: responsiveVisible ? node.props?.opacity ?? 1 : .32,
     borderRadius: design.radius ? `${design.radius}px` : undefined,
     boxShadow: design.shadow && design.shadow !== 'none' ? design.shadow : undefined,
@@ -998,7 +1002,7 @@ function NodeFrame({
         </div>
       )}
 
-      <div style={{ width: '100%', maxWidth: `${design.maxWidth || 1120}px`, margin: '0 auto' }}>
+      <div style={{ width: '100%', maxWidth: fullWidthImage ? 'none' : `${design.maxWidth || 1120}px`, margin: '0 auto' }}>
         {children}
       </div>
     </div>

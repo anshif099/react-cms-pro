@@ -11,6 +11,18 @@ import {
 } from "./sourceGenerationService";
 
 describe("connected React page generation", () => {
+  it("renders 100% images without page gutters or a maximum width", () => {
+    const html = generateStaticPageSource({ title: "Photo", slug: "photo", tree: { children: [
+      { type: "image", props: { src: "/photo.jpg", width: "100%" } }
+    ] } });
+    const dom = new JSDOM(html, { runScripts: "dangerously", url: "https://example.com/photo/" });
+    const shell = dom.window.document.querySelector('.rcms-node-shell');
+    expect(shell.style.paddingLeft).toBe('0px');
+    expect(shell.style.paddingRight).toBe('0px');
+    expect(shell.querySelector('.rcms-node-inner').style.maxWidth).toBe('none');
+    expect(shell.querySelector('img').style.width).toBe('100%');
+    dom.window.close();
+  });
   it("generates a hosted static page for StackCP and cPanel sites", () => {
     const html = generateStaticPageSource({
       title: "Case Studies",
