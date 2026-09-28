@@ -1,0 +1,1 @@
+import{k as e}from"./index-DIsAX7D2.js";function t(){return e()}export{t};
