@@ -9,6 +9,7 @@ import sourceProviderService, {
   parseReactCmsGitContent,
   routeDeletionBootstrapSource,
   verifyExistingLiveRouting,
+  verifyLiveNativePage,
   versionLocalBuildAssets
 } from "./sourceProviderService";
 
@@ -20,6 +21,19 @@ function jsonResponse(value, status = 200) {
 }
 
 describe("connected source providers", () => {
+  it("rejects a successful HTTP response that serves the original React app", async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('<div id="root"></div>')));
+    await expect(verifyLiveNativePage({ id: 'site', domain: 'https://example.com' }, '/edited/', 'edited'))
+      .rejects.toThrow('not serving this CMS page');
+  });
+
+  it("verifies that the live route belongs to the published CMS page", async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
+      '<script id="rcms-page-data" type="application/json">{"websiteId":"site","pageKey":"edited"}</script>'
+    )));
+    await expect(verifyLiveNativePage({ id: 'site', domain: 'https://example.com' }, '/edited/', 'edited'))
+      .resolves.toEqual({ verified: true });
+  });
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();

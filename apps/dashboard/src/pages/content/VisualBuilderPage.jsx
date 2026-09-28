@@ -47,7 +47,7 @@ import themeService from "../../services/themeService";
 import websiteService from "../../services/websiteService";
 import sourceCredentialService from "../../services/sourceCredentialService";
 import sourceProviderService from "../../services/sourceProviderService";
-import { mergeReactCmsGitContent } from "../../services/sourceProviderService";
+import { mergeReactCmsGitContent, verifyLiveNativePage } from "../../services/sourceProviderService";
 import registryService from "../../services/registryService";
 import pageService from "../../services/pageService";
 import contentSyncService from "../../services/contentSyncService";
@@ -3291,6 +3291,9 @@ export function VisualBuilderPage() {
         }
       }
 
+      if (directHosting && sourceWebsite.domain) {
+        await verifyLiveNativePage(sourceWebsite, desiredRoute, currentPageKey);
+      }
       await visualBuilderService.publish({
         websiteId,
         pageId,

@@ -322,6 +322,22 @@ export async function verifyExistingLiveRouting(website) {
   };
 }
 
+export async function verifyLiveNativePage(website, route, pageKey) {
+  const origin = normalizedLiveOrigin(website?.domain);
+  const response = await fetch(
+    `/api/live-preview?target=${encodeURIComponent(origin)}&route=${encodeURIComponent(route)}&mode=preview&rcms_verify=${Date.now()}`,
+    { cache: "no-store" }
+  );
+  const html = await response.text();
+  const embedded = html.match(/<script\b[^>]*\bid=["']rcms-page-data["'][^>]*>([\s\S]*?)<\/script>/i);
+  let data = null;
+  try { data = embedded ? JSON.parse(embedded[1]) : null; } catch { /* Invalid page data fails verification. */ }
+  if (!response.ok || data?.websiteId !== website.id || data?.pageKey !== pageKey) {
+    throw new Error(`The live route ${route} is not serving this CMS page. Reconnect hosting, check the website document root, and publish again. CMS content alone cannot replace the original React page.`);
+  }
+  return { verified: true };
+}
+
 function escapeHtmlAttribute(value) {
   return String(value || "")
     .replaceAll("&", "&amp;")
