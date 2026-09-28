@@ -12,6 +12,24 @@ import {
 } from "./sourceGenerationService";
 
 describe("connected React page generation", () => {
+  it.each([
+    [{ alignment: 'center' }, 'auto', 'auto', ''],
+    [{ alignment: 'left' }, '0px', 'auto', ''],
+    [{ alignment: 'right' }, 'auto', '0px', ''],
+    [{ alignment: 'center', horizontalPosition: 0.5, offsetX: 300 }, '0px', '0px', '50%'],
+  ])('preserves standalone button placement %j', (props, leftMargin, rightMargin, left) => {
+    const html = generateStaticPageSource({ title: 'Button', slug: 'button', tree: { children: [
+      { type: 'button', props: { label: 'Contact us', ...props } }
+    ] } });
+    const dom = new JSDOM(html, { runScripts: 'dangerously', url: 'https://example.com/button/' });
+    const button = dom.window.document.querySelector('#rcms-content a');
+    expect(button.style.marginLeft).toBe(leftMargin);
+    expect(button.style.marginRight).toBe(rightMargin);
+    expect(button.style.left).toBe(left);
+    expect(button.style.width).toBe('fit-content');
+    if (left) expect(button.style.translate).toBe('-50% 0');
+    dom.window.close();
+  });
   it.each(BLOCK_SCHEMAS.map(schema => [schema.type, schema]))('renders the catalog element %s in a hosted page', (type, schema) => {
     const props = { locales: { en: {} } };
     const sample = fields => Object.fromEntries(fields.map(field => [field.key,
@@ -68,7 +86,7 @@ describe("connected React page generation", () => {
       tree: { id: "page", type: "page", children: [{ id: "heading-1", type: "heading", props: { text: "Selected work" }, children: [] }] }
     });
     expect(staticPageSourcePath("case-studies")).toBe("case-studies/index.html");
-    expect(STATIC_PAGE_RUNTIME_VERSION).toBe(5);
+    expect(STATIC_PAGE_RUNTIME_VERSION).toBe(6);
     expect(html).toContain('<iframe id="rcms-header" class="rcms-site-shell" src="/?rcms_preview=1"');
     expect(html).toContain('<iframe id="rcms-footer" class="rcms-site-shell" src="/?rcms_preview=1"');
     expect(html).toContain("showSitePart(document.getElementById('rcms-header')");
