@@ -213,6 +213,18 @@ export function versionLocalBuildAssets(html, version = Date.now()) {
 
 export function ensureSpaHtaccess(existingContent = "") {
   const content = String(existingContent || "");
+  // Serve CMS page directories before an existing SPA catch-all can rewrite
+  // their URLs to the original application. Preserve the site's other rules.
+  const pageRule = "RewriteRule ^(.+?)/?$ $1/index.html [L]";
+  const pageBlock = `# ReactCMS Published Page Routing
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{REQUEST_FILENAME}/index.html -f
+  ${pageRule}
+</IfModule>
+`;
+  const hasPageRule = content.includes(pageRule);
+  const routedContent = hasPageRule ? content : `${pageBlock}\n${content}`;
   if (
     content.includes("RewriteEngine On")
     && (
@@ -222,7 +234,7 @@ export function ensureSpaHtaccess(existingContent = "") {
       || content.includes("RewriteRule ^/ index.html")
     )
   ) {
-    return { content, changed: false };
+    return { content: routedContent, changed: !hasPageRule };
   }
 
   const spaBlock = `# ReactCMS SPA Routing
@@ -237,7 +249,7 @@ export function ensureSpaHtaccess(existingContent = "") {
 </IfModule>
 `;
 
-  const updated = content ? `${content.trimEnd()}\n\n${spaBlock}` : spaBlock;
+  const updated = `${routedContent.trimEnd()}\n\n${spaBlock}`;
   return { content: updated, changed: true };
 }
 

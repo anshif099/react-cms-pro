@@ -3211,9 +3211,9 @@ export function VisualBuilderPage() {
       const saved = await performSave({ manual: true });
       if (!saved) return;
       const page = pageRef.current;
-      const currentPageKey = visualBuilderService.resolvePageKey(page);
       const desiredRoute = String(settingsRef.current.route || page.route || `/${settingsRef.current.slug || page.slug || ""}`)
         .split("?")[0].replace(/\/+$/, "") || "/";
+      const currentPageKey = visualBuilderService.resolvePageKey({ route: desiredRoute });
       const existingPages = await pageService.getAll(websiteId);
       const routeConflict = existingPages.find((candidate) => {
         if (candidate.id === pageId || candidate.status === "deleted") return false;
@@ -3228,10 +3228,10 @@ export function VisualBuilderPage() {
       let providerResult = null;
       let generatedSourceFile = null;
       let generatedRouterFile = null;
-      if (sourceWebsite?.connection?.sourceMode === "provider") {
+      const directHosting = ["sftp", "cpanel"].includes(sourceWebsite?.connection?.provider);
+      if (directHosting || sourceWebsite?.connection?.sourceMode === "provider") {
         const framework = String(sourceWebsite.framework || "").toLowerCase();
         const reactSource = framework.includes("react") || framework.includes("vite");
-        const directHosting = ["sftp", "cpanel"].includes(sourceWebsite.connection.provider);
         if (!reactSource && !directHosting) throw new Error("This source provider needs a React/Vite project to generate a new page.");
         const credentials = sourceCredentialService.get(websiteId);
         if (
@@ -3265,7 +3265,7 @@ export function VisualBuilderPage() {
             { path: generatedRouterFile, content: routerSource }
           ], `Publish ${settingsRef.current.title || page.title} from ReactCMS`);
         } else {
-          generatedSourceFile = staticPageSourcePath(settingsRef.current.slug || page.slug);
+          generatedSourceFile = staticPageSourcePath(desiredRoute);
           const hostingConnected = directHosting && credentials.provider === sourceWebsite.connection.provider
             && (sourceWebsite.connection.provider === "sftp"
               ? credentials.host && credentials.username && credentials.credential

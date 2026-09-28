@@ -416,6 +416,17 @@ describe("connected source providers", () => {
     expect(existing.changed).toBe(false);
   });
 
+  it("prioritizes published page directories over an existing SPA catch-all", () => {
+    const original = 'Options -Indexes\nRewriteEngine On\nRewriteRule . /index.html [L]\n';
+    const result = ensureSpaHtaccess(original);
+    expect(result.changed).toBe(true);
+    expect(result.content).toContain('RewriteCond %{REQUEST_FILENAME}/index.html -f');
+    expect(result.content.indexOf('RewriteRule ^(.+?)/?$ $1/index.html [L]'))
+      .toBeLessThan(result.content.indexOf('RewriteRule . /index.html [L]'));
+    expect(result.content).toContain(original);
+    expect(ensureSpaHtaccess(result.content).changed).toBe(false);
+  });
+
   it("merges a Vercel SPA rewrite without replacing existing project configuration", () => {
     const result = ensureVercelSpaConfig(JSON.stringify({
       framework: "vite",
