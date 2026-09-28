@@ -1,0 +1,1 @@
+import{k as e}from"./index-CFT8B_Cw.js";function t(){return e()}export{t};
