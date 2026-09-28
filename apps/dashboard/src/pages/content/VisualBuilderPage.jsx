@@ -374,6 +374,7 @@ function ConnectedSourceWorkspace({
   const [visualError, setVisualError] = useState("");
   const [liveRouteError, setLiveRouteError] = useState("");
   const [aiOpen, setAIOpen] = useState(true);
+  const [inspectorOpenRequest, setInspectorOpenRequest] = useState(0);
   const [canvasSEOScan, setCanvasSEOScan] = useState(null);
   const [pendingRuntimeInsert, setPendingRuntimeInsert] = useState(null);
   const runtimeAdditionsRef = useRef(createRuntimeAdditionsTree(pageKey || pageId, locale));
@@ -1977,7 +1978,10 @@ function ConnectedSourceWorkspace({
         onPublish={publishConnectedSource}
         onRepairLiveRoute={onRepairLiveRoute}
         onSettings={() => {}}
-        onAIToggle={() => setAIOpen((value) => !value)}
+        onInspectorOpen={() => {
+          setAIOpen(true);
+          setInspectorOpenRequest((value) => value + 1);
+        }}
         aiOpen={aiOpen}
         showSettings={false}
         publishLabel={isGitHub ? "Commit & Push" : visualOnly ? "Publish" : isSftp ? "Update StackCP" : "Update cPanel"}
@@ -2179,6 +2183,7 @@ function ConnectedSourceWorkspace({
           {!isPreview && aiOpen && (
             <Suspense fallback={<aside className="h-full w-[400px] flex-shrink-0 border-l border-slate-800 bg-[#0b1120] 2xl:w-[440px]" />}>
               <AIWorkspace
+                inspectorOpenRequest={inspectorOpenRequest}
                 websiteId={websiteId}
                 pageId={pageId}
                 pageTitle={page?.title || "Untitled Page"}
@@ -2245,6 +2250,7 @@ function ConnectedSourceWorkspace({
           {aiOpen && (
             <Suspense fallback={<aside className="h-full w-[400px] flex-shrink-0 border-l border-slate-800 bg-[#0b1120] 2xl:w-[440px]" />}>
               <AIWorkspace
+                inspectorOpenRequest={inspectorOpenRequest}
                 websiteId={websiteId}
                 pageId={pageId}
                 pageTitle={page?.title || "Untitled Page"}
@@ -2457,6 +2463,7 @@ function NativeBuilderWorkspace({
   const isPreview = mode === "preview";
   const connectedDraft = isConnectedNativePage(website, page);
   const [aiOpen, setAIOpen] = useState(!connectedDraft);
+  const [inspectorOpenRequest, setInspectorOpenRequest] = useState(0);
   const [layersOpen, setLayersOpen] = useState(!connectedDraft);
   const [layersTab, setLayersTab] = useState("layers");
   const [pendingNativeInsert, setPendingNativeInsert] = useState(null);
@@ -2641,7 +2648,10 @@ function NativeBuilderWorkspace({
         onPublish={onPublish}
         onSettings={onOpenSettings}
         onTheme={onTheme}
-        onAIToggle={() => setAIOpen((value) => !value)}
+        onInspectorOpen={() => {
+          setAIOpen(true);
+          setInspectorOpenRequest((value) => value + 1);
+        }}
         aiOpen={aiOpen}
       />
 
@@ -2762,6 +2772,7 @@ function NativeBuilderWorkspace({
         {!isPreview && aiOpen && (
           <Suspense fallback={<aside className="w-[400px] border-l border-slate-800 bg-[#0b1120]" />}>
             <AIWorkspace
+                inspectorOpenRequest={inspectorOpenRequest}
               websiteId={websiteId}
               pageId={pageId}
               pageTitle={pageTitle}

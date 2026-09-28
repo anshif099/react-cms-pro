@@ -13,7 +13,7 @@ import {
   Save,
   Settings,
   Smartphone,
-  Sparkles,
+  MousePointer2,
   Tablet,
   Undo2
 } from "lucide-react";
@@ -62,7 +62,7 @@ export function VisualBuilderToolbar({
   onPublish,
   onRepairLiveRoute,
   onSettings,
-  onAIToggle,
+  onInspectorOpen,
   aiOpen = true,
   showSettings = true,
   publishLabel = "Publish"
@@ -143,16 +143,17 @@ export function VisualBuilderToolbar({
 
           <button
             type="button"
-            onClick={onAIToggle}
+            onClick={onInspectorOpen}
             className={`flex h-9 items-center gap-1.5 px-2.5 xl:px-3 rounded-lg text-[11px] font-semibold border cursor-pointer ${
               aiOpen
                 ? "text-white border-violet-500/40 bg-violet-600 shadow-md shadow-violet-950/30"
                 : "text-violet-300 border-violet-500/20 bg-violet-500/10 hover:bg-violet-500/15"
             }`}
-            title={aiOpen ? "Close Rocket AI" : "Open Rocket AI"}
+            title="Open Inspector"
+            aria-label="Open Inspector"
           >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span className="hidden xl:inline">Rocket AI</span>
+            <MousePointer2 className="w-3.5 h-3.5" />
+            <span className="hidden xl:inline">Inspector</span>
           </button>
 
           <SaveState status={saveStatus} />

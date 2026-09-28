@@ -369,6 +369,7 @@ export function AIWorkspace({
   renderInspector,
   inspectorSelectionKey,
   inspectorSelectionVersion,
+  inspectorOpenRequest = 0,
   selectedTarget,
   selectedTargets = [],
   onRequestAreaSelect,
@@ -379,7 +380,10 @@ export function AIWorkspace({
   onSaveSEO,
   onClose
 }) {
-  const [activeTab, setActiveTab] = useState("chat");
+  const [activeTab, setActiveTab] = useState(inspectorOpenRequest ? "inspector" : "chat");
+  useEffect(() => {
+    if (inspectorOpenRequest) setActiveTab("inspector");
+  }, [inspectorOpenRequest]);
   const [modelInfo, setModelInfo] = useState(() => aiWebsiteAgentService.getModelInfo());
   const [prompt, setPrompt] = useState("");
   const [messages, setMessages] = useState(freshConversationMessages);
