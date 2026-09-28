@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { JSDOM } from "jsdom";
+import BLOCK_SCHEMAS from '../components/blocks/blockSchemas';
 import {
   generateStaticPageSource,
   generateReactPageSource,
@@ -11,6 +12,24 @@ import {
 } from "./sourceGenerationService";
 
 describe("connected React page generation", () => {
+  it.each(BLOCK_SCHEMAS.map(schema => [schema.type, schema]))('renders the catalog element %s in a hosted page', (type, schema) => {
+    const props = { locales: { en: {} } };
+    const sample = fields => Object.fromEntries(fields.map(field => [field.key,
+      field.type === 'array' ? [sample(field.fields)] : field.type === 'image' || field.type === 'url' ? 'https://example.com/media' : field.type === 'number' ? 3 : field.type === 'boolean' ? true : field.defaultValue || 'Sample content'
+    ]));
+    for (const field of schema.fields) {
+      const val = sample([field])[field.key];
+      (field.localized ? props.locales.en : props)[field.key] = val;
+    }
+    const html = generateStaticPageSource({ title: 'Catalog', slug: 'catalog', tree: { children: [{ type, props }] } });
+    const dom = new JSDOM(html, { runScripts: 'dangerously', url: 'https://example.com/catalog/' });
+    const content = dom.window.document.querySelector(type === 'button' ? '#rcms-content' : '.rcms-node-inner');
+    expect(content.children.length).toBeGreaterThan(0);
+    if (!['section', 'container', 'columns', 'grid', 'flex', 'spacer', 'divider'].includes(type)) {
+      expect(content.textContent.trim().length > 0 || !!content.querySelector('img,video,audio,iframe,input,textarea,select')).toBe(true);
+    }
+    dom.window.close();
+  });
   it.each(['faq', 'accordion'])('publishes localized %s questions and answers as separate expandable rows', (type) => {
     const html = generateStaticPageSource({ title: 'FAQ', slug: 'faq', locale: 'ml', tree: { children: [
       { type, props: { locales: { ml: { title: 'Questions', items: [
@@ -49,7 +68,7 @@ describe("connected React page generation", () => {
       tree: { id: "page", type: "page", children: [{ id: "heading-1", type: "heading", props: { text: "Selected work" }, children: [] }] }
     });
     expect(staticPageSourcePath("case-studies")).toBe("case-studies/index.html");
-    expect(STATIC_PAGE_RUNTIME_VERSION).toBe(4);
+    expect(STATIC_PAGE_RUNTIME_VERSION).toBe(5);
     expect(html).toContain('<iframe id="rcms-header" class="rcms-site-shell" src="/?rcms_preview=1"');
     expect(html).toContain('<iframe id="rcms-footer" class="rcms-site-shell" src="/?rcms_preview=1"');
     expect(html).toContain("showSitePart(document.getElementById('rcms-header')");

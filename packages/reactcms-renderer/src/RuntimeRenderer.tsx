@@ -363,6 +363,37 @@ function BuiltinComponent({
   }
 
   switch (node.type) {
+    case 'statistics':
+    case 'logos':
+    case 'timeline':
+    case 'list': {
+      const items = localized(node, locale, 'items', []);
+      const isList = node.type === 'list' || node.type === 'timeline';
+      const Tag = isList ? (props.ordered || node.type === 'timeline' ? 'ol' : 'ul') : 'div';
+      return <>
+        {text('title') ? inline('title', '', 'h2') : null}
+        <Tag style={isList ? { lineHeight: 1.8 } : { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,180px),1fr))', gap: 24 }}>
+          {items.map((item: any, index: number) => isList
+            ? <li key={item.id || index}>{item.text || item.title}{item.description ? <p>{item.description}</p> : null}</li>
+            : <div key={item.id || index} style={{ textAlign: 'center', padding: 20 }}>
+                {node.type === 'logos' ? <img src={item.src} alt={item.name || ''} style={{ maxWidth: '100%', maxHeight: 100, objectFit: 'contain' }} /> : <strong style={{ display: 'block', fontSize: 40 }}>{item.value}</strong>}
+                <p>{item.label || item.name}</p>
+              </div>)}
+        </Tag>
+      </>;
+    }
+    case 'quote':
+      return <figure style={{ margin: 0 }}>{inline('text', 'Add your quotation', 'blockquote', { borderLeft: '4px solid #2563eb', paddingLeft: 24, fontSize: 24 })}{inline('author', '', 'figcaption')}</figure>;
+    case 'audio':
+      return <audio src={props.url} controls style={{ width: '100%' }} />;
+    case 'table':
+      return <div style={{ overflowX: 'auto' }}>
+        {text('title') ? inline('title', '', 'h2') : null}
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead><tr>{String(text('headers', 'Name, Value')).split(',').map((cell, index) => <th key={index} style={{ padding: 12, borderBottom: '1px solid #cbd5e1', textAlign: 'left' }}>{cell.trim()}</th>)}</tr></thead>
+          <tbody>{localized(node, locale, 'rows', []).map((row: any, index: number) => <tr key={row.id || index}>{String(row.cells || '').split(',').map((cell, cellIndex) => <td key={cellIndex} style={{ padding: 12, borderBottom: '1px solid #e2e8f0' }}>{cell.trim()}</td>)}</tr>)}</tbody>
+        </table>
+      </div>;
     case 'hero':
       return (
         <div style={{

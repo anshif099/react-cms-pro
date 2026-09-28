@@ -762,4 +762,18 @@ export const BLOCK_SCHEMAS = [
   }
 ];
 
+const textField = (key, label, defaultValue = "") => ({ key, label, type: "text", localized: true, defaultValue });
+const collection = (fields) => ({ key: "items", label: "Items", type: "array", localized: true, fields,
+  defaultValue: [{ id: "first-item", ...Object.fromEntries(fields.map(field => [field.key, field.type === "image" ? "" : field.key === "value" ? "100+" : `Your ${field.key}`])) }]
+});
+BLOCK_SCHEMAS.push(
+  { type: "statistics", label: "Statistics", icon: "LayoutGrid", category: "commerce", description: "Highlight business metrics and results.", fields: [textField("title", "Title", "Our results"), collection([{ key: "value", label: "Value", type: "text" }, { key: "label", label: "Label", type: "text" }])] },
+  { type: "logos", label: "Logo Wall", icon: "Image", category: "social", description: "Show client and partner logos.", fields: [textField("title", "Title", "Trusted by"), collection([{ key: "src", label: "Logo", type: "image" }, { key: "name", label: "Name", type: "text" }])] },
+  { type: "list", label: "List", icon: "AlignLeft", category: "content", description: "Bulleted or numbered text items.", fields: [textField("title", "Title"), { key: "ordered", label: "Numbered", type: "boolean", localized: false }, collection([{ key: "text", label: "Text", type: "text" }])] },
+  { type: "quote", label: "Quote", icon: "MessageSquare", category: "content", description: "A quotation with author attribution.", fields: [textField("text", "Quote", "Add your quotation"), textField("author", "Author")] },
+  { type: "audio", label: "Audio Player", icon: "Video", category: "content", description: "Audio playback with native controls.", fields: [{ key: "url", label: "Audio URL", type: "url", localized: false }] },
+  { type: "table", label: "Table", icon: "Grid", category: "content", description: "Scrollable data table with editable rows.", fields: [textField("title", "Title"), textField("headers", "Headers (comma separated)", "Name, Value"), { key: "rows", label: "Rows", type: "array", localized: true, fields: [{ key: "cells", label: "Cells (comma separated)", type: "text" }] }] },
+  { type: "timeline", label: "Timeline", icon: "ListCollapse", category: "content", description: "Steps, milestones, and company history.", fields: [textField("title", "Title", "Our journey"), collection([{ key: "title", label: "Step", type: "text" }, { key: "description", label: "Description", type: "textarea" }])] }
+);
+
 export default BLOCK_SCHEMAS;
