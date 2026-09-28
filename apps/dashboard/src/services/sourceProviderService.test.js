@@ -33,6 +33,8 @@ describe("connected source providers", () => {
     )));
     await expect(verifyLiveNativePage({ id: 'site', domain: 'https://example.com' }, '/edited/', 'edited'))
       .resolves.toEqual({ verified: true });
+    const request = new URL(fetch.mock.calls[0][0], 'https://cms.example.com');
+    expect(new URL(request.searchParams.get('target')).pathname).toBe('/edited/');
   });
   afterEach(() => {
     vi.restoreAllMocks();

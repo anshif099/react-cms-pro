@@ -324,8 +324,13 @@ export async function verifyExistingLiveRouting(website) {
 
 export async function verifyLiveNativePage(website, route, pageKey) {
   const origin = normalizedLiveOrigin(website?.domain);
+  const pageUrl = new URL(route, origin);
+  pageUrl.pathname = `${pageUrl.pathname.replace(/\/+$/, '')}/`;
+  pageUrl.search = '';
+  pageUrl.hash = '';
+  pageUrl.searchParams.set('rcms_verify', String(Date.now()));
   const response = await fetch(
-    `/api/live-preview?target=${encodeURIComponent(origin)}&route=${encodeURIComponent(route)}&mode=preview&rcms_verify=${Date.now()}`,
+    `/api/live-preview?target=${encodeURIComponent(pageUrl.toString())}&route=${encodeURIComponent(route)}&mode=preview`,
     { cache: "no-store" }
   );
   const html = await response.text();
