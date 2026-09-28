@@ -3271,8 +3271,8 @@ export function VisualBuilderPage() {
               ? credentials.host && credentials.username && credentials.credential
               : credentials.endpoint && credentials.username && credentials.credential);
           if (!hostingConnected) {
-            if (page.sourceFile !== generatedSourceFile || Number(page.sourceContentBridgeVersion) < STATIC_PAGE_RUNTIME_VERSION) {
-              throw new Error("This page needs one publish from a browser connected to StackCP or cPanel before content editors can publish without hosting credentials.");
+            if (page.sourceFile !== generatedSourceFile || (Number(page.sourceContentBridgeVersion) || 0) < STATIC_PAGE_RUNTIME_VERSION) {
+              throw new Error("This page needs its hosted HTML updated for the latest layout fixes. Connect StackCP or cPanel in this browser and publish once; content editors can then publish without hosting credentials.");
             }
             generatedSourceFile = null;
           } else {
