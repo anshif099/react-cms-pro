@@ -722,7 +722,7 @@ function NodeFrame({
     parallax: 'rcms-slide-up',
   };
   const compactButton = node.type === 'button';
-  const fullWidthImage = node.type === 'image' && String(node.props?.width || '').trim() === '100%';
+  const fullWidthImage = node.type === 'image' && (String(node.props?.width || '').trim() || '100%') === '100%';
   const buttonAlignment = compactButton ? node.props?.alignment : undefined;
   const horizontalPosition = compactButton && typeof node.props?.horizontalPosition === 'number'
     && Number.isFinite(node.props.horizontalPosition)

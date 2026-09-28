@@ -12,13 +12,16 @@ it.each(['desktop', 'tablet', 'mobile'] as const)('removes image width constrain
   const tree = { id: 'page', type: 'page', version: 2, children: [
     { id: 'image', type: 'image', props: { src: '/photo.jpg', width: '100%' }, children: [] },
   ] } as PageComponentTree;
-  for (const mode of ['edit', 'runtime'] as const) {
+  for (const width of ['100%', '', undefined]) {
+    tree.children[0].props!.width = width;
+    for (const mode of ['edit', 'runtime'] as const) {
     act(() => root.render(<RuntimeRenderer tree={tree} mode={mode} responsiveMode={responsiveMode} />));
     const frame = host.querySelector<HTMLElement>('[data-rcms-node="image"]')!;
     expect(frame.style.paddingRight).toBe('0px');
     expect(frame.style.paddingLeft).toBe('0px');
     expect((frame.firstElementChild as HTMLElement).style.maxWidth).toBe('none');
     expect(frame.querySelector('img')!.style.width).toBe('100%');
+    }
   }
   act(() => root.unmount());
   vi.unstubAllGlobals();

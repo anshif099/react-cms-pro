@@ -11,9 +11,9 @@ import {
 } from "./sourceGenerationService";
 
 describe("connected React page generation", () => {
-  it("renders 100% images without page gutters or a maximum width", () => {
+  it.each(['100%', '', undefined])("renders full-width images without page gutters (width: %s)", (width) => {
     const html = generateStaticPageSource({ title: "Photo", slug: "photo", tree: { children: [
-      { type: "image", props: { src: "/photo.jpg", width: "100%" } }
+      { type: "image", props: { src: "/photo.jpg", width } }
     ] } });
     const dom = new JSDOM(html, { runScripts: "dangerously", url: "https://example.com/photo/" });
     const shell = dom.window.document.querySelector('.rcms-node-shell');
