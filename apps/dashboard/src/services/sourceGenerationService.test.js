@@ -12,6 +12,18 @@ import {
 } from "./sourceGenerationService";
 
 describe("connected React page generation", () => {
+  it('removes captured editor insertion controls without removing published content', () => {
+    const html = generateStaticPageSource({ title: 'Page', slug: 'page', tree: { children: [
+      { type: 'html', props: { code: '<div data-rcms-runtime-additions-host><p>Published section</p><div data-rcms-empty-additions="true"><span>CMS insertion area above the footer</span><button>+ Section</button></div><div data-rcms-toolbar>Delete</div></div>' } }
+    ] } });
+    const dom = new JSDOM(html, { runScripts: 'dangerously', url: 'https://example.com/page/' });
+    const content = dom.window.document.querySelector('#rcms-content');
+    expect(content.textContent).toContain('Published section');
+    expect(content.textContent).not.toContain('CMS insertion area');
+    expect(content.querySelector('[data-rcms-empty-additions]')).toBeNull();
+    expect(content.querySelector('[data-rcms-toolbar]')).toBeNull();
+    dom.window.close();
+  });
   it('publishes heading links while preserving heading text and level', () => {
     const html = generateStaticPageSource({ title: 'Links', slug: 'links', tree: { children: [
       { type: 'heading', props: { level: 'h3', text: 'Contact us', linkUrl: '/contact', newTab: true } }
@@ -98,7 +110,7 @@ describe("connected React page generation", () => {
       tree: { id: "page", type: "page", children: [{ id: "heading-1", type: "heading", props: { text: "Selected work" }, children: [] }] }
     });
     expect(staticPageSourcePath("case-studies")).toBe("case-studies/index.html");
-    expect(STATIC_PAGE_RUNTIME_VERSION).toBe(7);
+    expect(STATIC_PAGE_RUNTIME_VERSION).toBe(8);
     expect(html).toContain('<iframe id="rcms-header" class="rcms-site-shell" src="/?rcms_preview=1"');
     expect(html).toContain('<iframe id="rcms-footer" class="rcms-site-shell" src="/?rcms_preview=1"');
     expect(html).toContain("showSitePart(document.getElementById('rcms-header')");
