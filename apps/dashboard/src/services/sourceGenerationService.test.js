@@ -11,6 +11,23 @@ import {
 } from "./sourceGenerationService";
 
 describe("connected React page generation", () => {
+  it.each(['faq', 'accordion'])('publishes localized %s questions and answers as separate expandable rows', (type) => {
+    const html = generateStaticPageSource({ title: 'FAQ', slug: 'faq', locale: 'ml', tree: { children: [
+      { type, props: { locales: { ml: { title: 'Questions', items: [
+        { question: 'First question?', answer: 'First answer' },
+        { question: 'Second question?', answer: 'Second answer' }
+      ] } } } }
+    ] } });
+    const dom = new JSDOM(html, { runScripts: 'dangerously', url: 'https://example.com/faq/' });
+    const rows = dom.window.document.querySelectorAll('#rcms-content details');
+    expect(dom.window.document.querySelector('#rcms-content h2').textContent).toBe('Questions');
+    expect(rows).toHaveLength(2);
+    expect(rows[0].querySelector('summary').textContent).toBe('First question?');
+    expect(rows[1].querySelector('summary').textContent).toBe('Second question?');
+    expect(rows[0].querySelector('p').textContent).toBe('First answer');
+    expect(rows[1].querySelector('p').textContent).toBe('Second answer');
+    dom.window.close();
+  });
   it.each(['100%', '', undefined])("renders full-width images without page gutters (width: %s)", (width) => {
     const html = generateStaticPageSource({ title: "Photo", slug: "photo", tree: { children: [
       { type: "image", props: { src: "/photo.jpg", width } }
@@ -32,7 +49,7 @@ describe("connected React page generation", () => {
       tree: { id: "page", type: "page", children: [{ id: "heading-1", type: "heading", props: { text: "Selected work" }, children: [] }] }
     });
     expect(staticPageSourcePath("case-studies")).toBe("case-studies/index.html");
-    expect(STATIC_PAGE_RUNTIME_VERSION).toBe(3);
+    expect(STATIC_PAGE_RUNTIME_VERSION).toBe(4);
     expect(html).toContain('<iframe id="rcms-header" class="rcms-site-shell" src="/?rcms_preview=1"');
     expect(html).toContain('<iframe id="rcms-footer" class="rcms-site-shell" src="/?rcms_preview=1"');
     expect(html).toContain("showSitePart(document.getElementById('rcms-header')");
