@@ -12,6 +12,18 @@ import {
 } from "./sourceGenerationService";
 
 describe("connected React page generation", () => {
+  it('publishes heading links while preserving heading text and level', () => {
+    const html = generateStaticPageSource({ title: 'Links', slug: 'links', tree: { children: [
+      { type: 'heading', props: { level: 'h3', text: 'Contact us', linkUrl: '/contact', newTab: true } }
+    ] } });
+    const dom = new JSDOM(html, { runScripts: 'dangerously', url: 'https://example.com/links/' });
+    const link = dom.window.document.querySelector('#rcms-content h3 a');
+    expect(link.textContent).toBe('Contact us');
+    expect(link.getAttribute('href')).toBe('/contact');
+    expect(link.target).toBe('_blank');
+    expect(link.rel).toBe('noopener noreferrer');
+    dom.window.close();
+  });
   it.each([
     [{ alignment: 'center' }, 'auto', 'auto', ''],
     [{ alignment: 'left' }, '0px', 'auto', ''],
@@ -86,7 +98,7 @@ describe("connected React page generation", () => {
       tree: { id: "page", type: "page", children: [{ id: "heading-1", type: "heading", props: { text: "Selected work" }, children: [] }] }
     });
     expect(staticPageSourcePath("case-studies")).toBe("case-studies/index.html");
-    expect(STATIC_PAGE_RUNTIME_VERSION).toBe(6);
+    expect(STATIC_PAGE_RUNTIME_VERSION).toBe(7);
     expect(html).toContain('<iframe id="rcms-header" class="rcms-site-shell" src="/?rcms_preview=1"');
     expect(html).toContain('<iframe id="rcms-footer" class="rcms-site-shell" src="/?rcms_preview=1"');
     expect(html).toContain("showSitePart(document.getElementById('rcms-header')");

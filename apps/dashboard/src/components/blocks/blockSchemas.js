@@ -47,7 +47,9 @@ export const BLOCK_SCHEMAS = [
           { value: "right", label: "Align Right" }
         ]
       },
-      { key: "color", label: "Text Color", type: "color", localized: false }
+      { key: "color", label: "Text Color", type: "color", localized: false },
+      { key: "linkUrl", label: "Heading Link URL", type: "url", localized: false },
+      { key: "newTab", label: "Open Link in New Tab", type: "boolean", localized: false }
     ]
   },
   {

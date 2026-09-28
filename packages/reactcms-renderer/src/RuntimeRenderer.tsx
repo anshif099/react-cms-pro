@@ -430,13 +430,17 @@ function BuiltinComponent({
       );
     case 'heading': {
       const level = /^h[1-6]$/.test(props.level) ? props.level : 'h2';
-      return inline('text', 'Section heading', level, {
+      const heading = inline('text', 'Section heading', level, {
         margin: 0,
         color: props.color || 'var(--rcms-color-text, #0f172a)',
         textAlign: props.alignment || 'left',
         fontSize: level === 'h1' ? '52px' : level === 'h2' ? '38px' : undefined,
         ...typography,
       });
+      const href = String(props.linkUrl || '').trim();
+      return href && !/^(javascript|data|vbscript):/i.test(href)
+        ? <a href={edit ? undefined : href} target={props.newTab ? '_blank' : undefined} rel={props.newTab ? 'noopener noreferrer' : undefined} style={{ color: 'inherit', textDecoration: 'none' }}>{heading}</a>
+        : heading;
     }
     case 'paragraph':
       return inline('text', '<p>Add your story here.</p>', 'div', {
