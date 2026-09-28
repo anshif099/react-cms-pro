@@ -7,6 +7,7 @@ import ColorPicker from "../ui/ColorPicker";
 import RichTextEditor from "../ui/RichTextEditor";
 import DraggableList from "../ui/DraggableList";
 import Button from "../ui/Button";
+import { ensureArrayItemIds } from "./arrayItemIdentity";
 
 export function BlockFields({ block, onChange, locale = "en" }) {
   const schema = BLOCK_SCHEMAS.find((s) => s.type === block.type);
@@ -190,7 +191,7 @@ export function BlockFields({ block, onChange, locale = "en" }) {
   const renderArrayField = (field) => {
     const key = field.key;
     const isLoc = field.localized;
-    const items = getFieldValue(key, isLoc) || [];
+    const items = ensureArrayItemIds(getFieldValue(key, isLoc) || []);
 
     const handleAddItem = () => {
       const newItem = { id: Math.random().toString(36).substring(2, 9) };
