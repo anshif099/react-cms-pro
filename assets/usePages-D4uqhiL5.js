@@ -1,0 +1,1 @@
+import{k as e}from"./index-BCA9bejL.js";function t(){return e()}export{t};
