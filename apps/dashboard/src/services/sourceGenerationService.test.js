@@ -29,6 +29,8 @@ describe("connected React page generation", () => {
       expect(event.defaultPrevented).toBe(false);
     }
     expect(editorHandler).not.toHaveBeenCalled();
+    expect(dom.window.getComputedStyle(footer).cursor).toBe('auto');
+    expect(dom.window.getComputedStyle(link).cursor).toBe('pointer');
     expect(link.getAttribute('href')).toBe('#contact');
     expect(html).toContain('lockPublishedSitePart(target);');
     dom.window.close();
@@ -131,7 +133,7 @@ describe("connected React page generation", () => {
       tree: { id: "page", type: "page", children: [{ id: "heading-1", type: "heading", props: { text: "Selected work" }, children: [] }] }
     });
     expect(staticPageSourcePath("case-studies")).toBe("case-studies/index.html");
-    expect(STATIC_PAGE_RUNTIME_VERSION).toBe(9);
+    expect(STATIC_PAGE_RUNTIME_VERSION).toBe(10);
     expect(html).toContain('<iframe id="rcms-header" class="rcms-site-shell" src="/?rcms_preview=1"');
     expect(html).toContain('<iframe id="rcms-footer" class="rcms-site-shell" src="/?rcms_preview=1"');
     expect(html).toContain("showSitePart(document.getElementById('rcms-header')");
