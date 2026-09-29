@@ -1,1 +1,0 @@
-import{k as e}from"./index-CFHRu8Jr.js";function t(){return e()}export{t};

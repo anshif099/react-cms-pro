@@ -1,0 +1,1 @@
+import{k as e}from"./index-DpkG8Seo.js";function t(){return e()}export{t};
