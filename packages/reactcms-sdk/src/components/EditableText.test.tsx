@@ -12,10 +12,12 @@ vi.mock('../messaging/MessageBus', () => ({ MessageBus: { send } }));
 afterEach(() => { vi.clearAllMocks(); vi.unstubAllGlobals(); document.body.innerHTML = ''; });
 
 describe('footer text positioning', () => {
-  it.each(['footer', 'div'])('keeps %s footer text fixed while allowing selection', (tag) => {
+  it.each(['footer', 'div', '.footer', '#footer'])('keeps %s footer text fixed while allowing selection', (tag) => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
-    const host = document.createElement(tag);
+    const host = document.createElement(tag.startsWith('.') || tag.startsWith('#') ? 'div' : tag);
     if (tag === 'div') host.setAttribute('role', 'contentinfo');
+    if (tag === '.footer') host.className = 'footer';
+    if (tag === '#footer') host.id = 'footer';
     document.body.append(host);
     const root = createRoot(host);
     act(() => root.render(
@@ -46,6 +48,12 @@ describe('footer text positioning', () => {
     ));
     const text = host.querySelector<HTMLElement>('[data-rcms-region]')!;
     act(() => text.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, clientX: 10, clientY: 10 })));
+    act(() => window.dispatchEvent(new MouseEvent('mousemove', { clientX: 30, clientY: 40 })));
+    act(() => window.dispatchEvent(new MouseEvent('mouseup', { clientX: 30, clientY: 40 })));
+    expect(update).not.toHaveBeenCalled();
+    expect(text.style.transform).toBe('');
+    const handle = text.querySelector('[data-rcms-text-move-handle]')!;
+    act(() => handle.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, clientX: 10, clientY: 10 })));
     act(() => window.dispatchEvent(new MouseEvent('mousemove', { clientX: 30, clientY: 40 })));
     expect(text.style.transform).toBe('translate(20px, 30px)');
     act(() => window.dispatchEvent(new MouseEvent('mouseup', { clientX: 30, clientY: 40 })));

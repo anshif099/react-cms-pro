@@ -1,4 +1,4 @@
-import React, { useContext, useState, useRef, useLayoutEffect } from 'react';
+import React, { useContext, useState, useRef, useLayoutEffect, useEffect } from 'react';
 import { useEditable } from '../hooks/useEditable';
 import { CMSContext } from '../context/CMSContext';
 import { PageContext } from '../context/PageContext';
@@ -58,9 +58,22 @@ export function EditableText({
 
   useLayoutEffect(() => {
     setIsFooterText(Boolean(elementRef.current?.closest(
-      'footer, [role="contentinfo"], [data-rcms-type="footer"], .footer-section, .site-footer, #site-footer',
+      'footer, [role="contentinfo"], [data-rcms-type="footer"], .footer, #footer, .footer-section, .site-footer, #site-footer, [data-rcms-region="footer"]',
     )));
   }, [RenderComponent, editMode, regionId]);
+
+  useEffect(() => {
+    if (!isSelected) return;
+    const dismiss = (event: Event) => {
+      if (!elementRef.current?.contains(event.target as Node)) setIsSelected(false);
+    };
+    document.addEventListener('mousedown', dismiss, true);
+    document.addEventListener('touchstart', dismiss, true);
+    return () => {
+      document.removeEventListener('mousedown', dismiss, true);
+      document.removeEventListener('touchstart', dismiss, true);
+    };
+  }, [isSelected]);
   
   const textStyle: React.CSSProperties = {};
   if (isRich) {
@@ -290,7 +303,7 @@ export function EditableText({
       });
     }
 
-    if (isFooterText) return;
+    if (isFooterText || !(e.target as HTMLElement).closest('[data-rcms-text-move-handle]')) return;
 
     const initX = (isRich ? value.offsetX : 0) || 0;
     const initY = (isRich ? value.offsetY : 0) || 0;
@@ -381,7 +394,7 @@ export function EditableText({
       });
     }
 
-    if (isFooterText) return;
+    if (isFooterText || !(e.target as HTMLElement).closest('[data-rcms-text-move-handle]')) return;
 
     const initX = (isRich ? value.offsetX : 0) || 0;
     const initY = (isRich ? value.offsetY : 0) || 0;
@@ -465,7 +478,7 @@ export function EditableText({
         outline: isSelected ? '2px solid #3b82f6' : '2px dashed #3b82f6',
         outlineOffset: '2px',
         position: 'relative',
-        cursor: isFooterText ? 'pointer' : isDragging ? 'grabbing' : 'grab',
+        cursor: isDragging ? 'grabbing' : 'pointer',
         userSelect: 'none',
       }}
       onMouseDown={handleMouseDown}
@@ -481,8 +494,19 @@ export function EditableText({
       {isEmpty ? 'Empty text — select to edit' : displayValue}
 
       {/* Floating Alignment Quick Toolbar */}
+      {isSelected && !isFooterText && (
+        <span
+          data-rcms-text-move-handle
+          data-rcms-toolbar
+          title="Drag to move text"
+          style={{ position: 'absolute', left: '-24px', top: 0, cursor: 'grab', touchAction: 'none', background: '#0f172a', color: '#fff', padding: '2px 4px', borderRadius: '4px', zIndex: 99999 }}
+        >
+          ↔
+        </span>
+      )}
       {isSelected && (
         <span
+          data-rcms-toolbar
           style={{
             position: 'absolute',
             top: '-42px',
