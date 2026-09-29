@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { JSDOM } from "jsdom";
 import BLOCK_SCHEMAS from '../components/blocks/blockSchemas';
 import {
@@ -12,6 +12,27 @@ import {
 } from "./sourceGenerationService";
 
 describe("connected React page generation", () => {
+  it('blocks delegated editor handlers in published site parts without cancelling links', () => {
+    const html = generateStaticPageSource({ title: 'Page', slug: 'page', tree: { children: [] } });
+    const script = html.match(/function lockPublishedSitePart\(target\)\{[\s\S]*?\n\}/)[0];
+    const dom = new JSDOM('<div id="root"><footer><a href="#contact">Contact</a></footer></div>', { runScripts: 'outside-only', url: 'https://example.com/' });
+    dom.window.eval(script);
+    const footer = dom.window.document.querySelector('footer');
+    const link = footer.querySelector('a');
+    const editorHandler = vi.fn();
+    dom.window.document.querySelector('#root').addEventListener('mousedown', editorHandler);
+    dom.window.document.querySelector('#root').addEventListener('click', editorHandler);
+    dom.window.lockPublishedSitePart(footer);
+    for (const type of ['mousedown', 'mousemove', 'mouseup', 'click', 'touchstart', 'pointerdown']) {
+      const event = new dom.window.Event(type, { bubbles: true, cancelable: true });
+      expect(link.dispatchEvent(event)).toBe(true);
+      expect(event.defaultPrevented).toBe(false);
+    }
+    expect(editorHandler).not.toHaveBeenCalled();
+    expect(link.getAttribute('href')).toBe('#contact');
+    expect(html).toContain('lockPublishedSitePart(target);');
+    dom.window.close();
+  });
   it('removes captured editor insertion controls without removing published content', () => {
     const html = generateStaticPageSource({ title: 'Page', slug: 'page', tree: { children: [
       { type: 'html', props: { code: '<div data-rcms-runtime-additions-host><p>Published section</p><div data-rcms-empty-additions="true"><span>CMS insertion area above the footer</span><button>+ Section</button></div><div data-rcms-toolbar>Delete</div></div>' } }
@@ -110,7 +131,7 @@ describe("connected React page generation", () => {
       tree: { id: "page", type: "page", children: [{ id: "heading-1", type: "heading", props: { text: "Selected work" }, children: [] }] }
     });
     expect(staticPageSourcePath("case-studies")).toBe("case-studies/index.html");
-    expect(STATIC_PAGE_RUNTIME_VERSION).toBe(8);
+    expect(STATIC_PAGE_RUNTIME_VERSION).toBe(9);
     expect(html).toContain('<iframe id="rcms-header" class="rcms-site-shell" src="/?rcms_preview=1"');
     expect(html).toContain('<iframe id="rcms-footer" class="rcms-site-shell" src="/?rcms_preview=1"');
     expect(html).toContain("showSitePart(document.getElementById('rcms-header')");
