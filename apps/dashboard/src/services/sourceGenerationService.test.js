@@ -12,6 +12,30 @@ import {
 } from "./sourceGenerationService";
 
 describe("connected React page generation", () => {
+  it('waits for shell route resolution before navigating out of the iframe', async () => {
+    const html = generateStaticPageSource({ title: 'Page', slug: 'page', tree: { children: [] } });
+    const dom = new JSDOM('<footer><a href="/about" target="_top">About Us</a></footer>', { runScripts: 'outside-only', url: 'https://triosis.in/' });
+    dom.window.eval(html.slice(html.indexOf('function resolvePublishedShellLinks'), html.indexOf('function lockPublishedSitePart')));
+    dom.window.eval('shellRoutesPromise=Promise.resolve({aboutus:{path:"/aboutus",title:"About Us",published:true}})');
+    const footer = dom.window.document.querySelector('footer');
+    const link = footer.querySelector('a');
+    const assign = vi.fn();
+    const target = {
+      contains: element => footer.contains(element),
+      querySelectorAll: selector => footer.querySelectorAll(selector),
+      ownerDocument: { baseURI: dom.window.document.baseURI, location: dom.window.location, defaultView: { top: { location: { assign } } } },
+    };
+    const preventDefault = vi.fn();
+    dom.window.activatePublishedShellLink({ target: link, button: 0, preventDefault }, target);
+    expect(preventDefault).toHaveBeenCalledOnce();
+    await Promise.resolve();
+    expect(assign).toHaveBeenCalledWith('https://triosis.in/aboutus');
+    assign.mockClear();
+    dom.window.activatePublishedShellLink({ target: link, button: 0, ctrlKey: true, preventDefault }, target);
+    await Promise.resolve();
+    expect(assign).not.toHaveBeenCalled();
+    dom.window.close();
+  });
   it('corrects missing shell routes by matching a unique published page title', () => {
     const html = generateStaticPageSource({ title: 'Page', slug: 'page', tree: { children: [] } });
     const helper = html.slice(html.indexOf('function resolvePublishedShellLinks'), html.indexOf('var shellRoutesPromise'));
@@ -31,6 +55,7 @@ describe("connected React page generation", () => {
     const html = generateStaticPageSource({ title: 'Page', slug: 'page', tree: { children: [] } });
     const script = html.match(/function lockPublishedSitePart\(target\)\{[\s\S]*?\n\}/)[0];
     const dom = new JSDOM('<div id="root"><footer><a href="#contact">Contact</a></footer></div>', { runScripts: 'outside-only', url: 'https://example.com/' });
+    dom.window.eval(html.slice(html.indexOf('function resolvePublishedShellLinks'), html.indexOf('function lockPublishedSitePart')));
     dom.window.eval(script);
     const footer = dom.window.document.querySelector('footer');
     const link = footer.querySelector('a');
@@ -149,7 +174,7 @@ describe("connected React page generation", () => {
       tree: { id: "page", type: "page", children: [{ id: "heading-1", type: "heading", props: { text: "Selected work" }, children: [] }] }
     });
     expect(staticPageSourcePath("case-studies")).toBe("case-studies/index.html");
-    expect(STATIC_PAGE_RUNTIME_VERSION).toBe(12);
+    expect(STATIC_PAGE_RUNTIME_VERSION).toBe(13);
     expect(html).toContain('<iframe id="rcms-header" class="rcms-site-shell" src="/?rcms_preview=1"');
     expect(html).toContain('<iframe id="rcms-footer" class="rcms-site-shell" src="/?rcms_preview=1"');
     expect(html).toContain("showSitePart(document.getElementById('rcms-header')");
