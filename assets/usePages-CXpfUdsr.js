@@ -1,0 +1,1 @@
+import{k as e}from"./index-LdA74Bgt.js";function t(){return e()}export{t};
