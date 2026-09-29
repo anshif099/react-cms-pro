@@ -43,6 +43,8 @@ export function EditableText({
   const [resizeWidth, setResizeWidth] = useState<number | null>(null);
   const resizeStartRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const elementRef = useRef<HTMLElement | null>(null);
+  const [isFooterText, setIsFooterText] = useState(false);
+
 
   const isRich = typeof value === 'object' && value !== null;
   const displayValue = isRich ? (value.text !== undefined ? value.text : '') : value;
@@ -53,6 +55,12 @@ export function EditableText({
   const RenderComponent: React.ElementType = configuredTag && EDITABLE_TEXT_TAGS.has(configuredTag)
     ? configuredTag
     : Component;
+
+  useLayoutEffect(() => {
+    setIsFooterText(Boolean(elementRef.current?.closest(
+      'footer, [role="contentinfo"], [data-rcms-type="footer"], .footer-section, .site-footer, #site-footer',
+    )));
+  }, [RenderComponent, editMode, regionId]);
   
   const textStyle: React.CSSProperties = {};
   if (isRich) {
@@ -121,10 +129,10 @@ export function EditableText({
 
     const offX = isDragging ? dragOffset.x : (value.offsetX || 0);
     const offY = isDragging ? dragOffset.y : (value.offsetY || 0);
-    if ((offX || offY) && (isDragging || vw >= 768)) {
+    if (!isFooterText && (offX || offY) && (isDragging || vw >= 768)) {
       textStyle.transform = `translate(${offX}px, ${offY}px)`;
     }
-  } else if (isDragging && (dragOffset.x || dragOffset.y)) {
+  } else if (!isFooterText && isDragging && (dragOffset.x || dragOffset.y)) {
     textStyle.transform = `translate(${dragOffset.x}px, ${dragOffset.y}px)`;
   }
 
@@ -282,6 +290,8 @@ export function EditableText({
       });
     }
 
+    if (isFooterText) return;
+
     const initX = (isRich ? value.offsetX : 0) || 0;
     const initY = (isRich ? value.offsetY : 0) || 0;
 
@@ -349,7 +359,7 @@ export function EditableText({
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (!editMode) return;
+    if (!editMode || e.button !== 0) return;
     e.stopPropagation();
     setIsSelected(true);
 
@@ -370,6 +380,8 @@ export function EditableText({
         pageId,
       });
     }
+
+    if (isFooterText) return;
 
     const initX = (isRich ? value.offsetX : 0) || 0;
     const initY = (isRich ? value.offsetY : 0) || 0;
@@ -453,7 +465,7 @@ export function EditableText({
         outline: isSelected ? '2px solid #3b82f6' : '2px dashed #3b82f6',
         outlineOffset: '2px',
         position: 'relative',
-        cursor: isDragging ? 'grabbing' : 'grab',
+        cursor: isFooterText ? 'pointer' : isDragging ? 'grabbing' : 'grab',
         userSelect: 'none',
       }}
       onMouseDown={handleMouseDown}
@@ -491,6 +503,7 @@ export function EditableText({
             fontSize: '11px',
           }}
           onMouseDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
         >
           <span style={{ color: '#94a3b8', fontSize: '10px', fontWeight: 700, paddingRight: '4px', borderRight: '1px solid #334155' }}>
