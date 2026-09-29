@@ -21,20 +21,19 @@ export function CMSProvider({
   environment = 'production',
   children,
 }: CMSProviderProps) {
-  const [editMode, setEditMode] = useState(() => {
+  const [editingAllowed] = useState(() => {
     if (typeof window !== 'undefined') {
       try {
-        const isIframe = window.self !== window.top;
         const params = new URLSearchParams(window.location.search);
-        if (params.has('rcms_edit')) return true;
-        if (params.has('rcms_preview')) return false;
-        if (isIframe) return true;
+        return !params.has('rcms_preview') && params.get('rcms_edit') === '1';
       } catch {
-        return true;
+        return false;
       }
     }
     return false;
   });
+  const [editMode, setEditModeState] = useState(editingAllowed);
+  const setEditMode = (enabled: boolean) => setEditModeState(editingAllowed && enabled);
   const [isConnected, setIsConnected] = useState(false);
   const [currentPage] = useState<Page | null>(null);
   const [locale, setLocale] = useState(() => {
@@ -82,7 +81,7 @@ export function CMSProvider({
     return () => {
       unsubscribe();
     };
-  }, [websiteId]);
+  }, [websiteId, editingAllowed]);
 
   return (
     <CMSContext.Provider

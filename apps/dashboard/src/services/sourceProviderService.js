@@ -628,31 +628,18 @@ async function discoverSectionElements(regions) {
     return;
   }
 
-  const suppression = document.createElement("style");
-  suppression.setAttribute(LIVE_STYLE_BRIDGE, "true");
-  suppression.textContent = "html[" + LIVE_STYLE_BRIDGE + "] .rcms-editable-region{outline:none!important;outline-offset:0!important;cursor:inherit!important;user-select:auto!important}";
-  document.head.appendChild(suppression);
-  document.documentElement.setAttribute(LIVE_STYLE_BRIDGE, "discovering");
-
-  try {
-    for (let attempt = 0; attempt < 20; attempt += 1) {
-      sendRuntimeMessage("rcms/v1/enter-edit-mode");
-      await wait(60);
-      document.querySelectorAll("[data-rcms-region]").forEach((element) => {
-        const regionId = element.getAttribute("data-rcms-region");
-        if (!sectionIds.includes(regionId)) return;
-        element.setAttribute("data-reactcms-live-region", regionId);
-        liveRegionElements.set(regionId, element);
-      });
-      if (sectionIds.every((regionId) => liveRegionElements.has(regionId))) break;
-    }
-  } finally {
-    sendRuntimeMessage("rcms/v1/exit-edit-mode");
-    await wait(80);
-    applyKnownSectionStyles();
-    document.documentElement.removeAttribute(LIVE_STYLE_BRIDGE);
-    suppression.remove();
+  // Published pages expose region attributes without entering the editor.
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    await wait(60);
+    document.querySelectorAll("[data-rcms-region]").forEach((element) => {
+      const regionId = element.getAttribute("data-rcms-region");
+      if (!sectionIds.includes(regionId)) return;
+      element.setAttribute("data-reactcms-live-region", regionId);
+      liveRegionElements.set(regionId, element);
+    });
+    if (sectionIds.every((regionId) => liveRegionElements.has(regionId))) break;
   }
+  applyKnownSectionStyles();
 }
 
 async function hydratePublishedPage(pageKey, page) {

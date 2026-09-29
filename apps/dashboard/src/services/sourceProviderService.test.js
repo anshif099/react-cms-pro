@@ -141,7 +141,7 @@ describe("connected source providers", () => {
     expect(source).toContain('data-reactcms-border-id');
     expect(source).toContain('border-color');
     expect(source).toContain('element.style.setProperty("background", value.background, "important")');
-    expect(source).toContain('sendRuntimeMessage("rcms/v1/enter-edit-mode")');
+    expect(source).not.toContain('sendRuntimeMessage("rcms/v1/enter-edit-mode")');
     expect(source).toContain('window.self === window.top');
     expect(source).toContain('await import(new URL(applicationSource');
   });
