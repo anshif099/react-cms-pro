@@ -12,6 +12,21 @@ import {
 } from "./sourceGenerationService";
 
 describe("connected React page generation", () => {
+  it('corrects missing shell routes by matching a unique published page title', () => {
+    const html = generateStaticPageSource({ title: 'Page', slug: 'page', tree: { children: [] } });
+    const helper = html.slice(html.indexOf('function resolvePublishedShellLinks'), html.indexOf('var shellRoutesPromise'));
+    const dom = new JSDOM('<header><a href="/about?ref=header#team">About Us</a><a href="/services">Services</a><a href="https://other.example/about">About Us</a></header>', { runScripts: 'outside-only', url: 'https://triosis.in/?rcms_preview=1' });
+    dom.window.eval(helper);
+    dom.window.resolvePublishedShellLinks(dom.window.document.querySelector('header'), {
+      aboutus: { path: '/aboutus', title: 'About Us', published: true },
+      services: { path: '/services', title: 'Services', published: true },
+    });
+    const links = dom.window.document.querySelectorAll('a');
+    expect(links[0].href).toBe('https://triosis.in/aboutus?ref=header#team');
+    expect(links[1].getAttribute('href')).toBe('/services');
+    expect(links[2].href).toBe('https://other.example/about');
+    dom.window.close();
+  });
   it('blocks delegated editor handlers in published site parts without cancelling links', () => {
     const html = generateStaticPageSource({ title: 'Page', slug: 'page', tree: { children: [] } });
     const script = html.match(/function lockPublishedSitePart\(target\)\{[\s\S]*?\n\}/)[0];
@@ -134,7 +149,7 @@ describe("connected React page generation", () => {
       tree: { id: "page", type: "page", children: [{ id: "heading-1", type: "heading", props: { text: "Selected work" }, children: [] }] }
     });
     expect(staticPageSourcePath("case-studies")).toBe("case-studies/index.html");
-    expect(STATIC_PAGE_RUNTIME_VERSION).toBe(11);
+    expect(STATIC_PAGE_RUNTIME_VERSION).toBe(12);
     expect(html).toContain('<iframe id="rcms-header" class="rcms-site-shell" src="/?rcms_preview=1"');
     expect(html).toContain('<iframe id="rcms-footer" class="rcms-site-shell" src="/?rcms_preview=1"');
     expect(html).toContain("showSitePart(document.getElementById('rcms-header')");
