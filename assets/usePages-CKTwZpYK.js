@@ -1,0 +1,1 @@
+import{k as e}from"./index-DYJWWdvA.js";function t(){return e()}export{t};
