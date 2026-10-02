@@ -12,6 +12,26 @@ import {
 } from "./sourceGenerationService";
 
 describe("connected React page generation", () => {
+  it('publishes device styles and switches them when the viewport changes', () => {
+    const html = generateStaticPageSource({ title: 'Responsive', slug: 'responsive', tree: { children: [
+      { type: 'heading', props: { level: 'h1', text: 'Best Marketing Agency in Kerala' }, styles: {
+        base: { color: 'red' }, desktop: { fontSize: '50px', padding: '24px' },
+        laptop: { fontSize: '40px' }, tablet: { fontSize: '30px' },
+        mobile: { fontSize: '20px', padding: 8, lineHeight: 1.2 }
+      } }
+    ] } });
+    const dom = new JSDOM(html, { runScripts: 'dangerously', url: 'https://example.com/' });
+    const heading = () => dom.window.document.querySelector('#rcms-content h1');
+    for (const [width, size] of [[1440, '50px'], [1100, '40px'], [800, '30px'], [390, '20px'], [1440, '50px']]) {
+      dom.window.innerWidth = width;
+      dom.window.dispatchEvent(new dom.window.Event('resize'));
+      expect(heading().style.fontSize).toBe(size);
+      expect(heading().style.color).toBe('red');
+      expect(heading().style.padding).toBe(width === 390 ? '8px' : '24px');
+      if (width === 390) expect(heading().style.lineHeight).toBe('1.2');
+    }
+    dom.window.close();
+  });
   it('waits for shell route resolution before navigating out of the iframe', async () => {
     const html = generateStaticPageSource({ title: 'Page', slug: 'page', tree: { children: [] } });
     const dom = new JSDOM('<footer><a href="/about" target="_top">About Us</a></footer>', { runScripts: 'outside-only', url: 'https://triosis.in/' });
@@ -174,7 +194,7 @@ describe("connected React page generation", () => {
       tree: { id: "page", type: "page", children: [{ id: "heading-1", type: "heading", props: { text: "Selected work" }, children: [] }] }
     });
     expect(staticPageSourcePath("case-studies")).toBe("case-studies/index.html");
-    expect(STATIC_PAGE_RUNTIME_VERSION).toBe(13);
+    expect(STATIC_PAGE_RUNTIME_VERSION).toBe(14);
     expect(html).toContain('<iframe id="rcms-header" class="rcms-site-shell" src="/?rcms_preview=1"');
     expect(html).toContain('<iframe id="rcms-footer" class="rcms-site-shell" src="/?rcms_preview=1"');
     expect(html).toContain("showSitePart(document.getElementById('rcms-header')");
