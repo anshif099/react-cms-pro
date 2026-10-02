@@ -12,6 +12,25 @@ import {
 } from "./sourceGenerationService";
 
 describe("connected React page generation", () => {
+  it('paints the published page canvas behind button rows and section gaps on every device', () => {
+    const tree = { styles: { base: { background: '#f3f4f6' }, mobile: { background: '#123456' } }, children: [
+      { type: 'heading', props: { text: 'Title' } },
+      { type: 'button', props: { label: 'WhatsApp', color: '#ef4444' } },
+      { type: 'button', props: { label: 'Audit', color: '#ef4444' } },
+      { type: 'spacer', props: { height: 64 } }
+    ] };
+    const dom = new JSDOM(generateStaticPageSource({ title: 'Background', slug: 'background', tree }), { runScripts: 'dangerously', url: 'https://example.com/' });
+    for (const [width, color] of [[1440, 'rgb(243, 244, 246)'], [390, 'rgb(18, 52, 86)'], [1440, 'rgb(243, 244, 246)']]) {
+      dom.window.innerWidth = width;
+      dom.window.dispatchEvent(new dom.window.Event('resize'));
+      expect(dom.window.document.getElementById('rcms-content').style.background).toBe(color);
+      expect(dom.window.document.body.style.background).toBe(color);
+      expect(dom.window.document.documentElement.style.background).toBe(color);
+      expect(dom.window.document.querySelector('.rcms-button-row')).not.toBeNull();
+      expect(dom.window.document.querySelector('.rcms-button').style.background).toBe('rgb(239, 68, 68)');
+    }
+    dom.window.close();
+  });
   it('publishes device styles and switches them when the viewport changes', () => {
     const html = generateStaticPageSource({ title: 'Responsive', slug: 'responsive', tree: { children: [
       { type: 'heading', props: { level: 'h1', text: 'Best Marketing Agency in Kerala' }, styles: {
@@ -194,7 +213,7 @@ describe("connected React page generation", () => {
       tree: { id: "page", type: "page", children: [{ id: "heading-1", type: "heading", props: { text: "Selected work" }, children: [] }] }
     });
     expect(staticPageSourcePath("case-studies")).toBe("case-studies/index.html");
-    expect(STATIC_PAGE_RUNTIME_VERSION).toBe(14);
+    expect(STATIC_PAGE_RUNTIME_VERSION).toBe(15);
     expect(html).toContain('<iframe id="rcms-header" class="rcms-site-shell" src="/?rcms_preview=1"');
     expect(html).toContain('<iframe id="rcms-footer" class="rcms-site-shell" src="/?rcms_preview=1"');
     expect(html).toContain("showSitePart(document.getElementById('rcms-header')");
