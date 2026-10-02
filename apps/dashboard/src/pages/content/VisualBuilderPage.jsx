@@ -91,6 +91,7 @@ import NativeLayersPanel from "../../components/content/NativeLayersPanel";
 import ImagePicker from "../../components/ui/ImagePicker";
 import HostingRouteRepairModal from "../../components/websites/HostingRouteRepairModal";
 import { calculateConnectedCanvasSizing } from "../../utils/connectedCanvasSizing";
+import { applyPageBackground, connectedPageBackgroundPlan } from "../../utils/pageBackground";
 
 const NativeInspector = lazy(() => import("../../components/content/NativeInspector"));
 const AIWorkspace = lazy(() => import("../../components/content/AIWorkspace"));
@@ -1976,6 +1977,11 @@ function ConnectedSourceWorkspace({
         onRedo={redoConnectedEdit}
         onSave={onSave}
         onPublish={publishConnectedSource}
+        onBackgroundChange={async (color) => {
+          const context = await getConnectedAIContext();
+          await applyConnectedAIPlan(connectedPageBackgroundPlan(context, color), context);
+        }}
+        backgroundHelp="Changes every editable section on this page. The connected site's header, footer, and unregistered areas keep their own styles."
         onRepairLiveRoute={onRepairLiveRoute}
         onSettings={() => {}}
         onInspectorOpen={() => {
@@ -2643,6 +2649,8 @@ function NativeBuilderWorkspace({
         onDeviceChange={setDevice}
         onCustomWidthChange={setCustomWidth}
         onUndo={editor.undo}
+        backgroundColor={editor.tree.styles?.base?.background || theme?.colors?.background}
+        onBackgroundChange={(color) => editor.replaceTree(applyPageBackground(editor.tree, color), "Change page background")}
         onRedo={editor.redo}
         onSave={onSave}
         onPublish={onPublish}

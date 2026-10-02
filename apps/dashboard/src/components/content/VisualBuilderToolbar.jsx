@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   ArrowLeft,
   Check,
@@ -18,6 +18,7 @@ import {
   Undo2
 } from "lucide-react";
 import Button from "../ui/Button";
+import ColorPicker from "../ui/ColorPicker";
 
 const DEVICES = [
   { id: "desktop", label: "Desktop", icon: Monitor },
@@ -63,11 +64,28 @@ export function VisualBuilderToolbar({
   onRepairLiveRoute,
   onSettings,
   onInspectorOpen,
+  backgroundColor,
+  onBackgroundChange,
+  backgroundHelp = "Applies to the whole page and its section backgrounds. Save or publish when ready.",
   aiOpen = true,
   showSettings = true,
   publishLabel = "Publish"
 }) {
   const isPreview = mode === "preview";
+  const [backgroundOpen, setBackgroundOpen] = useState(false);
+  const [backgroundBusy, setBackgroundBusy] = useState(false);
+  const [backgroundError, setBackgroundError] = useState("");
+  const [backgroundDraft, setBackgroundDraft] = useState(backgroundColor || "#ffffff");
+  useEffect(() => { setBackgroundDraft(backgroundColor || "#ffffff"); }, [backgroundColor]);
+  const changeBackground = async (color) => {
+    setBackgroundDraft(color);
+    if (!/^#[0-9a-f]{6}$/i.test(color) || backgroundBusy) return;
+    setBackgroundBusy(true);
+    setBackgroundError("");
+    try { await onBackgroundChange(color); }
+    catch (error) { setBackgroundError(error.message || "Could not change the background."); }
+    finally { setBackgroundBusy(false); }
+  };
   const title = page?.title || "Current Page";
   const status = page?.status || "draft";
 
@@ -157,6 +175,31 @@ export function VisualBuilderToolbar({
           </button>
 
           <SaveState status={saveStatus} />
+
+          {onBackgroundChange && (
+            <div className="relative">
+              <button type="button" onClick={() => setBackgroundOpen(!backgroundOpen)}
+                aria-expanded={backgroundOpen} aria-label="Page background"
+                title="Page background"
+                className="h-9 px-2.5 rounded-lg border border-slate-700 text-slate-200 hover:bg-slate-900 flex items-center gap-2 cursor-pointer">
+                <span className="w-4 h-4 rounded border border-slate-500" style={{ background: backgroundDraft }} />
+                <span className="hidden xl:inline text-[11px] font-semibold">Background</span>
+              </button>
+              {backgroundOpen && (
+                <div className="absolute right-0 top-11 w-72 rounded-xl border border-slate-700 bg-slate-900 p-4 shadow-xl z-50">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm font-semibold">Page background</span>
+                    <button type="button" onClick={() => setBackgroundOpen(false)} aria-label="Close background picker" className="text-xs text-slate-400 cursor-pointer">Close</button>
+                  </div>
+                  <fieldset disabled={backgroundBusy} className="disabled:opacity-50">
+                    <ColorPicker value={backgroundDraft} onChange={changeBackground} />
+                  </fieldset>
+                  <p className="mt-3 text-xs text-slate-400">{backgroundBusy ? "Applying background…" : backgroundHelp}</p>
+                  {backgroundError && <p role="alert" className="mt-2 text-xs text-rose-300">{backgroundError}</p>}
+                </div>
+              )}
+            </div>
+          )}
 
           {onRepairLiveRoute && (
             <button
