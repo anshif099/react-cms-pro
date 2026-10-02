@@ -12,6 +12,30 @@ import {
 } from "./sourceGenerationService";
 
 describe("connected React page generation", () => {
+  it('preserves CTA banner styling independently of the page background', () => {
+    const tree = { styles: { base: { background: '#f3f4f6' } }, children: [{
+      type: 'cta', props: { title: 'Ready to get started?', subtitle: '', background: '#ef4444', primaryButtonText: 'Book Your Free Growth Audit', primaryButtonUrl: '/contact', design: { background: '#f3f4f6' } },
+      styles: { base: { background: '#f3f4f6', color: '#f59e0b', fontFamily: 'Georgia', fontSize: '36px' }, mobile: { fontSize: '24px' } }
+    }] };
+    const dom = new JSDOM(generateStaticPageSource({ title: 'CTA', slug: 'cta', tree }), { runScripts: 'dangerously', url: 'https://example.com/' });
+    for (const [width, size] of [[1440, '36px'], [390, '24px']]) {
+      dom.window.innerWidth = width;
+      dom.window.dispatchEvent(new dom.window.Event('resize'));
+      const heading = dom.window.document.querySelector('#rcms-content h2');
+      const banner = heading.parentElement;
+      const button = banner.querySelector('a');
+      expect(banner.style.background).toBe('rgb(239, 68, 68)');
+      expect(banner.style.borderRadius).toBe('22px');
+      expect(heading.style.color).toBe('rgb(245, 158, 11)');
+      expect(heading.style.fontFamily).toBe('Georgia');
+      expect(heading.style.fontSize).toBe(size);
+      expect(button.style.background).toBe('rgb(15, 23, 42)');
+      expect(button.querySelector('span').style.color).toBe('rgb(245, 158, 11)');
+      expect(button.getAttribute('href')).toBe('/contact');
+      expect(dom.window.document.body.style.background).toBe('rgb(243, 244, 246)');
+    }
+    dom.window.close();
+  });
   it('paints the published page canvas behind button rows and section gaps on every device', () => {
     const tree = { styles: { base: { background: '#f3f4f6' }, mobile: { background: '#123456' } }, children: [
       { type: 'heading', props: { text: 'Title' } },
@@ -213,7 +237,7 @@ describe("connected React page generation", () => {
       tree: { id: "page", type: "page", children: [{ id: "heading-1", type: "heading", props: { text: "Selected work" }, children: [] }] }
     });
     expect(staticPageSourcePath("case-studies")).toBe("case-studies/index.html");
-    expect(STATIC_PAGE_RUNTIME_VERSION).toBe(15);
+    expect(STATIC_PAGE_RUNTIME_VERSION).toBe(16);
     expect(html).toContain('<iframe id="rcms-header" class="rcms-site-shell" src="/?rcms_preview=1"');
     expect(html).toContain('<iframe id="rcms-footer" class="rcms-site-shell" src="/?rcms_preview=1"');
     expect(html).toContain("showSitePart(document.getElementById('rcms-header')");

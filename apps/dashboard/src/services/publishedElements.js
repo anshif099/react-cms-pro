@@ -1,5 +1,5 @@
 // This function is serialized into hosted pages. Keep it self-contained.
-export function renderPublishedElement(node, value, richText) {
+export function renderPublishedElement(node, value, richText, styles = {}) {
   const type = node.type;
   const el = document.createElement('div');
   const get = (key, fallback = '') => value(node, key) ?? fallback;
@@ -71,7 +71,28 @@ export function renderPublishedElement(node, value, richText) {
       if (item.caption) add('figcaption', item.caption, figure);
     }); return el;
   }
-  if (type === 'hero' || type === 'cta') {
+  if (type === 'cta') {
+    // The editor paints page styles on the wrapper, with a separate CTA banner inside.
+    const banner = add('div');
+    Object.assign(banner.style, { padding: '56px 32px', borderRadius: '22px', textAlign: 'center', color: '#fff', background: get('background') || 'linear-gradient(135deg,#1d4ed8,#7c3aed)' });
+    const typography = {};
+    for (const key of ['color', 'fontFamily', 'fontSize', 'fontStyle', 'fontWeight', 'letterSpacing', 'lineHeight', 'textAlign', 'textDecoration', 'textTransform']) {
+      if (styles[key] !== undefined) typography[key] = typeof styles[key] === 'number' && !['fontWeight', 'lineHeight'].includes(key) ? `${styles[key]}px` : styles[key];
+    }
+    const title = add('h2', get('title', 'Ready to get started?'), banner);
+    Object.assign(title.style, { margin: '0', fontSize: '40px', ...typography });
+    const subtitle = add('p', get('subtitle', 'Take the next step today.'), banner);
+    Object.assign(subtitle.style, { color: '#dbeafe', fontSize: '17px', ...typography });
+    const button = link(get('primaryButtonText', 'Get Started'), get('primaryButtonUrl'), banner);
+    Object.assign(button.style, { minHeight: '50px', padding: '0 26px', background: '#0f172a', border: '1px solid #0f172a', boxShadow: '0 12px 28px rgba(15,23,42,.16)' });
+    const label = document.createElement('span');
+    label.textContent = button.textContent;
+    button.textContent = '';
+    Object.assign(label.style, typography);
+    button.appendChild(label);
+    return el;
+  }
+  if (type === 'hero') {
     Object.assign(el.style, { padding: '64px 28px', textAlign: 'center', color: '#fff', borderRadius: '16px', background: get('background') || '#0f172a' });
     if (get('image')) image(get('image'), '', el);
     heading();
