@@ -3291,7 +3291,11 @@ export function VisualBuilderPage() {
               : credentials.endpoint && credentials.username && credentials.credential);
           if (!hostingConnected) {
             if (page.sourceFile !== generatedSourceFile || (Number(page.sourceContentBridgeVersion) || 0) < STATIC_PAGE_RUNTIME_VERSION) {
-              throw new Error("This page needs its hosted HTML updated for the latest layout fixes. Connect StackCP or cPanel in this browser and publish once; content editors can then publish without hosting credentials.");
+              setShowRouteRepair(true);
+              toast.info(page.sourceFile !== generatedSourceFile
+                ? "Connect hosting to create this page at its live URL, then click Publish again."
+                : "Connect hosting to update this page's layout runtime, then click Publish again.");
+              return;
             }
             generatedSourceFile = null;
           } else {
@@ -4194,6 +4198,20 @@ export function VisualBuilderPage() {
       readOnly={isPreview}
       onChange={handleTreeChange}
     >
+      {canRepairLiveRoute && (
+        <HostingRouteRepairModal
+          isOpen={showRouteRepair}
+          onClose={() => setShowRouteRepair(false)}
+          website={sourceWebsite}
+          connectOnly
+          onRepaired={async ({ connection }) => {
+            const updatedWebsite = await websiteService.update(websiteId, { connection });
+            setSourceWebsite(updatedWebsite);
+            setShowRouteRepair(false);
+            toast.success("Hosting connected. Click Publish to publish this page.");
+          }}
+        />
+      )}
       <NativeBuilderWorkspace
         mode={mode}
         websiteId={websiteId}

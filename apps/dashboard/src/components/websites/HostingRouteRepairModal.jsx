@@ -28,7 +28,7 @@ async function verifyLiveSpaFallback(domain) {
   return result;
 }
 
-export function HostingRouteRepairModal({ isOpen, onClose, website, onRepaired }) {
+export function HostingRouteRepairModal({ isOpen, onClose, website, onRepaired, connectOnly = false }) {
   const provider = website?.connection?.provider;
   const isSftp = provider === "sftp";
   const [endpoint, setEndpoint] = useState("");
@@ -104,6 +104,11 @@ export function HostingRouteRepairModal({ isOpen, onClose, website, onRepaired }
         rootDirectory: resolvedRootDirectory,
         ...(isSftp ? {} : { authMethod })
       };
+      if (connectOnly) {
+        await sourceProviderService.readFile({ ...website, connection }, "index.html");
+        await onRepaired?.({ connection });
+        return;
+      }
       const routing = await sourceProviderService.ensureSpaRouting({
         ...website,
         connection
@@ -115,7 +120,7 @@ export function HostingRouteRepairModal({ isOpen, onClose, website, onRepaired }
         connection
       });
     } catch (repairError) {
-      setError(repairError.message || "The live route could not be repaired.");
+      setError(repairError.message || (connectOnly ? "Hosting could not be connected." : "The live route could not be repaired."));
     } finally {
       setLoading(false);
     }
@@ -125,16 +130,18 @@ export function HostingRouteRepairModal({ isOpen, onClose, website, onRepaired }
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Repair Live Website Routes"
+      title={connectOnly ? "Connect Hosting to Publish" : "Repair Live Website Routes"}
       size="md"
     >
       <form className="space-y-5 text-left" onSubmit={handleSubmit}>
         <div className="flex gap-3 rounded-lg border border-blue-200 bg-blue-50 p-4 text-blue-900 dark:border-blue-900/50 dark:bg-blue-950/20 dark:text-blue-200">
           <Route className="h-5 w-5 flex-shrink-0" />
           <div>
-            <p className="text-sm font-semibold">Configure live publishing and SPA fallback routing</p>
+            <p className="text-sm font-semibold">{connectOnly ? "Connect your website hosting" : "Configure live publishing and SPA fallback routing"}</p>
             <p className="mt-1 text-xs leading-5">
-              ReactCMS will configure <code>.htaccess</code>, install published-style and deleted-route handling, read the files back, and confirm that the live server accepts a nested route. Credentials remain in this browser session only.
+              {connectOnly
+                ? "ReactCMS needs hosting access to create new page files or update their layout runtime. Connect here, then click Publish again. Credentials remain in this browser session only."
+                : <>ReactCMS will configure <code>.htaccess</code>, install published-style and deleted-route handling, read the files back, and confirm that the live server accepts a nested route. Credentials remain in this browser session only.</>}
             </p>
           </div>
         </div>
@@ -212,7 +219,7 @@ export function HostingRouteRepairModal({ isOpen, onClose, website, onRepaired }
           <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
           <Button type="submit" loading={loading} className="gap-2">
             <Route className="h-4 w-4" />
-            Repair and Verify Route
+            {connectOnly ? "Connect Hosting" : "Repair and Verify Route"}
           </Button>
         </div>
       </form>
