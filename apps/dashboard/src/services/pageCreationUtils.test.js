@@ -2,10 +2,32 @@ import { describe, expect, it } from "vitest";
 import {
   cloneDraftDocument,
   clonePageLocales,
+  normalizePageSlug,
+  pageRouteExists,
   resolveCreationLayout
 } from "./pageCreationUtils";
 
 describe("page creation helpers", () => {
+  it('normalizes nested slugs and detects existing routes and translated slugs', () => {
+    expect(normalizePageSlug('/New Page/Offer/')).toBe('new-page/offer');
+    expect(pageRouteExists([{ route: '/offer/' }], 'offer')).toBe(true);
+    expect(pageRouteExists([{ route: '/' }], 'home')).toBe(true);
+    expect(pageRouteExists([{ locales: { fr: { slug: 'offre' } } }], 'offre')).toBe(true);
+    expect(pageRouteExists([{ slug: 'offer' }], 'offer-copy')).toBe(false);
+  });
+
+  it('copies styles independently and assigns the new slug to translations', () => {
+    const page = { locales: { en: { blocks: [] }, fr: { title: 'Bonjour', slug: 'old', blocks: [{ text: 'Bonjour' }] } } };
+    const locales = clonePageLocales(page, { title: 'Copy', slug: 'copy' });
+    expect(locales.fr.slug).toBe('copy');
+    locales.fr.blocks[0].text = 'Changed';
+    expect(page.locales.fr.blocks[0].text).toBe('Bonjour');
+    const draft = { tree: { children: [{ styles: { mobile: { fontSize: '24px' } } }] }, regions: {} };
+    const copy = cloneDraftDocument(draft, { sourcePageKey: 'old', targetPageKey: 'copy', title: 'Copy', slug: 'copy' });
+    copy.tree.children[0].styles.mobile.fontSize = '36px';
+    expect(draft.tree.children[0].styles.mobile.fontSize).toBe('24px');
+  });
+
   it("uses the registered website default layout for a new page", () => {
     const layouts = {
       marketing: { isDefault: true },

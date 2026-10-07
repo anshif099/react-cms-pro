@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Edit3, Eye, Search, FileText, Trash2, Globe, Plus, RefreshCw } from "lucide-react";
+import { Edit3, Eye, Copy, Search, FileText, Trash2, Globe, Plus, RefreshCw } from "lucide-react";
 import { usePages } from "../../hooks/usePages";
 import { useLocale } from "../../hooks/useLocale";
 import { useWebsites } from "../../hooks/useWebsites";
@@ -10,16 +10,60 @@ import Button from "../../components/ui/Button";
 import Card from "../../components/ui/Card";
 import EmptyState from "../../components/ui/EmptyState";
 import ManualRouteImportModal from "../../components/websites/ManualRouteImportModal";
+import Modal from "../../components/ui/Modal";
+import Input from "../../components/ui/Input";
+import { useAuth } from "../../hooks/useAuth";
+import { normalizePageSlug, pageRouteExists } from "../../services/pageCreationUtils";
 
 export function PagesListPage() {
   const { websiteId } = useParams();
   const navigate = useNavigate();
-  const { pages, pageLoading, fetchPages, deletePage } = usePages();
+  const { pages, pageLoading, fetchPages, deletePage, createPage } = usePages();
+  const { user } = useAuth();
   const { selectWebsite, selectedWebsite } = useWebsites();
   const { activeLocales, activeLocale, setLocale } = useLocale(websiteId);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
+  const [copyPage, setCopyPage] = useState(null);
+  const [copyTitle, setCopyTitle] = useState("");
+  const [copySlug, setCopySlug] = useState("");
+  const [copyError, setCopyError] = useState("");
+  const [copying, setCopying] = useState(false);
+
+  const openDuplicate = (page) => {
+    const title = page.locales?.[activeLocale]?.title || page.title || "Untitled Page";
+    const base = normalizePageSlug(page.slug || title) + "-copy";
+    let slug = base;
+    let index = 2;
+    while (pageRouteExists(pages, slug)) slug = `${base}-${index++}`;
+    setCopyPage(page);
+    setCopyTitle(`${title} Copy`);
+    setCopySlug(slug);
+    setCopyError("");
+  };
+
+  const handleDuplicate = async (event) => {
+    event.preventDefault();
+    if (copying) return;
+    const title = copyTitle.trim();
+    const slug = normalizePageSlug(copySlug);
+    if (!title || !slug) { setCopyError("Enter a page name and URL slug."); return; }
+    if (pageRouteExists(pages, slug)) { setCopyError("This URL slug is already used. Choose a different slug."); return; }
+    setCopying(true);
+    setCopyError("");
+    try {
+      const page = await createPage(websiteId, {
+        title, slug, route: slug === "home" ? "/" : `/${slug}`, routeId: slug,
+        copyFromPageId: copyPage.id, status: "draft", source: "cms",
+        userId: user?.email || user?.uid || ""
+      });
+      setCopyPage(null);
+      navigate(`/content/${websiteId}/pages/${page.id}/editor?mode=edit`);
+    } catch (error) {
+      setCopyError(error.message || "The page could not be duplicated.");
+    } finally { setCopying(false); }
+  };
 
   const {
     sync,
@@ -296,6 +340,15 @@ export function PagesListPage() {
                       <Edit3 className="w-4 h-4" />
                     </button>
 
+                    <button
+                      onClick={() => openDuplicate(page)}
+                      className="p-1.5 rounded-lg hover:bg-blue-500/10 text-admin-secondary hover:text-blue-400 transition-colors cursor-pointer"
+                      title={`Duplicate ${displayTitle}`}
+                      aria-label={`Duplicate ${displayTitle}`}
+                    >
+                      <Copy className="w-4 h-4" />
+                    </button>
+
                     {/* Delete Page */}
                     <button
                       onClick={() => handleDelete(page.id, displayTitle)}
@@ -311,6 +364,20 @@ export function PagesListPage() {
           })}
         </Table>
       )}
+
+      <Modal isOpen={Boolean(copyPage)} onClose={() => { if (!copying) setCopyPage(null); }} title="Duplicate Page" role="dialog" aria-modal="true" aria-label="Duplicate Page">
+        <form onSubmit={handleDuplicate} className="space-y-4">
+          <p className="text-sm text-admin-secondary">Copy “{copyPage?.title}” to a new editable draft.</p>
+          <Input label="Page name" aria-label="Page name" value={copyTitle} onChange={event => setCopyTitle(event.target.value)} required autoFocus disabled={copying} />
+          <Input label="URL slug" aria-label="URL slug" value={copySlug} onChange={event => setCopySlug(event.target.value)} placeholder="new-page" required disabled={copying} />
+          <p className="text-xs text-admin-secondary break-all">URL: {String(selectedWebsite.domain || '').replace(/\/$/, '')}/{normalizePageSlug(copySlug) === 'home' ? '' : normalizePageSlug(copySlug)}</p>
+          {copyError && <p role="alert" className="text-sm text-admin-danger">{copyError}</p>}
+          <div className="flex justify-end gap-3">
+            <Button variant="secondary" disabled={copying} onClick={() => setCopyPage(null)}>Cancel</Button>
+            <Button type="submit" loading={copying}>Create Copy</Button>
+          </div>
+        </form>
+      </Modal>
 
       <ManualRouteImportModal
         isOpen={showManualSync}

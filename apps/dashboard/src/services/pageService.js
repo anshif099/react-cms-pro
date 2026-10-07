@@ -1,6 +1,7 @@
 import { database } from "../lib/firebase";
 import { ref, get, set, push, onValue, update, serverTimestamp } from "firebase/database";
 import contentSyncService from "./contentSyncService";
+import visualBuilderService from "./visualBuilderService";
 import revisionService from "./revisionService";
 import searchService from "./searchService";
 import activityLogService from "./activityLogService";
@@ -14,6 +15,7 @@ import {
   cloneDraftDocument,
   clonePageLocales,
   resolveCreationLayout,
+  pageRouteExists,
   resolvePageKey
 } from "./pageCreationUtils";
 
@@ -199,6 +201,9 @@ export const pageService = {
 
   async create(websiteId, data) {
     try {
+      if (pageRouteExists(await this.getAll(websiteId), data.slug || data.routeId)) {
+        throw new Error("This URL slug is already used by another page. Choose a different slug.");
+      }
       const [layoutsSnapshot, copiedPageSnapshot] = await Promise.all([
         get(ref(database, paths.registryLayouts(websiteId))),
         data.copyFromPageId
@@ -217,11 +222,10 @@ export const pageService = {
       let copiedDraft = null;
       if (copiedPage) {
         const sourcePageKey = resolvePageKey(copiedPage);
-        const [draft, published] = await Promise.all([
-          contentSyncService.getDraft(websiteId, sourcePageKey),
-          contentSyncService.getPublished(websiteId, sourcePageKey)
-        ]);
-        const sourceDocument = draft || published;
+        const { draft } = await visualBuilderService.loadNativePage(websiteId, sourcePageKey, {
+          pageId: copiedPage.id, routeId: copiedPage.routeId, slug: copiedPage.slug, route: copiedPage.route
+        });
+        const sourceDocument = draft;
         if (sourceDocument) {
           copiedDraft = cloneDraftDocument(
             decodeFirebaseObject(sourceDocument),

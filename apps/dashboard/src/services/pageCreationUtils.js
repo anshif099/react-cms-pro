@@ -3,6 +3,19 @@ function cloneValue(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+export function normalizePageSlug(value) {
+  return String(value || '').trim().toLowerCase().replace(/^\/+|\/+$/g, '')
+    .split('/').map(part => part.replace(/[^a-z0-9-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, ''))
+    .filter(Boolean).join('/');
+}
+
+export function pageRouteExists(pages, slug) {
+  const key = slug === 'home' ? '' : normalizePageSlug(slug);
+  return pages.some(page => [page.route, page.slug, page.routeId, ...Object.values(page.locales || {}).map(locale => locale?.slug)]
+    .filter(value => value !== undefined && value !== null)
+    .some(value => (normalizePageSlug(value) === 'home' ? '' : normalizePageSlug(value)) === key));
+}
+
 function updateTreeIdentity(tree, { pageKey, title, locale }) {
   if (!tree || typeof tree !== "object" || !Array.isArray(tree.children)) {
     return tree;
@@ -61,14 +74,15 @@ export function clonePageLocales(sourcePage, {
   };
 
   Object.entries(locales).forEach(([locale, value]) => {
-    if (locale === "en" || !value?.componentTree) return;
+    if (locale === "en") return;
     locales[locale] = {
       ...value,
-      componentTree: updateTreeIdentity(value.componentTree, {
+      slug,
+      ...(value?.componentTree ? { componentTree: updateTreeIdentity(value.componentTree, {
         pageKey: slug || "home",
         title: value.title,
         locale
-      })
+      }) } : {})
     };
   });
 
