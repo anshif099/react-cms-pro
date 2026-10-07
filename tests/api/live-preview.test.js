@@ -264,6 +264,7 @@ describe("live preview HTML rewriting", () => {
     expect(response.body).toContain('var selectors = "header, [role=\'banner\']');
     expect(response.body).toContain('send("rcms/v1/site-shell-size"');
     expect(response.body).toContain('document.body.replaceChildren(copy)');
+    expect(response.headers['cache-control']).toBe('private, max-age=60');
     const dom = new JSDOM(response.body, {
       runScripts: "dangerously",
       url: `${previewOrigin}/api/live-preview?route=%2F`

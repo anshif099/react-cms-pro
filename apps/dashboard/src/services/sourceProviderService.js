@@ -697,7 +697,9 @@ async function start() {
     setRuntimeTypographyTree(message.payload.value);
   });
   let page = null;
-  if (websiteId && databaseUrl) {
+  const shellPreview = window.self !== window.top && pageKey === "home"
+    && new URLSearchParams(location.search).has("rcms_preview");
+  if (websiteId && databaseUrl && !shellPreview) {
     try {
       page = await fetchPublishedPage(pageKey);
       if (page?.deleted === true || !(await routeExists(pageKey, page))) {

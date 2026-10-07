@@ -1107,7 +1107,9 @@ export default async function handler(request, response) {
       : rewritePreviewHtml(html, url, route, requestOrigin(request));
 
     response.setHeader("Content-Type", "text/html; charset=utf-8");
-    response.setHeader("Cache-Control", "private, no-store, max-age=0");
+    response.setHeader("Cache-Control", shell === "header" || shell === "footer"
+      ? "private, max-age=60"
+      : "private, no-store, max-age=0");
     response.setHeader("X-Content-Type-Options", "nosniff");
     response.setHeader(
       "Content-Security-Policy",

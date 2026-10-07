@@ -12,6 +12,29 @@ import {
 } from "./sourceGenerationService";
 
 describe("connected React page generation", () => {
+  it('shows the site shell before the iframe load event fires', async () => {
+    vi.useFakeTimers();
+    const html = generateStaticPageSource({ title: 'Shell', slug: 'shell', tree: { children: [] } });
+    const dom = new JSDOM('', { runScripts: 'outside-only', url: 'https://example.com/' });
+    const site = new JSDOM('<div><header><a href="/about">About</a></header><main>Slow video</main></div>', { url: 'https://example.com/' });
+    try {
+      dom.window.setInterval = setInterval;
+      dom.window.clearInterval = clearInterval;
+      dom.window.data = {};
+      dom.window.eval(html.slice(html.indexOf('function resolvePublishedShellLinks'), html.indexOf("showSitePart(document.getElementById('rcms-header')")));
+      const frame = { contentDocument: site.window.document, contentWindow: site.window, style: {} };
+      dom.window.showSitePart(frame, 'header');
+      await vi.advanceTimersByTimeAsync(50);
+      expect(frame.style.height).toBe('1px');
+      expect(site.window.document.querySelector('main').style.display).toBe('none');
+      expect(site.window.document.querySelector('a').target).toBe('_top');
+    } finally {
+      dom.window.close();
+      site.window.close();
+      vi.useRealTimers();
+    }
+  });
+
   it('preserves delegated mobile menu clicks and keyboard events while blocking editor events', () => {
     const html = generateStaticPageSource({ title: 'Menu', slug: 'menu', tree: { children: [] } });
     const dom = new JSDOM('<div id="root"><header><button aria-expanded="false"><span>Menu</span></button><nav hidden>Links</nav><p>Editable text</p></header></div>', { runScripts: 'outside-only', url: 'https://example.com/' });
@@ -297,7 +320,7 @@ describe("connected React page generation", () => {
       tree: { id: "page", type: "page", children: [{ id: "heading-1", type: "heading", props: { text: "Selected work" }, children: [] }] }
     });
     expect(staticPageSourcePath("case-studies")).toBe("case-studies/index.html");
-    expect(STATIC_PAGE_RUNTIME_VERSION).toBe(18);
+    expect(STATIC_PAGE_RUNTIME_VERSION).toBe(19);
     expect(html).toContain('<iframe id="rcms-header" class="rcms-site-shell" src="/?rcms_preview=1"');
     expect(html).toContain('<iframe id="rcms-footer" class="rcms-site-shell" src="/?rcms_preview=1"');
     expect(html).toContain("showSitePart(document.getElementById('rcms-header')");
