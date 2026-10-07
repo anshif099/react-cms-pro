@@ -3315,7 +3315,7 @@ export function VisualBuilderPage() {
       }
 
       if (directHosting && sourceWebsite.domain) {
-        await verifyLiveNativePage(sourceWebsite, desiredRoute, currentPageKey);
+        await verifyLiveNativePage(sourceWebsite, desiredRoute, currentPageKey, STATIC_PAGE_RUNTIME_VERSION);
       }
       await visualBuilderService.publish({
         websiteId,

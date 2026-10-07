@@ -322,7 +322,7 @@ export async function verifyExistingLiveRouting(website) {
   };
 }
 
-export async function verifyLiveNativePage(website, route, pageKey) {
+export async function verifyLiveNativePage(website, route, pageKey, expectedRuntimeVersion = 0) {
   const origin = normalizedLiveOrigin(website?.domain);
   const pageUrl = new URL(route, origin);
   pageUrl.pathname = `${pageUrl.pathname.replace(/\/+$/, '')}/`;
@@ -339,6 +339,9 @@ export async function verifyLiveNativePage(website, route, pageKey) {
   try { data = embedded ? JSON.parse(embedded[1]) : null; } catch { /* Invalid page data fails verification. */ }
   if (!response.ok || data?.websiteId !== website.id || data?.pageKey !== pageKey) {
     throw new Error(`The live route ${route} is not serving this CMS page. Reconnect hosting, check the website document root, and publish again. CMS content alone cannot replace the original React page.`);
+  }
+  if (expectedRuntimeVersion && (Number(data.runtimeVersion) || 0) < expectedRuntimeVersion) {
+    throw new Error(`The live route ${route} is still serving an older page runtime. Reconnect hosting and publish again to install the mobile menu fix. If already published, refresh the hosting cache.`);
   }
   return { verified: true };
 }

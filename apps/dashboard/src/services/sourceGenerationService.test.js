@@ -52,11 +52,21 @@ describe("connected React page generation", () => {
     let open = true;
     nav.getBoundingClientRect = () => open ? ({ bottom: 420, height: 320, width: 375 }) : ({ bottom: 0, height: 0, width: 0 });
     dom.window.target = target;
-    dom.window.frame = { style: {} };
+    dom.window.frame = { style: {}, contentWindow: dom.window };
     dom.window.eval(html.slice(start, end));
     dom.window.measure();
     expect(dom.window.frame.style.height).toBe('420px');
     open = false;
+    dom.window.measure();
+    expect(dom.window.frame.style.height).toBe('100px');
+    // The connected site's mobile menu uses position:fixed and 100vh.
+    nav.style.position = 'fixed';
+    nav.style.visibility = 'visible';
+    open = true;
+    dom.window.innerHeight = 667;
+    dom.window.measure();
+    expect(dom.window.frame.style.height).toBe('667px');
+    nav.style.visibility = 'hidden';
     dom.window.measure();
     expect(dom.window.frame.style.height).toBe('100px');
     dom.window.close();
@@ -287,7 +297,7 @@ describe("connected React page generation", () => {
       tree: { id: "page", type: "page", children: [{ id: "heading-1", type: "heading", props: { text: "Selected work" }, children: [] }] }
     });
     expect(staticPageSourcePath("case-studies")).toBe("case-studies/index.html");
-    expect(STATIC_PAGE_RUNTIME_VERSION).toBe(17);
+    expect(STATIC_PAGE_RUNTIME_VERSION).toBe(18);
     expect(html).toContain('<iframe id="rcms-header" class="rcms-site-shell" src="/?rcms_preview=1"');
     expect(html).toContain('<iframe id="rcms-footer" class="rcms-site-shell" src="/?rcms_preview=1"');
     expect(html).toContain("showSitePart(document.getElementById('rcms-header')");

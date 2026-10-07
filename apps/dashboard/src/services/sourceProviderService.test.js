@@ -21,6 +21,22 @@ function jsonResponse(value, status = 200) {
 }
 
 describe("connected source providers", () => {
+  it("rejects a matching live page when its menu runtime is stale", async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
+      '<script id="rcms-page-data" type="application/json">{"websiteId":"site","pageKey":"edited"}</script>'
+    )));
+    await expect(verifyLiveNativePage({ id: 'site', domain: 'https://example.com' }, '/edited/', 'edited', 18))
+      .rejects.toThrow('older page runtime');
+  });
+
+  it("accepts the deployed menu runtime version", async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
+      '<script id="rcms-page-data" type="application/json">{"websiteId":"site","pageKey":"edited","runtimeVersion":18}</script>'
+    )));
+    await expect(verifyLiveNativePage({ id: 'site', domain: 'https://example.com' }, '/edited/', 'edited', 18))
+      .resolves.toEqual({ verified: true });
+  });
+
   it("rejects a successful HTTP response that serves the original React app", async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('<div id="root"></div>')));
     await expect(verifyLiveNativePage({ id: 'site', domain: 'https://example.com' }, '/edited/', 'edited'))
