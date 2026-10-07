@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useMemo, useState } from "react";
+import React, { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import {
   Accessibility,
   Box,
@@ -20,6 +20,7 @@ import {
 import BLOCK_SCHEMAS from "../blocks/blockSchemas";
 import ColorPicker from "../ui/ColorPicker";
 import Input from "../ui/Input";
+import { WEB_FONT_FAMILIES, loadEditorFonts } from "../../utils/fontFamilies";
 
 const BlockFields = lazy(() => import("../blocks/BlockFields"));
 
@@ -32,7 +33,8 @@ const FONT_FAMILIES = [
   ["Times New Roman", '"Times New Roman", Times, serif'],
   ["Courier New", '"Courier New", Courier, monospace'],
   ["Comic Sans MS", '"Comic Sans MS", "Comic Sans", cursive'],
-  ["Impact", "Impact, Haettenschweiler, sans-serif"]
+  ["Impact", "Impact, Haettenschweiler, sans-serif"],
+  ...WEB_FONT_FAMILIES
 ];
 
 function FieldLabel({ children }) {
@@ -132,6 +134,7 @@ export function NativeInspector({
   onClose,
   embedded = false
 }) {
+  useEffect(() => { loadEditorFonts(); }, []);
   const [tab, setTab] = useState("content");
   const schema = useMemo(
     () => node ? BLOCK_SCHEMAS.find((item) => item.type === node.type) : null,

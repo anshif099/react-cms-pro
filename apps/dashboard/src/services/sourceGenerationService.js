@@ -1,4 +1,5 @@
 import { renderPublishedElement } from './publishedElements';
+import { WEB_FONTS_URL } from '../utils/fontFamilies';
 function cleanSlug(value) {
   const slug = String(value || "")
     .replace(/^\/+|\/+$/g, "")
@@ -77,6 +78,7 @@ function Block({ block }) {
 export default function ${name}() {
   return (
     <main data-reactcms-page="${cleanSlug(slug)}">
+      <link rel="stylesheet" href=${JSON.stringify(WEB_FONTS_URL)} />
       {blocks.length
         ? blocks.map((block) => <Block key={block.id || block.type} block={block} />)
         : <section style={{ padding: '96px 24px' }}><h1>{${JSON.stringify(String(title || "Untitled Page"))}}</h1></section>}
@@ -154,7 +156,7 @@ export function generateStaticPageSource({ title, slug, tree, locale = "en", web
     .replaceAll(">", "&gt;").replaceAll('"', "&quot;");
   return `<!doctype html>
 <html lang="${String(locale).replace(/[^a-zA-Z-]/g, "") || "en"}">
-<head><meta charset="utf-8"><base href="/"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapedTitle}</title>
+<head><meta charset="utf-8"><base href="/"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapedTitle}</title><link rel="stylesheet" data-rcms-fonts="true" href="${WEB_FONTS_URL.replaceAll('&', '&amp;')}">
 <style>body{margin:0;font-family:Inter,Arial,sans-serif;color:#0f172a}.rcms-site-shell{display:block;width:100%;height:0;border:0;overflow:hidden}#rcms-content{min-height:40vh}#rcms-content img{max-width:100%}#rcms-content .rcms-node-shell{box-sizing:border-box;padding:36px 24px}#rcms-content .rcms-node-inner{width:100%;max-width:1120px;margin:0 auto}#rcms-content .rcms-container{max-width:1200px;margin:auto}#rcms-content .rcms-button-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:12px;padding:24px;max-width:100%;box-sizing:border-box}#rcms-content .rcms-button{display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;min-height:42px;padding:0 20px;border-radius:10px;background:#2563eb;color:white;text-decoration:none;font-weight:700;white-space:nowrap;max-width:100%}html,body,body *{cursor:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2232%22%20height%3D%2232%22%20viewBox%3D%220%200%2032%2032%22%3E%3Cpath%20d%3D%22M3%202%20L3%2025%20L9%2019%20L14%2029%20L19%2026%20L14%2017%20L24%2017%20Z%22%20fill%3D%22%23111827%22%20stroke%3D%22white%22%20stroke-width%3D%221.5%22%20stroke-linejoin%3D%22round%22%2F%3E%3C%2Fsvg%3E") 3 2, default!important} body a[href],body a[href] *,body button,body button *{cursor:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2232%22%20height%3D%2232%22%20viewBox%3D%220%200%2032%2032%22%3E%3Cpath%20d%3D%22M11%2016%20V4%20C11%201%2016%201%2016%204%20V12%20C16%209%2020%209%2020%2012%20V13%20C20%2010%2024%2011%2024%2014%20V15%20C24%2012%2028%2013%2028%2016%20V23%20C28%2027%2025%2030%2021%2030%20H15%20C12%2030%2010%2028%208%2025%20L3%2018%20C1%2015%205%2012%207%2015%20L11%2019%20Z%22%20fill%3D%22%23111827%22%20stroke%3D%22white%22%20stroke-width%3D%221.5%22%20stroke-linejoin%3D%22round%22%2F%3E%3C%2Fsvg%3E") 13 3, pointer!important}</style></head>
 <body><iframe id="rcms-header" class="rcms-site-shell" src="/?rcms_preview=1" title="Site header"></iframe><div id="rcms-content" role="main"></div><iframe id="rcms-footer" class="rcms-site-shell" src="/?rcms_preview=1" title="Site footer"></iframe>
 <script id="rcms-page-data" type="application/json">${payload}</script>
