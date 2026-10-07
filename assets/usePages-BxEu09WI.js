@@ -1,1 +1,0 @@
-import{k as e}from"./index-Aib4cZKm.js";function t(){return e()}export{t};
