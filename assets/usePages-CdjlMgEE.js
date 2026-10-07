@@ -1,0 +1,1 @@
+import{k as e}from"./index-CN0Kb5u-.js";function t(){return e()}export{t};
