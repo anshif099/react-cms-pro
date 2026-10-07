@@ -2804,6 +2804,7 @@ function NativeBuilderWorkspace({
                 <NativeInspector
                   embedded
                   node={editor.selectedNode}
+                  tree={editor.tree}
                   locale={locale}
                   responsiveMode={device}
                   onUpdate={(updatedNode) => editor.update(

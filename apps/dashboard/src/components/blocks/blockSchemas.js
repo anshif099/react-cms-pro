@@ -377,6 +377,7 @@ export const BLOCK_SCHEMAS = [
         key: "linkType", label: "Redirect Type", type: "select", localized: false, defaultValue: "internal",
         options: [
           { value: "internal", label: "Internal Page" },
+          { value: "section", label: "Section on This Page" },
           { value: "external", label: "External Website" },
           { value: "whatsapp", label: "WhatsApp" },
           { value: "phone", label: "Phone Call" },

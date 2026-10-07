@@ -12,6 +12,17 @@ import {
 } from "./sourceGenerationService";
 
 describe("connected React page generation", () => {
+  it('links buttons to a section on the current page instead of the homepage', () => {
+    const html = generateStaticPageSource({ title: 'Anchors', slug: 'anchors', tree: { children: [
+      { id: 'button', type: 'button', props: { label: 'Services', linkType: 'section', url: '#services' } },
+      { id: 'section', type: 'services', props: { anchorId: 'services', items: [] } }
+    ] } });
+    const dom = new JSDOM(html, { runScripts: 'dangerously', url: 'https://example.com/anchors/' });
+    expect(dom.window.document.querySelector('#button').href).toBe('https://example.com/anchors/#services');
+    expect(dom.window.document.getElementById('services')).not.toBeNull();
+    dom.window.close();
+  });
+
   it('publishes theme-derived card colors and fonts when no element override exists', () => {
     const html = generateStaticPageSource({ title: 'Theme', slug: 'theme', theme: {
       colors: { text: '#00cc44', background: '#f3f4f6' }, typography: { bodyFont: 'Georgia', baseSize: '20px' }
@@ -358,7 +369,7 @@ describe("connected React page generation", () => {
       tree: { id: "page", type: "page", children: [{ id: "heading-1", type: "heading", props: { text: "Selected work" }, children: [] }] }
     });
     expect(staticPageSourcePath("case-studies")).toBe("case-studies/index.html");
-    expect(STATIC_PAGE_RUNTIME_VERSION).toBe(21);
+    expect(STATIC_PAGE_RUNTIME_VERSION).toBe(22);
     expect(html).toContain('<iframe id="rcms-header" class="rcms-site-shell" src="/?rcms_preview=1"');
     expect(html).toContain('<iframe id="rcms-footer" class="rcms-site-shell" src="/?rcms_preview=1"');
     expect(html).toContain("showSitePart(document.getElementById('rcms-header')");

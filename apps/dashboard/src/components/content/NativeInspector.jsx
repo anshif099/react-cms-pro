@@ -128,6 +128,7 @@ const TABS = [
 
 export function NativeInspector({
   node,
+  tree,
   locale,
   responsiveMode,
   onUpdate,
@@ -247,6 +248,15 @@ export function NativeInspector({
                 value={node.label || ""}
                 onChange={(event) => updateNode({ label: event.target.value })}
               />
+              {node.type === "button" && node.props?.linkType === "section" && (
+                <SelectField label="Scroll to section" value={node.props?.url || ""} onChange={url => updateProps({ url, newTab: false })}>
+                  <option value="">Choose a section</option>
+                  {(tree?.children || []).filter(item => item.id !== node.id && !item.hidden).map(item => (
+                    <option key={item.id} value={`#${item.props?.anchorId || item.id}`}>{item.label || item.props?.locales?.[locale]?.text || item.props?.locales?.[locale]?.title || item.type}</option>
+                  ))}
+                </SelectField>
+              )}
+              <Input label="Section anchor ID" value={node.props?.anchorId || ""} placeholder="e.g. services" helperText="Link to this area using #services." onChange={event => updateProps({ anchorId: event.target.value.trim().replace(/[^a-zA-Z0-9_-]/g, '-') })} />
               {schema ? (
                 <Suspense fallback={<div className="py-8 text-center text-[10px] text-slate-600">Loading component controls...</div>}>
                   <BlockFields

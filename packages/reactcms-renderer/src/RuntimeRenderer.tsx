@@ -250,6 +250,7 @@ function ButtonIcon({ name, src, size = 18, width, height, color }: { name?: str
 function buttonHref(props: Record<string, any>): string {
   const url = String(props.url || '').trim();
   if (!url) return '';
+  if (props.linkType === 'section') return `#${url.replace(/^#/, '')}`;
   if (props.linkType === 'phone') return url.startsWith('tel:') ? url : `tel:${url}`;
   if (props.linkType === 'email') return url.startsWith('mailto:') ? url : `mailto:${url}`;
   if (props.linkType === 'whatsapp') {
@@ -821,6 +822,7 @@ function NodeFrame({
     <div
       style={shellStyle}
       data-rcms-node={node.id}
+      id={node.props?.anchorId || node.id}
       data-rcms-type={node.type}
       data-rcms-selected={selected ? 'true' : undefined}
       data-rcms-responsive-hidden={!responsiveVisible ? 'true' : undefined}
