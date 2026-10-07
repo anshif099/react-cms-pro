@@ -1,0 +1,1 @@
+import{k as e}from"./index-ConRXL9x.js";function t(){return e()}export{t};

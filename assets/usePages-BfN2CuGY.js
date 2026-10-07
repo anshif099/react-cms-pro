@@ -1,1 +1,0 @@
-import{k as e}from"./index-Cc7Zv1HP.js";function t(){return e()}export{t};
