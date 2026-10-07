@@ -1,1 +1,0 @@
-import{k as e}from"./index-C5LgbWOD.js";function t(){return e()}export{t};
