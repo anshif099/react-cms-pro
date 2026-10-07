@@ -248,11 +248,12 @@ export function NativeInspector({
                 value={node.label || ""}
                 onChange={(event) => updateNode({ label: event.target.value })}
               />
-              {node.type === "button" && node.props?.linkType === "section" && (
-                <SelectField label="Scroll to section" value={node.props?.url || ""} onChange={url => updateProps({ url, newTab: false })}>
+              {node.type === "button" && (
+                <SelectField label="Link to an area on this page" value={node.props?.url || ""} onChange={url => updateProps({ url, linkType: 'section', newTab: false })}>
                   <option value="">Choose a section</option>
+                  {node.props?.url && !(tree?.children || []).some(item => `#${item.props?.anchorId || item.id}` === node.props.url) && <option value={node.props.url}>Current link: {node.props.url}</option>}
                   {(tree?.children || []).filter(item => item.id !== node.id && !item.hidden).map(item => (
-                    <option key={item.id} value={`#${item.props?.anchorId || item.id}`}>{item.label || item.props?.locales?.[locale]?.text || item.props?.locales?.[locale]?.title || item.type}</option>
+                    <option key={item.id} value={`#${item.props?.anchorId || item.id}`}>{item.props?.locales?.[locale]?.text || item.props?.locales?.[locale]?.title || item.label || item.type}</option>
                   ))}
                 </SelectField>
               )}

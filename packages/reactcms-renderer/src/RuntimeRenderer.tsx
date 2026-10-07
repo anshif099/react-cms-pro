@@ -467,6 +467,18 @@ function BuiltinComponent({
           {href ? (
             <a
               href={mode === 'edit' ? undefined : href}
+              onClick={event => {
+                if (mode === 'edit' || !href.startsWith('#')) return;
+                let fragment = href.slice(1);
+                try { fragment = decodeURIComponent(fragment); } catch { /* Keep the literal fragment. */ }
+                const scope = event.currentTarget.closest('[data-rcms-page-tree]');
+                if (!scope) return;
+                const normalize = (value: string) => value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+                const exact = Array.from(scope.querySelectorAll('[id]')).find(element => element.id === fragment);
+                const heading = Array.from(scope.querySelectorAll('h1,h2,h3,h4,h5,h6')).find(element => normalize(element.textContent || '') === normalize(fragment));
+                const target = exact || heading;
+                if (target) { event.preventDefault(); target.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+              }}
               target={props.newTab ? '_blank' : undefined}
               rel={props.newTab ? 'noopener noreferrer' : undefined}
               aria-label={iconOnly ? String(text('label', 'Button')) : undefined}

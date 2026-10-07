@@ -12,6 +12,24 @@ import {
 } from "./sourceGenerationService";
 
 describe("connected React page generation", () => {
+  it('scrolls to heading-text links even when the heading has no custom anchor', () => {
+    const text = 'How to choose the best digital marketing agency in Calicut';
+    const html = generateStaticPageSource({ title: 'Links', slug: 'links', tree: { children: [
+      { id: 'cta', type: 'button', props: { label: 'Choose an agency', url: `#${text}`, linkType: 'internal' } },
+      { id: 'heading', type: 'heading', props: { text, level: 'h2' } }
+    ] } });
+    const dom = new JSDOM(html, { runScripts: 'dangerously', url: 'https://example.com/links/' });
+    const heading = dom.window.document.getElementById('heading');
+    heading.scrollIntoView = vi.fn();
+    dom.window.document.getElementById('cta').click();
+    expect(heading.scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
+    expect(heading.style.scrollMarginTop).toBe('110px');
+    dom.window.document.getElementById('cta').href = '/links/#how-to-choose-the-best-digital-marketing-agency-in-calicut';
+    dom.window.document.getElementById('cta').click();
+    expect(heading.scrollIntoView).toHaveBeenCalledTimes(2);
+    dom.window.close();
+  });
+
   it('links buttons to a section on the current page instead of the homepage', () => {
     const html = generateStaticPageSource({ title: 'Anchors', slug: 'anchors', tree: { children: [
       { id: 'button', type: 'button', props: { label: 'Services', linkType: 'section', url: '#services' } },
@@ -369,7 +387,7 @@ describe("connected React page generation", () => {
       tree: { id: "page", type: "page", children: [{ id: "heading-1", type: "heading", props: { text: "Selected work" }, children: [] }] }
     });
     expect(staticPageSourcePath("case-studies")).toBe("case-studies/index.html");
-    expect(STATIC_PAGE_RUNTIME_VERSION).toBe(22);
+    expect(STATIC_PAGE_RUNTIME_VERSION).toBe(23);
     expect(html).toContain('<iframe id="rcms-header" class="rcms-site-shell" src="/?rcms_preview=1"');
     expect(html).toContain('<iframe id="rcms-footer" class="rcms-site-shell" src="/?rcms_preview=1"');
     expect(html).toContain("showSitePart(document.getElementById('rcms-header')");
