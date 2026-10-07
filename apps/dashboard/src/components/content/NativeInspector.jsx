@@ -324,13 +324,24 @@ export function NativeInspector({
             <InspectorGroup title="Spacing" icon={Move3D}>
               <FourSides label="Padding" values={activeStyles} onChange={updateStyle} />
               <FourSides label="Margin" values={activeStyles} onChange={updateStyle} />
-              <RangeField
-                label="Section Vertical Space"
+              <Input
+                label="Section Vertical Space (px)"
+                aria-label="Section Vertical Space (px)"
+                type="number"
                 value={design.paddingY ?? 36}
                 min={0}
-                max={200}
-                suffix="px"
-                onChange={(paddingY) => updateProps({ design: { ...design, paddingY } })}
+                step={1}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  if (value === "") {
+                    updateProps({ design: { ...design, paddingY: "" } });
+                  } else if (Number.isFinite(Number(value))) {
+                    updateProps({ design: { ...design, paddingY: Math.max(0, Number(value)) } });
+                  }
+                }}
+                onBlur={() => {
+                  if (design.paddingY === "") updateProps({ design: { ...design, paddingY: 0 } });
+                }}
               />
             </InspectorGroup>
 
