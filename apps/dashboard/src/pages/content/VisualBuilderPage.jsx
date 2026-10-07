@@ -3307,6 +3307,7 @@ export function VisualBuilderPage() {
                 tree: treeRef.current,
                 locale: activeLocale,
                 websiteId,
+                theme: themeTokens,
                 pageKey: currentPageKey
               })
             }], `Publish ${settingsRef.current.title || page.title} from ReactCMS`);

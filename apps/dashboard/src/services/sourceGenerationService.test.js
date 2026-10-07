@@ -12,6 +12,21 @@ import {
 } from "./sourceGenerationService";
 
 describe("connected React page generation", () => {
+  it('publishes theme-derived card colors and fonts when no element override exists', () => {
+    const html = generateStaticPageSource({ title: 'Theme', slug: 'theme', theme: {
+      colors: { text: '#00cc44', background: '#f3f4f6' }, typography: { bodyFont: 'Georgia', baseSize: '20px' }
+    }, tree: { children: [{ type: 'services', props: { items: [{ title: 'Based in', description: 'Kozhikode, Kerala' }] } }] } });
+    const dom = new JSDOM(html, { runScripts: 'dangerously', url: 'https://example.com/' });
+    const content = dom.window.document.getElementById('rcms-content');
+    expect(content.style.getPropertyValue('--rcms-color-text')).toBe('#00cc44');
+    expect(content.style.fontFamily).toBe('Georgia');
+    expect(content.style.fontSize).toBe('20px');
+    expect(content.querySelector('h3').style.color).toBe('var(--rcms-color-text, #0f172a)');
+    expect(content.querySelector('p').style.color).toBe('rgb(100, 116, 139)');
+    expect(dom.window.document.body.style.background).toBe('rgb(243, 244, 246)');
+    dom.window.close();
+  });
+
   it('preserves info-card typography and surfaces on desktop and mobile', () => {
     const html = generateStaticPageSource({ title: 'Cards', slug: 'cards', tree: { children: [{
       type: 'services', props: { items: [{ title: 'Based in', description: 'Kozhikode, Kerala' }] },
@@ -343,7 +358,7 @@ describe("connected React page generation", () => {
       tree: { id: "page", type: "page", children: [{ id: "heading-1", type: "heading", props: { text: "Selected work" }, children: [] }] }
     });
     expect(staticPageSourcePath("case-studies")).toBe("case-studies/index.html");
-    expect(STATIC_PAGE_RUNTIME_VERSION).toBe(20);
+    expect(STATIC_PAGE_RUNTIME_VERSION).toBe(21);
     expect(html).toContain('<iframe id="rcms-header" class="rcms-site-shell" src="/?rcms_preview=1"');
     expect(html).toContain('<iframe id="rcms-footer" class="rcms-site-shell" src="/?rcms_preview=1"');
     expect(html).toContain("showSitePart(document.getElementById('rcms-header')");

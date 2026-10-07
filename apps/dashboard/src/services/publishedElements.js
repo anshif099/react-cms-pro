@@ -62,7 +62,7 @@ export function renderPublishedElement(node, value, richText, styles = {}) {
       if (infoCards) Object.assign(box.style, { borderRadius: '16px', background: '#fff', boxShadow: '0 12px 30px rgba(15,23,42,.06)' });
       image(item.image || item.avatar || item.src, item.alt || item.name || item.title, box);
       const title = add('h3', item.title || item.name || item.label || '', box);
-      if (infoCards) Object.assign(title.style, { margin: '12px 0 8px', color: '#0f172a', fontSize: '19px', fontWeight: 'inherit', ...typography });
+      if (infoCards) Object.assign(title.style, { margin: '12px 0 8px', color: 'var(--rcms-color-text, #0f172a)', fontSize: '19px', fontWeight: 'inherit', ...typography });
       if (type === 'pricing') add('strong', `$${item.price || 0}/${item.period || 'month'}`, box);
       if (type === 'statistics') add('strong', item.value || '', box);
       if (item.role) add('p', item.role, box);
