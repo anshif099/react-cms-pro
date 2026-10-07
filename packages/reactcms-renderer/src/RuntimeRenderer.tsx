@@ -322,10 +322,11 @@ function BuiltinComponent({
     as: keyof React.JSX.IntrinsicElements,
     style?: React.CSSProperties,
     html = false,
+    fallbackWhenEmpty = false,
   ) => (
     <InlineText
       as={as}
-      value={text(key, fallback)}
+      value={fallbackWhenEmpty ? text(key, fallback) || fallback : text(key, fallback)}
       html={html}
       editable={edit && !node.locked}
       selected={selected}
@@ -610,7 +611,7 @@ function BuiltinComponent({
       const items = localized(node, locale, 'items', []);
       return (
         <>
-          {inline('title', 'Frequently asked questions', 'h2', { marginTop: 0, color: '#0f172a', fontSize: '36px' })}
+          {inline('title', 'Frequently asked questions', 'h2', { margin: '0 0 24px', color: 'var(--rcms-color-text, #0f172a)', fontSize: '36px', fontWeight: 700 }, false, true)}
           <div style={{ display: 'grid', gap: '10px' }}>
             {items.map((item: any, index: number) => (
               <details key={item.id || index} style={{ padding: '16px 18px', border: '1px solid #e2e8f0', borderRadius: '12px', background: '#fff' }}>
