@@ -147,7 +147,7 @@ export function staticPageSourcePath(slug) {
   return `${cleanSlug(slug)}/index.html`;
 }
 
-export const STATIC_PAGE_RUNTIME_VERSION = 19;
+export const STATIC_PAGE_RUNTIME_VERSION = 20;
 
 export function generateStaticPageSource({ title, slug, tree, locale = "en", websiteId = "", pageKey = "" }) {
   const payload = JSON.stringify({ tree, locale, websiteId, pageKey, runtimeVersion: STATIC_PAGE_RUNTIME_VERSION }).replace(/</g, "\\u003c");

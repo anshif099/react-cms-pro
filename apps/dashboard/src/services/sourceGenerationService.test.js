@@ -12,6 +12,29 @@ import {
 } from "./sourceGenerationService";
 
 describe("connected React page generation", () => {
+  it('preserves info-card typography and surfaces on desktop and mobile', () => {
+    const html = generateStaticPageSource({ title: 'Cards', slug: 'cards', tree: { children: [{
+      type: 'services', props: { items: [{ title: 'Based in', description: 'Kozhikode, Kerala' }] },
+      styles: { base: { color: '#00cc44', fontFamily: 'Georgia', fontWeight: 400 }, desktop: { fontSize: '20px' }, mobile: { fontSize: '15px' } }
+    }] } });
+    const dom = new JSDOM(html, { runScripts: 'dangerously', url: 'https://example.com/' });
+    for (const [width, size] of [[1440, '20px'], [375, '15px']]) {
+      dom.window.innerWidth = width;
+      dom.window.dispatchEvent(new dom.window.Event('resize'));
+      const card = dom.window.document.querySelector('#rcms-content article');
+      expect(card.style.borderRadius).toBe('16px');
+      expect(card.style.background).toBe('rgb(255, 255, 255)');
+      expect(card.style.boxShadow).toContain('0 12px 30px');
+      for (const text of card.querySelectorAll('h3,p')) {
+        expect(text.style.color).toBe('rgb(0, 204, 68)');
+        expect(text.style.fontFamily).toBe('Georgia');
+        expect(text.style.fontSize).toBe(size);
+        expect(text.style.fontWeight).toBe('400');
+      }
+    }
+    dom.window.close();
+  });
+
   it('shows the site shell before the iframe load event fires', async () => {
     vi.useFakeTimers();
     const html = generateStaticPageSource({ title: 'Shell', slug: 'shell', tree: { children: [] } });
@@ -320,7 +343,7 @@ describe("connected React page generation", () => {
       tree: { id: "page", type: "page", children: [{ id: "heading-1", type: "heading", props: { text: "Selected work" }, children: [] }] }
     });
     expect(staticPageSourcePath("case-studies")).toBe("case-studies/index.html");
-    expect(STATIC_PAGE_RUNTIME_VERSION).toBe(19);
+    expect(STATIC_PAGE_RUNTIME_VERSION).toBe(20);
     expect(html).toContain('<iframe id="rcms-header" class="rcms-site-shell" src="/?rcms_preview=1"');
     expect(html).toContain('<iframe id="rcms-footer" class="rcms-site-shell" src="/?rcms_preview=1"');
     expect(html).toContain("showSitePart(document.getElementById('rcms-header')");

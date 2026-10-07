@@ -259,7 +259,7 @@ function buttonHref(props: Record<string, any>): string {
   return url;
 }
 
-function cards(items: any[], bodyKey = 'description') {
+function cards(items: any[], bodyKey = 'description', typography: React.CSSProperties = {}) {
   return (
     <div style={{
       display: 'grid',
@@ -282,10 +282,10 @@ function cards(items: any[], bodyKey = 'description') {
               style={{ width: '100%', aspectRatio: '16 / 10', objectFit: 'cover', borderRadius: '12px' }}
             />
           ) : null}
-          <h3 style={{ margin: '12px 0 8px', color: 'var(--rcms-color-text, #0f172a)', fontSize: '19px' }}>
+          <h3 style={{ margin: '12px 0 8px', color: 'var(--rcms-color-text, #0f172a)', fontSize: '19px', fontWeight: 'inherit', ...typography }}>
             {item.title || item.name || `Item ${index + 1}`}
           </h3>
-          <p style={{ margin: 0, color: '#64748b', lineHeight: 1.7 }}>
+          <p style={{ margin: 0, color: '#64748b', lineHeight: 1.7, ...typography }}>
             {item[bodyKey] || item.quote || item.bio || item.excerpt || ''}
           </p>
         </article>
@@ -575,7 +575,7 @@ function BuiltinComponent({
         <>
           {inline('title', node.type.replace(/-/g, ' '), 'h2', { margin: 0, color: '#0f172a', fontSize: '38px', textAlign: 'center' })}
           {text('subtitle') ? inline('subtitle', '', 'p', { color: '#64748b', textAlign: 'center', fontSize: '17px' }) : null}
-          {cards(items, body)}
+          {cards(items, body, typography)}
         </>
       );
     }

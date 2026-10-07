@@ -1,6 +1,10 @@
 // This function is serialized into hosted pages. Keep it self-contained.
 export function renderPublishedElement(node, value, richText, styles = {}) {
   const type = node.type;
+  const typography = {};
+  for (const key of ['color', 'fontFamily', 'fontSize', 'fontStyle', 'fontWeight', 'letterSpacing', 'lineHeight', 'textAlign', 'textDecoration', 'textTransform']) {
+    if (styles[key] !== undefined) typography[key] = typeof styles[key] === 'number' && !['fontWeight', 'lineHeight'].includes(key) ? `${styles[key]}px` : styles[key];
+  }
   const el = document.createElement('div');
   const get = (key, fallback = '') => value(node, key) ?? fallback;
   const add = (tag, text, parent = el) => {
@@ -50,15 +54,20 @@ export function renderPublishedElement(node, value, richText, styles = {}) {
   if (['features', 'services', 'cards', 'testimonials', 'team', 'blog-posts', 'pricing', 'statistics', 'logos'].includes(type)) {
     heading();
     const parent = grid();
+    const infoCards = ['features', 'services', 'cards', 'testimonials', 'team', 'blog-posts'].includes(type);
+    if (infoCards) Object.assign(parent.style, { gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%,220px), 1fr))', gap: '22px', marginTop: '30px' });
     const key = type === 'cards' ? 'cards' : type === 'team' ? 'members' : type === 'pricing' ? 'plans' : 'items';
     (get(key, []) || []).forEach(item => {
       const box = card(parent);
+      if (infoCards) Object.assign(box.style, { borderRadius: '16px', background: '#fff', boxShadow: '0 12px 30px rgba(15,23,42,.06)' });
       image(item.image || item.avatar || item.src, item.alt || item.name || item.title, box);
-      add('h3', item.title || item.name || item.label || '', box);
+      const title = add('h3', item.title || item.name || item.label || '', box);
+      if (infoCards) Object.assign(title.style, { margin: '12px 0 8px', color: '#0f172a', fontSize: '19px', fontWeight: 'inherit', ...typography });
       if (type === 'pricing') add('strong', `$${item.price || 0}/${item.period || 'month'}`, box);
       if (type === 'statistics') add('strong', item.value || '', box);
       if (item.role) add('p', item.role, box);
-      add('p', item.description || item.quote || item.bio || item.excerpt || item.features || '', box);
+      const description = add('p', item.description || item.quote || item.bio || item.excerpt || item.features || '', box);
+      if (infoCards) Object.assign(description.style, { margin: '0', color: '#64748b', lineHeight: '1.7', ...typography });
       if (item.buttonText) link(item.buttonText, item.buttonUrl || item.url, box);
     });
     return el;
