@@ -12,6 +12,56 @@ import {
 } from "./sourceGenerationService";
 
 describe("connected React page generation", () => {
+  it('preserves delegated mobile menu clicks and keyboard events while blocking editor events', () => {
+    const html = generateStaticPageSource({ title: 'Menu', slug: 'menu', tree: { children: [] } });
+    const dom = new JSDOM('<div id="root"><header><button aria-expanded="false"><span>Menu</span></button><nav hidden>Links</nav><p>Editable text</p></header></div>', { runScripts: 'outside-only', url: 'https://example.com/' });
+    dom.window.eval(html.slice(html.indexOf('function resolvePublishedShellLinks'), html.indexOf('function showSitePart')));
+    const header = dom.window.document.querySelector('header');
+    const button = header.querySelector('button');
+    const nav = header.querySelector('nav');
+    const keydown = vi.fn();
+    const editor = vi.fn();
+    dom.window.document.getElementById('root').addEventListener('click', event => {
+      if (event.target.closest('button')) {
+        nav.hidden = !nav.hidden;
+        button.setAttribute('aria-expanded', String(!nav.hidden));
+      } else editor();
+    });
+    dom.window.document.getElementById('root').addEventListener('keydown', keydown);
+    dom.window.lockPublishedSitePart(header);
+    header.querySelector('span').click();
+    expect(nav.hidden).toBe(false);
+    expect(button.getAttribute('aria-expanded')).toBe('true');
+    button.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    expect(keydown).toHaveBeenCalledOnce();
+    button.click();
+    expect(nav.hidden).toBe(true);
+    header.querySelector('p').click();
+    expect(editor).not.toHaveBeenCalled();
+    dom.window.close();
+  });
+
+  it('sizes the shell frame to include a mobile dropdown outside the header bounds', () => {
+    const html = generateStaticPageSource({ title: 'Menu', slug: 'menu', tree: { children: [] } });
+    const start = html.indexOf('function measure(){');
+    const end = html.indexOf('new frame.contentWindow.MutationObserver(measure)', start);
+    const dom = new JSDOM('<header><nav></nav></header>', { runScripts: 'outside-only' });
+    const target = dom.window.document.querySelector('header');
+    const nav = target.querySelector('nav');
+    target.getBoundingClientRect = () => ({ top: 0, bottom: 100, height: 100, width: 375 });
+    let open = true;
+    nav.getBoundingClientRect = () => open ? ({ bottom: 420, height: 320, width: 375 }) : ({ bottom: 0, height: 0, width: 0 });
+    dom.window.target = target;
+    dom.window.frame = { style: {} };
+    dom.window.eval(html.slice(start, end));
+    dom.window.measure();
+    expect(dom.window.frame.style.height).toBe('420px');
+    open = false;
+    dom.window.measure();
+    expect(dom.window.frame.style.height).toBe('100px');
+    dom.window.close();
+  });
+
   it('preserves CTA banner styling independently of the page background', () => {
     const tree = { styles: { base: { background: '#f3f4f6' } }, children: [{
       type: 'cta', props: { title: 'Ready to get started?', subtitle: '', background: '#ef4444', primaryButtonText: 'Book Your Free Growth Audit', primaryButtonUrl: '/contact', design: { background: '#f3f4f6' } },
@@ -237,7 +287,7 @@ describe("connected React page generation", () => {
       tree: { id: "page", type: "page", children: [{ id: "heading-1", type: "heading", props: { text: "Selected work" }, children: [] }] }
     });
     expect(staticPageSourcePath("case-studies")).toBe("case-studies/index.html");
-    expect(STATIC_PAGE_RUNTIME_VERSION).toBe(16);
+    expect(STATIC_PAGE_RUNTIME_VERSION).toBe(17);
     expect(html).toContain('<iframe id="rcms-header" class="rcms-site-shell" src="/?rcms_preview=1"');
     expect(html).toContain('<iframe id="rcms-footer" class="rcms-site-shell" src="/?rcms_preview=1"');
     expect(html).toContain("showSitePart(document.getElementById('rcms-header')");
