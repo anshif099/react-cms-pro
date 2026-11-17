@@ -11,12 +11,21 @@ import {
   patchEditableRegionSource,
   selectGitContentRegions,
   shouldUseConnectedWebsiteCanvas,
+  shouldUseClientContentCanvas,
   isConnectedPageDraft,
   isConnectedNativePage,
   updateRegionFieldValue
 } from "./sourceVisualPatchService";
 
 describe("source visual patches", () => {
+  it("uses content-only editing for clients on imported source pages", () => {
+    const website = { sourceConnected: true, domain: "https://example.com" };
+    const page = { isImported: true, nativeArtifactStatus: "source-only", sourceFile: "index.html" };
+    expect(shouldUseClientContentCanvas(website, page, false)).toBe(true);
+    expect(shouldUseClientContentCanvas(website, page, true)).toBe(false);
+    expect(shouldUseClientContentCanvas(null, page, false)).toBe(false);
+    expect(shouldUseClientContentCanvas(website, { ...page, isImported: false }, false)).toBe(false);
+  });
   it("patches a multiline EditableText default value", () => {
     const source = `
       <EditableText

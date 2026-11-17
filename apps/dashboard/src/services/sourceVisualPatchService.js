@@ -588,6 +588,11 @@ export function connectedDraftTargets({
   return targets;
 }
 
+export function shouldUseClientContentCanvas(website, page, isSuperAdmin) {
+  return Boolean(!isSuperAdmin && website?.sourceConnected && website?.domain
+    && page?.isImported && page?.nativeArtifactStatus === "source-only" && page?.sourceFile);
+}
+
 export function shouldUseConnectedWebsiteCanvas(website, page) {
   return Boolean(
     page

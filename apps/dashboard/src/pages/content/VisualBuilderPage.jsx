@@ -65,6 +65,7 @@ import {
   patchEditableRegionSource,
   selectGitContentRegions,
   shouldUseConnectedWebsiteCanvas,
+  shouldUseClientContentCanvas,
   updateRegionFieldValue
 } from "../../services/sourceVisualPatchService";
 import {
@@ -2878,7 +2879,7 @@ export function VisualBuilderPage() {
     loadRevisions,
     restoreRevision
   } = useRevisions();
-  const { user } = useAuth();
+  const { user, isSuperAdmin } = useAuth();
   const toast = useToast();
 
   const [initialTree, setInitialTree] = useState(null);
@@ -2978,11 +2979,13 @@ export function VisualBuilderPage() {
   }, [websiteId]);
 
   const isConnectedSourcePage = Boolean(
+    isSuperAdmin
+    &&
     selectedPage?.isImported
     && selectedPage?.nativeArtifactStatus === "source-only"
     && selectedPage?.sourceFile
   );
-  const isConnectedCmsPage = shouldUseConnectedWebsiteCanvas(
+  const isConnectedCmsPage = shouldUseClientContentCanvas(sourceWebsite, selectedPage, isSuperAdmin) || shouldUseConnectedWebsiteCanvas(
     sourceWebsite,
     selectedPage
   );
@@ -3800,6 +3803,8 @@ export function VisualBuilderPage() {
       if (!saved) return null;
 
       const publishesToGit = Boolean(
+        isSuperAdmin
+        &&
         sourceWebsite?.connection?.provider === "github"
         && sourceWebsite?.connection?.sourceMode === "provider"
         && sourceWebsite?.connection?.writebackEnabled !== false
@@ -3839,6 +3844,14 @@ export function VisualBuilderPage() {
           configured: true,
           deploymentPending: gitPublish.deploymentPending
         };
+      } else if (sourceWebsite && !isSuperAdmin) {
+        // Clients publish content through the installed bridge. Hosting
+        // credentials belong to the administrator's browser session.
+        try {
+          spaRouting = await sourceProviderService.verifyExistingLiveRouting(sourceWebsite);
+        } catch {
+          throw new Error("Live publishing is not configured for this website. Ask your administrator to reconnect hosting and publish once; your draft is saved.");
+        }
       } else if (sourceWebsite) {
         // Visual-only client publishing writes editable content to Firebase.
         // SFTP/cPanel credentials are deliberately session-only and normally
@@ -3976,6 +3989,7 @@ export function VisualBuilderPage() {
     pageId,
     pageKey,
     saveConnectedDraft,
+    isSuperAdmin,
     selectedPage?.routeId,
     setSelectedPage,
     sourceWebsite,
@@ -3985,7 +3999,7 @@ export function VisualBuilderPage() {
   ]);
 
   const canRepairLiveRoute = Boolean(
-    ["cpanel", "sftp"].includes(sourceWebsite?.connection?.provider)
+    isSuperAdmin && ["cpanel", "sftp"].includes(sourceWebsite?.connection?.provider)
   );
 
   const handleLiveRouteRepaired = useCallback(async ({ routing, connection }) => {
