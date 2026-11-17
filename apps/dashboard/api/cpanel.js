@@ -88,6 +88,14 @@ function cpanelError(payload) {
   return "cPanel rejected the file operation.";
 }
 
+export function normalizeCpanelResult(payload) {
+  // HTTP /execute responses expose the UAPI result directly; other callers
+  // may wrap the same result in a `result` property.
+  return payload?.result && typeof payload.result === "object"
+    ? payload.result
+    : payload;
+}
+
 export function incompatiblePanelError(hostname, status, location = "") {
   const redirectDetail = location ? ` It redirected to ${location}.` : "";
   return `The server ${hostname} does not provide the cPanel UAPI endpoint (${status}).${redirectDetail} If this hosting account uses StackCP/20i, connect with its unlocked SFTP/FTP details instead of the control-panel URL.`;
@@ -209,13 +217,14 @@ export default async function handler(request, response) {
         error: `cPanel returned a non-JSON response (${upstream.status}). Check that the URL is the secure cPanel hostname, usually on port 2083.`
       });
     }
-    if (!upstream.ok || payload?.result?.status !== 1) {
+    const result = normalizeCpanelResult(payload);
+    if (!upstream.ok || Number(result?.status) !== 1) {
       return response.status(502).json({
         error: cpanelError(payload)
       });
     }
 
-    let data = payload.result.data;
+    let data = result.data;
     if (operation === "read") data = data?.content ?? data;
     return response.status(200).json({ data });
   } catch (error) {
