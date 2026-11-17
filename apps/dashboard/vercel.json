@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npm run build",
+  "buildCommand": "cd ../.. && npm run build",
   "outputDirectory": "dist",
   "functions": {
     "api/cpanel.js": { "maxDuration": 60 },
