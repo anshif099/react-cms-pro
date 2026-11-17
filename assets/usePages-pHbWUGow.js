@@ -1,1 +1,0 @@
-import{k as e}from"./index-DaYlb9-u.js";function t(){return e()}export{t};
