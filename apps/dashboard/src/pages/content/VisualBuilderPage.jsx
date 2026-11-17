@@ -643,7 +643,7 @@ function ConnectedSourceWorkspace({
         }
         const entries = Object.entries(draftRegions || {}).filter(([regionId, value]) => (
           value !== null && value !== undefined
-          && (visualOnly || regionId === RUNTIME_ADDITIONS_REGION
+          && (visualOnly || regionId.startsWith("__rcms_auto__") || regionId === RUNTIME_ADDITIONS_REGION
             || Object.prototype.hasOwnProperty.call(sourceOverrides, regionId))
         ));
         const draftValues = new Map(entries);
@@ -1124,8 +1124,7 @@ function ConnectedSourceWorkspace({
             </p>
             {!runtimeConnected && (
               <p className="mt-4 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-[10px] leading-4 text-amber-200/70">
-                Waiting for the ReactCMS editing bridge. The live page still previews normally,
-                but visual selection requires its SDK components.
+                Preparing automatic visual editing. Reload the canvas if element selection does not become available.
               </p>
             )}
           </div>
@@ -3472,6 +3471,7 @@ export function VisualBuilderPage() {
     setSourceSaving(true);
     setSourceSaveStatus("saving");
     try {
+      await Promise.all(Array.from(connectedWritesRef.current));
       const dirtyFiles = Object.fromEntries(
         Array.from(sourceDirtyPathsRef.current).map((path) => [
           path,
@@ -3515,9 +3515,10 @@ export function VisualBuilderPage() {
       const dirtyPaths = Array.from(sourceDirtyPathsRef.current);
       const provider = sourceWebsite.connection?.provider;
       const directHostingProvider = provider === "sftp" || provider === "cpanel";
+      const automaticContent = Object.keys(regionsRef.current).some((id) => id.startsWith("__rcms_auto__"));
       const publishPaths = dirtyPaths.length
         ? dirtyPaths
-        : directHostingProvider && selectedPage.sourceFile
+        : directHostingProvider && selectedPage.sourceFile && !automaticContent
           ? [selectedPage.sourceFile]
           : [];
       const result = publishPaths.length
@@ -3543,6 +3544,10 @@ export function VisualBuilderPage() {
         websiteId,
         pageSyncKey
       );
+      if (automaticContent) {
+        const routing = await sourceProviderService.ensureSpaRouting(sourceWebsite);
+        if (!routing.publishedStyleBridgeConfigured) throw new Error("Automatic editing content was saved, but the live hosting bridge could not be installed. Automatic publishing currently requires connected cPanel or SFTP hosting.");
+      }
       const publishedAt = await pageService.markPublished(
         websiteId,
         pageId,
@@ -3585,6 +3590,24 @@ export function VisualBuilderPage() {
   };
 
   const patchSourceFromVisual = useCallback((change) => {
+    if (change.regionId.startsWith("__rcms_auto__")) {
+      regionsRef.current = { ...regionsRef.current, [change.regionId]: change.value };
+      let overrides = {};
+      try { overrides = JSON.parse(sessionStorage.getItem(sourcePreviewOverridesKey(websiteId, pageId)) || "{}"); } catch {}
+      sessionStorage.setItem(sourcePreviewOverridesKey(websiteId, pageId), JSON.stringify({ ...overrides, [change.regionId]: change.value }));
+      const targets = connectedDraftTargets({
+        websiteId, pageKey, regionId: change.regionId,
+        runtimeWebsiteId: change.runtimeWebsiteId,
+        runtimePageId: change.pageId,
+        pageAliases: [pageId, selectedPage?.id, selectedPage?.routeId, selectedPage?.slug, selectedPage?.route]
+      });
+      const write = visualBuilderService.persistRegionTargets(targets, change.regionId, change.value);
+      connectedWritesRef.current.add(write);
+      write.catch((error) => toast.error(error.message || "The content could not be saved."))
+        .finally(() => connectedWritesRef.current.delete(write));
+      setSourceSaveStatus("unsaved");
+      return { changed: true };
+    }
     if (change.regionId.startsWith(`${pageKey}.`)
       && sourceWebsite?.connection?.provider === "github") {
       const manifestPath = "public/reactcms-content.js";

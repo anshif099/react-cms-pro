@@ -1,6 +1,7 @@
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import sftpHandler from "./sftp.js";
+import { installAutomaticEditing } from "./automatic-editing.js";
 
 const MAX_HTML_BYTES = 2 * 1024 * 1024;
 const MAX_ASSET_BYTES = 4 * 1024 * 1024;
@@ -239,6 +240,7 @@ function runtimeBootstrap(baseUrl, route, proxyOrigin) {
   var sourceBaseUrl = ${JSON.stringify(baseUrl)};
   var assetProxyPath = ${JSON.stringify(`${proxyOrigin}${ASSET_PROXY_PATH}`)};
   var previewRoute = ${JSON.stringify(route)};
+  (${installAutomaticEditing.toString()})({ preview: true, editing: ${JSON.stringify(route.includes("rcms_edit=1"))} });
   // Opaque sandbox origins cannot access browser storage. Give the embedded
   // application isolated, ephemeral storage so ordinary reads do not crash it.
   ["localStorage", "sessionStorage"].forEach(function (name) {

@@ -4,6 +4,20 @@ ReactCMS includes an embedded first-party Rocket planning engine and the experim
 
 ## Dashboard
 
+Connected website previews automatically discover ordinary text, images, links,
+buttons, and sections without requiring SDK wrappers. Existing SDK regions keep
+their own editing behavior. Automatic edits are stored as page content drafts;
+publishing to connected cPanel/SFTP hosting installs the live content bridge.
+The hosting session must be connected for that installation. Original JSX and
+compiled bundles are not rewritten for these content edits. Routes still need
+to be discovered/imported separately.
+
+Automatic fields use DOM paths, so a later source deployment that changes page
+structure can require reselecting affected content. Forms, application logic,
+canvas content, shadow DOM, and custom interactive widgets are not converted
+into CMS fields. Git-backed automatic content publishing requires a separate
+deployment integration; the automatic cPanel/SFTP publisher does not cover it.
+
 This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
 
 Currently, two official plugins are available:

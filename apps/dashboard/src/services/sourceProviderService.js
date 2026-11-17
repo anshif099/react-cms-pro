@@ -1,4 +1,5 @@
 import sourceCredentialService from "./sourceCredentialService";
+import { installAutomaticEditing } from "../../api/automatic-editing.js";
 
 function normalizeRepository(value) {
   const repository = String(value || "")
@@ -421,7 +422,8 @@ export function ensureRouteDeletionBootstrapHtml(
 }
 
 export function routeDeletionBootstrapSource() {
-  return `const bootstrap = document.querySelector("script[data-reactcms-route-bootstrap]");
+  return `const automaticEditing = (${installAutomaticEditing.toString()})();
+const bootstrap = document.querySelector("script[data-reactcms-route-bootstrap]");
 const applicationSource = bootstrap?.dataset.reactcmsApp || "";
 const websiteId = bootstrap?.dataset.reactcmsWebsite || "";
 const databaseUrl = (bootstrap?.dataset.reactcmsDatabase || "").replace(/\\/$/, "");
@@ -649,6 +651,7 @@ async function hydratePublishedPage(pageKey, page) {
   if (!page || page.deleted === true) return;
   activePageKey = pageKey;
   publishedRegions = pageRegions(page);
+  automaticEditing.applyRegions(publishedRegions);
   setRuntimeTypographyTree(publishedRegions.__rcms_runtime_additions__);
   broadcastPublishedRegions(pageKey, publishedRegions);
   await discoverSectionElements(publishedRegions);
