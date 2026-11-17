@@ -1,1 +1,0 @@
-import{k as e}from"./index-J4tM3S4E.js";function t(){return e()}export{t};
