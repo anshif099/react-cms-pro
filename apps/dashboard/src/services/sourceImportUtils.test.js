@@ -6,6 +6,22 @@ import {
 } from "./sourceImportUtils";
 
 describe("source import discovery", () => {
+  it("discovers deployed SPA routes from a sitemap using the application shell", () => {
+    const manifest = buildSourceManifest([
+      { path: "index.html", content: '<link rel="canonical" href="https://monkeytribe.in/">' },
+      { path: "sitemap.xml", content: '<urlset><url><loc>https://monkeytribe.in/</loc></url><url><loc>https://monkeytribe.in/courses</loc></url><url><loc>https://other.example/contact</loc></url></urlset>' }
+    ]);
+    expect(manifest.routes.map((route) => route.path)).toEqual(["/", "/courses"]);
+    expect(manifest.routes[1].sourceFile).toBe("index.html");
+  });
+
+  it("does not treat sitemap index locations as page routes", () => {
+    const routes = discoverSourceRoutes([
+      { path: "index.html", content: "<div id='root'></div>" },
+      { path: "sitemap.xml", content: '<sitemapindex><sitemap><loc>https://example.com/pages.xml</loc></sitemap></sitemapindex>' }
+    ]);
+    expect(routes.map((route) => route.path)).toEqual(["/"]);
+  });
   it("discovers React Router paths without inventing page content", () => {
     const routes = discoverSourceRoutes([
       {

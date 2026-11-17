@@ -17,6 +17,7 @@ const SOURCE_EXTENSIONS = new Set([
   "ts",
   "tsx",
   "vue",
+  "xml",
   "yaml",
   "yml"
 ]);
@@ -315,6 +316,27 @@ export function discoverSourceRoutes(files, sourceMetadata = {}) {
   if (!discovered.length) {
     const indexFile = files.find((file) => /(^|\/)index\.html?$/.test(file.path));
     if (indexFile) add("/", indexFile);
+  }
+
+  // Deployed SPAs often contain no JSX or route files. Their sitemap still
+  // identifies public routes, all served by the same application shell.
+  const shell = files.find((file) => file.path === "index.html");
+  if (shell) {
+    const canonical = shell.content?.match(/<link\b[^>]*rel=["']canonical["'][^>]*href=["']([^"']+)["']/i)?.[1];
+    let siteOrigin;
+    try { siteOrigin = canonical ? new URL(canonical).origin : undefined; } catch {}
+    files.filter((file) => /(^|\/)sitemap[^/]*\.xml$/i.test(file.path)).forEach((file) => {
+      if (!/<urlset\b/i.test(file.content || "")) return;
+      for (const match of file.content.matchAll(/<loc>\s*([^<]+)\s*<\/loc>/gi)) {
+        try {
+          const url = new URL(match[1].trim().replace(/&amp;/g, "&"));
+          if (!["http:", "https:"].includes(url.protocol)) continue;
+          siteOrigin ||= url.origin;
+          if (url.origin !== siteOrigin || url.search || url.hash) continue;
+          add(url.pathname, shell);
+        } catch {}
+      }
+    });
   }
 
   const unique = new Map();

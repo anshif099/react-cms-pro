@@ -239,6 +239,21 @@ function runtimeBootstrap(baseUrl, route, proxyOrigin) {
   var sourceBaseUrl = ${JSON.stringify(baseUrl)};
   var assetProxyPath = ${JSON.stringify(`${proxyOrigin}${ASSET_PROXY_PATH}`)};
   var previewRoute = ${JSON.stringify(route)};
+  // Opaque sandbox origins cannot access browser storage. Give the embedded
+  // application isolated, ephemeral storage so ordinary reads do not crash it.
+  ["localStorage", "sessionStorage"].forEach(function (name) {
+    try { window[name].getItem("__rcms_probe"); return; } catch (_) {}
+    var entries = new Map();
+    var storage = {
+      getItem: function (key) { key = String(key); return entries.has(key) ? entries.get(key) : null; },
+      setItem: function (key, value) { entries.set(String(key), String(value)); },
+      removeItem: function (key) { entries.delete(String(key)); },
+      clear: function () { entries.clear(); },
+      key: function (index) { return Array.from(entries.keys())[Number(index)] || null; }
+    };
+    Object.defineProperty(storage, "length", { get: function () { return entries.size; } });
+    Object.defineProperty(window, name, { configurable: true, value: storage });
+  });
   var embeddedEditorToolbarHidden = false;
   var areaSelectionArmed = false;
   var bridgeWebsiteId = "";

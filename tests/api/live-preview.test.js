@@ -15,6 +15,20 @@ vi.mock("node:dns/promises", () => ({
 const previewOrigin = "https://reactcms.example";
 
 describe("live preview HTML rewriting", () => {
+  it("allows application storage reads in an opaque preview without sharing dashboard storage", () => {
+    const html = rewritePreviewHtml(
+      '<html><head></head><body><script>localStorage.setItem("test", 12); sessionStorage.setItem("login", "yes"); window.appStarted = localStorage.getItem("test");</script></body></html>',
+      "https://example.com/", "/"
+    );
+    const dom = new JSDOM(html, { runScripts: "dangerously" });
+    expect(dom.window.appStarted).toBe("12");
+    expect(dom.window.sessionStorage.getItem("login")).toBe("yes");
+    expect(dom.window.localStorage.getItem("login")).toBeNull();
+    expect(dom.window.localStorage.length).toBe(1);
+    dom.window.localStorage.removeItem("test");
+    expect(dom.window.localStorage.getItem("test")).toBeNull();
+    dom.window.close();
+  });
   afterEach(() => {
     vi.unstubAllGlobals();
   });
