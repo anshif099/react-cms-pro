@@ -1,1 +1,0 @@
-import{k as e}from"./index-DfkO75it.js";function t(){return e()}export{t};
