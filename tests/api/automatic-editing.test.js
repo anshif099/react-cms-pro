@@ -33,6 +33,21 @@ describe("automatic connected website editing", () => {
     expect(readFileSync(new URL("../../api/automatic-editing.js", import.meta.url), "utf8"))
       .toBe(readFileSync(new URL("../../apps/dashboard/api/automatic-editing.js", import.meta.url), "utf8"));
   });
+  it("selects the bold footer company name as text inside its link", async () => {
+    const { bridge, window, document } = setup('<footer><ul><li>A division of <a href="https://company.example"><strong>Creative Monkeys Advertising Pvt. Ltd.</strong></a></li></ul></footer>', { editing: true });
+    const messages = [];
+    window.addEventListener("message", (event) => messages.push(event.data));
+    const strong = document.querySelector("strong");
+    const id = strong.getAttribute("data-rcms-region");
+    expect(strong.getAttribute("data-rcms-type")).toBe("text");
+    strong.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
+    await new Promise((resolve) => setTimeout(resolve, 15));
+    expect(messages.find((message) => message.type === "rcms/v1/region-selected").payload)
+      .toMatchObject({ regionId: id, type: "text", value: "Creative Monkeys Advertising Pvt. Ltd." });
+    bridge.applyRegions({ [id]: "Updated company name" });
+    expect(strong.textContent).toBe("Updated company name");
+    expect(document.querySelector("a").getAttribute("href")).toBe("https://company.example");
+  });
   it("selects ordinary content without an SDK and blocks navigation in edit mode", async () => {
     const { window, document } = setup('<main><h1>Hello <em>world</em></h1><a href="/courses">Courses</a></main>', { preview: true, editing: true });
     const messages = [];

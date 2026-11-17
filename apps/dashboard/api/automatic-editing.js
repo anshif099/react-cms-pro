@@ -78,7 +78,7 @@ export function installAutomaticEditing(options = {}) {
         span.appendChild(node);
       });
     });
-    document.querySelectorAll("h1,h2,h3,h4,h5,h6,p,li,label,a,button,img,section,header,footer,main,span").forEach((element) => {
+    document.querySelectorAll("h1,h2,h3,h4,h5,h6,p,li,label,a,button,img,section,header,footer,main,span,strong,b,em,i,small").forEach((element) => {
       if (element.closest("[data-rcms-node],script,style,svg,form,input,textarea,select,[contenteditable=true]")) return;
       const existing = element.closest("[data-rcms-region]");
       if (existing && !existing.getAttribute("data-rcms-region").startsWith(prefix)) return;
