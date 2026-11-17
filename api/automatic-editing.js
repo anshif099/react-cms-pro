@@ -63,6 +63,21 @@ export function installAutomaticEditing(options = {}) {
   }
   function discover() {
     scheduled = false;
+    // Mixed footer copy contains direct text beside links. Expose each plain
+    // text run separately so editing it never clears the adjacent link/icon.
+    document.querySelectorAll("p,li,div").forEach((element) => {
+      if (element.closest("[data-rcms-node],script,style,svg,form,[contenteditable=true]")) return;
+      const region = element.closest("[data-rcms-region]");
+      if (region && !region.getAttribute("data-rcms-region").startsWith(prefix)) return;
+      if (!element.querySelector("a,button") || element.querySelector("p,li,div,section,ul,ol,form")) return;
+      Array.from(element.childNodes).forEach((node) => {
+        if (node.nodeType !== 3 || !node.textContent.trim()) return;
+        const span = document.createElement("span");
+        span.setAttribute("data-rcms-auto-text", "true");
+        node.replaceWith(span);
+        span.appendChild(node);
+      });
+    });
     document.querySelectorAll("h1,h2,h3,h4,h5,h6,p,li,label,a,button,img,section,header,footer,main,span").forEach((element) => {
       if (element.closest("[data-rcms-node],script,style,svg,form,input,textarea,select,[contenteditable=true]")) return;
       const existing = element.closest("[data-rcms-region]");

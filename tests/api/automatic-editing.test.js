@@ -5,7 +5,7 @@ import { installAutomaticEditing } from "../../api/automatic-editing.js";
 
 let dom;
 let activeBridge;
-afterEach(() => { activeBridge?.destroy(); dom?.window.close(); });
+afterEach(() => { activeBridge?.destroy(); dom?.window.close(); activeBridge = undefined; dom = undefined; });
 function setup(html, options = {}) {
   dom = new JSDOM(html, { url: "https://example.com/", runScripts: "outside-only", pretendToBeVisual: true });
   const bridge = dom.window.eval(`(${installAutomaticEditing.toString()})(${JSON.stringify(options)})`);
@@ -14,6 +14,21 @@ function setup(html, options = {}) {
   return { bridge, window: dom.window, document: dom.window.document };
 }
 describe("automatic connected website editing", () => {
+  it("edits mixed footer text independently while preserving linked company names", () => {
+    const { bridge, document } = setup('<footer><p>The education division of <a href="https://company.example">Creative Monkeys</a> — empowering professionals.</p><ul><li>A division of <a href="https://company.example"><strong>Creative Monkeys Ltd.</strong></a></li></ul></footer>');
+    const text = document.querySelector("li > span");
+    const id = text.getAttribute("data-rcms-region");
+    const company = document.querySelector("li > a");
+    const companyId = company.getAttribute("data-rcms-region");
+    expect(document.querySelectorAll("p > span")).toHaveLength(2);
+    bridge.applyRegions({ [id]: "Part of ", [companyId]: { text: "New company", url: "https://new.example" } });
+    expect(document.querySelector("li").textContent).toBe("Part of New company");
+    expect(company.querySelector("strong").textContent).toBe("New company");
+    expect(company.getAttribute("href")).toBe("https://new.example");
+    bridge.applyRegions({ [id]: "Part of " });
+    expect(document.querySelectorAll("li > span")).toHaveLength(1);
+    expect(text.getAttribute("data-rcms-region")).toBe(id);
+  });
   it("keeps both deployable bridge copies identical", () => {
     expect(readFileSync(new URL("../../api/automatic-editing.js", import.meta.url), "utf8"))
       .toBe(readFileSync(new URL("../../apps/dashboard/api/automatic-editing.js", import.meta.url), "utf8"));
