@@ -599,6 +599,22 @@ describe("connected source providers", () => {
     })).rejects.toThrow("HTTP 404");
   });
 
+  it.each([false, true])("checks automatic publishing support on the live bridge (%s)", async (supportsAutomaticEditing) => {
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ ok: true, status: 200 }))
+      .mockResolvedValueOnce(new Response(supportsAutomaticEditing
+        ? routeDeletionBootstrapSource()
+        : "data-reactcms-route-bootstrap data-reactcms-deleted-route await routeExists(pageKey, page) data-reactcms-runtime-style-v2"))
+    );
+
+    const verification = verifyExistingLiveRouting({ domain: "https://triosis.in" }, { requireAutomaticEditing: true });
+    if (supportsAutomaticEditing) {
+      await expect(verification).resolves.toMatchObject({ verified: true });
+    } else {
+      await expect(verification).rejects.toThrow("needs an update to apply automatic edits");
+    }
+  });
+
   it("does not mark customer routing complete when the deletion guard is absent", async () => {
     vi.stubGlobal("fetch", vi.fn()
       .mockResolvedValueOnce(jsonResponse({ ok: true, status: 200 }))

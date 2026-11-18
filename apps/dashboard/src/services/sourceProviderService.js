@@ -266,7 +266,7 @@ function normalizedLiveOrigin(domain) {
   return url.origin;
 }
 
-export async function verifyExistingLiveRouting(website) {
+export async function verifyExistingLiveRouting(website, { requireAutomaticEditing = false } = {}) {
   const origin = normalizedLiveOrigin(website?.domain);
   const verificationId = Date.now().toString(36);
   const nestedRoute = new URL(`/reactcms-route-check-${verificationId}`, origin);
@@ -309,6 +309,9 @@ export async function verifyExistingLiveRouting(website) {
     throw new Error(
       "The live route is working, but its ReactCMS published-style bridge is outdated."
     );
+  }
+  if (requireAutomaticEditing && !bootstrapSource.includes("automaticEditing.applyRegions(publishedRegions)")) {
+    throw new Error("The live publishing bridge needs an update to apply automatic edits.");
   }
 
   return {

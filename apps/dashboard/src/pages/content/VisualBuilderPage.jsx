@@ -3518,7 +3518,17 @@ export function VisualBuilderPage() {
       const dirtyPaths = Array.from(sourceDirtyPathsRef.current);
       const provider = sourceWebsite.connection?.provider;
       const directHostingProvider = provider === "sftp" || provider === "cpanel";
-      const automaticContent = Object.keys(regionsRef.current).some((id) => id.startsWith("__rcms_auto__"));
+      const savedRegions = directHostingProvider
+        ? await visualBuilderService.loadSavedDraftRegions(websiteId, pageKey, {
+          pageId,
+          routeId: selectedPage.routeId,
+          slug: selectedPage.slug,
+          route: selectedPage.route
+        })
+        : {};
+      const automaticContent = [regionsRef.current, savedRegions].some((regions) =>
+        Object.keys(regions || {}).some((id) => id.startsWith("__rcms_auto__"))
+      );
       const publishPaths = dirtyPaths.length
         ? dirtyPaths
         : directHostingProvider && selectedPage.sourceFile && !automaticContent
@@ -3848,9 +3858,11 @@ export function VisualBuilderPage() {
         // Clients publish content through the installed bridge. Hosting
         // credentials belong to the administrator's browser session.
         try {
-          spaRouting = await sourceProviderService.verifyExistingLiveRouting(sourceWebsite);
-        } catch {
-          throw new Error("Live publishing is not configured for this website. Ask your administrator to reconnect hosting and publish once; your draft is saved.");
+          spaRouting = await sourceProviderService.verifyExistingLiveRouting(sourceWebsite, {
+            requireAutomaticEditing: Object.keys(regionsRef.current).some((id) => id.startsWith("__rcms_auto__"))
+          });
+        } catch (error) {
+          throw new Error(`${error.message} Ask your administrator to reconnect hosting and use Update cPanel or Update StackCP. Your draft is saved.`);
         }
       } else if (sourceWebsite) {
         // Visual-only client publishing writes editable content to Firebase.
