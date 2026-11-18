@@ -1,0 +1,1 @@
+import{k as e}from"./index-Bdv5LBd9.js";function t(){return e()}export{t};
