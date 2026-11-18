@@ -4107,6 +4107,7 @@ export function VisualBuilderPage() {
 
   if (isConnectedSourcePage) {
     return (
+      <>
       <ConnectedSourceWorkspace
         mode={mode}
         websiteId={websiteId}
@@ -4145,7 +4146,17 @@ export function VisualBuilderPage() {
         onAIDraftSave={saveSourceAIChanges}
         onSave={saveSourceDraft}
         onPublish={publishSource}
+        onRepairLiveRoute={canRepairLiveRoute ? () => setShowRouteRepair(true) : undefined}
       />
+      {canRepairLiveRoute && (
+        <HostingRouteRepairModal
+          isOpen={showRouteRepair}
+          onClose={() => setShowRouteRepair(false)}
+          website={sourceWebsite}
+          onRepaired={handleLiveRouteRepaired}
+        />
+      )}
+      </>
     );
   }
 

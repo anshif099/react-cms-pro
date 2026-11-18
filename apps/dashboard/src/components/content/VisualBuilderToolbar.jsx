@@ -206,10 +206,10 @@ export function VisualBuilderToolbar({
               type="button"
               onClick={onRepairLiveRoute}
               className="hidden xl:flex h-9 items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 text-[11px] font-semibold text-amber-200 hover:bg-amber-500/15 cursor-pointer"
-              title="Install or verify live nested URL routing"
+              title="Install or update the live publishing script on your hosting"
             >
               <Route className="w-3.5 h-3.5" />
-              Repair Route
+              Set Up Live Publishing
             </button>
           )}
 

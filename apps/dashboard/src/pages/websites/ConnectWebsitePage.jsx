@@ -305,6 +305,7 @@ export function ConnectWebsitePage() {
             : null,
           spaRoutingConfigured: spaRouting?.configured || false,
           routeDeletionGuardConfigured: spaRouting?.deletionGuardConfigured || false,
+          publishedStyleBridgeConfigured: spaRouting?.publishedStyleBridgeConfigured || false,
           spaRoutingPath: spaRouting?.path || null,
           spaRoutingUpdatedAt: spaRouting?.configured ? Date.now() : null,
           writebackEnabled: (

@@ -6,28 +6,6 @@ import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { Modal } from "../ui/Modal";
 
-async function verifyLiveSpaFallback(domain) {
-  const route = new URL(
-    `/reactcms-route-check-${Date.now().toString(36)}`,
-    String(domain || "")
-  );
-  route.searchParams.set("rcms_route_check", Date.now().toString());
-  const response = await fetch(
-    `/api/live-preview?probe=${encodeURIComponent(route.toString())}`,
-    { method: "GET", cache: "no-store" }
-  );
-  const result = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(result?.error || "ReactCMS could not verify the repaired live route.");
-  }
-  if (!result?.ok) {
-    throw new Error(
-      `.htaccess was written successfully, but the live server still returned HTTP ${result?.status || "unknown"}. Confirm that the connected project root is the domain's active document root and that Apache allows rewrite rules.`
-    );
-  }
-  return result;
-}
-
 export function HostingRouteRepairModal({ isOpen, onClose, website, onRepaired, connectOnly = false }) {
   const provider = website?.connection?.provider;
   const isSftp = provider === "sftp";
@@ -113,7 +91,10 @@ export function HostingRouteRepairModal({ isOpen, onClose, website, onRepaired, 
         ...website,
         connection
       });
-      const liveProbe = await verifyLiveSpaFallback(website.domain);
+      const liveProbe = await sourceProviderService.verifyExistingLiveRouting(
+        { ...website, connection },
+        { requireAutomaticEditing: true }
+      );
       await onRepaired?.({
         routing,
         liveProbe,
@@ -130,7 +111,7 @@ export function HostingRouteRepairModal({ isOpen, onClose, website, onRepaired, 
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={connectOnly ? "Connect Hosting to Publish" : "Repair Live Website Routes"}
+      title={connectOnly ? "Connect Hosting to Publish" : "Set Up Live Publishing"}
       size="md"
     >
       <form className="space-y-5 text-left" onSubmit={handleSubmit}>
@@ -219,7 +200,7 @@ export function HostingRouteRepairModal({ isOpen, onClose, website, onRepaired, 
           <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
           <Button type="submit" loading={loading} className="gap-2">
             <Route className="h-4 w-4" />
-            {connectOnly ? "Connect Hosting" : "Repair and Verify Route"}
+            {connectOnly ? "Connect Hosting" : "Install and Verify"}
           </Button>
         </div>
       </form>
