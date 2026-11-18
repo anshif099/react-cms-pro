@@ -14,7 +14,7 @@ import Modal from "../../components/ui/Modal";
 import Input from "../../components/ui/Input";
 import { useAuth } from "../../hooks/useAuth";
 import { normalizePageSlug, pageRouteExists } from "../../services/pageCreationUtils";
-import { isMonkeyTribeWebsite, monkeyTribePublicRoutes } from "../../services/monkeyTribeRoutes";
+import { isMonkeyTribeWebsite, monkeyTribePublicRoutes, MONKEY_TRIBE_COURSE_TEMPLATES } from "../../services/monkeyTribeRoutes";
 
 export function PagesListPage() {
   const { websiteId } = useParams();
@@ -28,6 +28,7 @@ export function PagesListPage() {
   const [activeFilter, setActiveFilter] = useState("all");
   const [copyPage, setCopyPage] = useState(null);
   const [creatingCourse, setCreatingCourse] = useState(false);
+  const [courseTemplateRoute, setCourseTemplateRoute] = useState("/promptx");
   const [copyTitle, setCopyTitle] = useState("");
   const [copySlug, setCopySlug] = useState("");
   const [copyError, setCopyError] = useState("");
@@ -47,6 +48,7 @@ export function PagesListPage() {
 
   const openCourse = () => {
     setCreatingCourse(true);
+    setCourseTemplateRoute("/promptx");
     setCopyTitle("");
     setCopySlug("");
     setCopyError("");
@@ -70,7 +72,7 @@ export function PagesListPage() {
     try {
       const page = await createPage(websiteId, {
         title, slug, route: slug === "home" ? "/" : `/${slug}`, routeId: slug,
-        ...(creatingCourse ? { template: "monkey-tribe-course" } : { copyFromPageId: copyPage.id }),
+        ...(creatingCourse ? { courseTemplateRoute } : { copyFromPageId: copyPage.id }),
         status: "draft", source: "cms",
         userId: user?.email || user?.uid || ""
       });
@@ -411,8 +413,17 @@ export function PagesListPage() {
       <Modal isOpen={creatingCourse || Boolean(copyPage)} onClose={() => { if (!copying) closeCreation(); }} title={creatingCourse ? "New Course" : "Duplicate Page"} role="dialog" aria-modal="true" aria-label={creatingCourse ? "New Course" : "Duplicate Page"}>
         <form onSubmit={handleDuplicate} className="space-y-4">
           <p className="text-sm text-admin-secondary">
-            {creatingCourse ? "Start with Monkey Tribe’s course layout and customize it in the visual editor." : `Copy “${copyPage?.title}” to a new editable draft.`}
+            {creatingCourse ? "Copy an existing course’s layout and content, then edit the copy." : `Copy “${copyPage?.title}” to a new editable draft.`}
           </p>
+          {creatingCourse && (
+            <label className="block space-y-2 text-sm">
+              <span>Copy existing course</span>
+              <select className="w-full rounded-lg border border-admin-border bg-admin-card p-2"
+                value={courseTemplateRoute} onChange={(event) => setCourseTemplateRoute(event.target.value)} disabled={copying}>
+                {Object.entries(MONKEY_TRIBE_COURSE_TEMPLATES).map(([route, name]) => <option key={route} value={route}>{name}</option>)}
+              </select>
+            </label>
+          )}
           <Input label={creatingCourse ? "Course name" : "Page name"} value={copyTitle} onChange={event => {
             const title = event.target.value;
             if (creatingCourse && copySlug === normalizePageSlug(copyTitle)) setCopySlug(normalizePageSlug(title));

@@ -2985,7 +2985,8 @@ export function VisualBuilderPage() {
     && selectedPage?.nativeArtifactStatus === "source-only"
     && selectedPage?.sourceFile
   );
-  const isConnectedCmsPage = shouldUseClientContentCanvas(sourceWebsite, selectedPage, isSuperAdmin) || shouldUseConnectedWebsiteCanvas(
+  const isConnectedCmsPage = Boolean(sourceWebsite?.sourceConnected && selectedPage?.courseTemplateRoute)
+    || shouldUseClientContentCanvas(sourceWebsite, selectedPage, isSuperAdmin) || shouldUseConnectedWebsiteCanvas(
     sourceWebsite,
     selectedPage
   );
@@ -3739,7 +3740,7 @@ export function VisualBuilderPage() {
       pageKey,
       runtimeWebsiteId: change.runtimeWebsiteId,
       runtimeWebsiteIds: change.runtimeWebsiteIds,
-      runtimePageId: change.pageId,
+      runtimePageId: selectedPage?.courseTemplateRoute ? pageKey : change.pageId,
       pageAliases: [
         pageId,
         selectedPage?.id,
@@ -3780,6 +3781,7 @@ export function VisualBuilderPage() {
     pageId,
     pageKey,
     selectedPage?.id,
+    selectedPage?.courseTemplateRoute,
     selectedPage?.route,
     selectedPage?.routeId,
     selectedPage?.slug,
@@ -3859,7 +3861,8 @@ export function VisualBuilderPage() {
         // credentials belong to the administrator's browser session.
         try {
           spaRouting = await sourceProviderService.verifyExistingLiveRouting(sourceWebsite, {
-            requireAutomaticEditing: Object.keys(regionsRef.current).some((id) => id.startsWith("__rcms_auto__"))
+            requireAutomaticEditing: Object.keys(regionsRef.current).some((id) => id.startsWith("__rcms_auto__")),
+            requireCourseCopy: Boolean(selectedPage?.courseTemplateRoute)
           });
         } catch (error) {
           throw new Error(`${error.message} Ask your administrator to reconnect hosting and use Update cPanel or Update StackCP. Your draft is saved.`);
@@ -3930,6 +3933,9 @@ export function VisualBuilderPage() {
 
       // Firebase remains the source for page SEO even when editable content is
       // also committed to Git, so publish both parts of the same page draft.
+      if (isSuperAdmin && selectedPage?.courseTemplateRoute) {
+        await sourceProviderService.verifyExistingLiveRouting(sourceWebsite, { requireCourseCopy: true });
+      }
       const publishTargets = Array.from(new Map([
         [`${websiteId}:${pageKey}`, { websiteId, pageKey }],
         ...connectedPublishTargetsRef.current.entries()
@@ -4002,6 +4008,7 @@ export function VisualBuilderPage() {
     pageKey,
     saveConnectedDraft,
     isSuperAdmin,
+    selectedPage?.courseTemplateRoute,
     selectedPage?.routeId,
     setSelectedPage,
     sourceWebsite,

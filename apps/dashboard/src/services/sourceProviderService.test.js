@@ -159,7 +159,10 @@ describe("connected source providers", () => {
     expect(source).toContain('element.style.setProperty("background", value.background, "important")');
     expect(source).not.toContain('sendRuntimeMessage("rcms/v1/enter-edit-mode")');
     expect(source).toContain('window.self === window.top');
-    expect(source).toContain('await import(new URL(applicationSource');
+    expect(source.indexOf('await routeExists(pageKey, page)')).toBeLessThan(
+      source.indexOf('await loadCourseTemplateApplication(new URL(applicationSource')
+    );
+    expect(source).toContain("await import(applicationUrl)");
   });
 
   it("writes page content and its loader to the connected Git source", async () => {

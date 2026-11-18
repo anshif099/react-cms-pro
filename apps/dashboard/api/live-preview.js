@@ -207,19 +207,25 @@ export function rewritePreviewCss(css, assetUrl, proxyOrigin = "") {
     );
 }
 
-export function rewritePreviewJavaScript(source, assetUrl) {
+export function rewritePreviewJavaScript(source, assetUrl, proxyOrigin = "") {
+  const input = String(source || "");
+  const vitePreloadBase = previewAssetUrl("/", assetUrl, proxyOrigin);
+  const modules = input.includes("__vite__mapDeps") && input.includes("vite:preloadError")
+    ? input.replace(/(\bfunction\(\s*([\w$]+)\s*\)\s*\{\s*return\s*)(["'`])\/\3\s*\+\s*\2(?=\s*;?\s*\})/g,
+      (_match, declaration, parameter) => `${declaration}${JSON.stringify(vitePreloadBase)}+encodeURIComponent(${parameter})`)
+    : input;
   const rewriteSpecifier = (value) => (
-    /^(?:\.{0,2}\/|https?:\/\/|\/\/)/.test(value)
+    !value.includes("$" + "{") && /^(?:\.{0,2}\/|https?:\/\/|\/\/)/.test(value)
       ? previewAssetUrl(value, assetUrl)
       : value
   );
-  return String(source || "")
+  return modules
     .replace(
       /(\bfrom\s*)(["'])([^"']+)\2/g,
       (_match, prefix, quote, value) => `${prefix}${quote}${rewriteSpecifier(value)}${quote}`
     )
     .replace(
-      /(\bimport\s*\(\s*)(["'])([^"']+)\2/g,
+      /(\bimport\s*\(\s*)(["'`])([^"'`]+)\2/g,
       (_match, prefix, quote, value) => `${prefix}${quote}${rewriteSpecifier(value)}${quote}`
     )
     .replace(
@@ -983,7 +989,7 @@ async function probePublicRoute(initialUrl) {
   throw new Error("The connected website route could not be checked.");
 }
 
-async function proxyPreviewAsset(asset, response) {
+async function proxyPreviewAsset(asset, response, proxyOrigin) {
   const { bytes, contentType, url } = await fetchPublicAsset(asset);
   const normalizedType = contentType.toLowerCase();
   const pathname = url.pathname.toLowerCase();
@@ -1002,7 +1008,7 @@ async function proxyPreviewAsset(asset, response) {
     || /\.m?js$/.test(pathname)
   ) {
     body = new TextEncoder().encode(
-      rewritePreviewJavaScript(new TextDecoder("utf-8").decode(bytes), url)
+      rewritePreviewJavaScript(new TextDecoder("utf-8").decode(bytes), url, proxyOrigin)
     );
   } else if (normalizedType.includes("text/css") || pathname.endsWith(".css")) {
     body = new TextEncoder().encode(
@@ -1103,7 +1109,10 @@ export default async function handler(request, response) {
 
   try {
     const asset = firstQueryValue(request.query?.asset);
-    if (asset) return await proxyPreviewAsset(asset, response);
+    if (asset) {
+      const origin = request.headers?.host || request.headers?.["x-forwarded-host"] ? requestOrigin(request) : "";
+      return await proxyPreviewAsset(asset, response, origin);
+    }
     const probe = firstQueryValue(request.query?.probe);
     if (probe) {
       const result = await probePublicRoute(probe);

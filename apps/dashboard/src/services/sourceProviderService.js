@@ -266,7 +266,7 @@ function normalizedLiveOrigin(domain) {
   return url.origin;
 }
 
-export async function verifyExistingLiveRouting(website, { requireAutomaticEditing = false } = {}) {
+export async function verifyExistingLiveRouting(website, { requireAutomaticEditing = false, requireCourseCopy = false } = {}) {
   const origin = normalizedLiveOrigin(website?.domain);
   const verificationId = Date.now().toString(36);
   const nestedRoute = new URL(`/reactcms-route-check-${verificationId}`, origin);
@@ -312,6 +312,9 @@ export async function verifyExistingLiveRouting(website, { requireAutomaticEditi
   }
   if (requireAutomaticEditing && !bootstrapSource.includes("automaticEditing.applyRegions(publishedRegions)")) {
     throw new Error("The live publishing bridge needs an update to apply automatic edits.");
+  }
+  if (requireCourseCopy && !bootstrapSource.includes("loadCourseTemplateApplication")) {
+    throw new Error("Run Set Up Live Publishing in Rocket to enable copied course pages on this website.");
   }
 
   return {
@@ -725,6 +728,34 @@ function showDeletedPage() {
   root.setAttribute("data-reactcms-deleted-route", "true");
 }
 
+async function loadCourseTemplateApplication(applicationUrl, templateRoute) {
+  if (window.self !== window.top || !/^(www\\.)?monkeytribe\\.in$/.test(location.hostname)
+    || !["/promptx", "/growthx", "/brandx", "/copycraft"].includes(templateRoute)) {
+    return import(applicationUrl);
+  }
+
+  const root = document.getElementById("root");
+  if (!root) throw new Error("The course application root is missing.");
+  const originalUrl = location.pathname + location.search + location.hash;
+  const originalState = history.state;
+  let observer;
+  let timer;
+  const mounted = new Promise((resolve) => {
+    observer = new MutationObserver(resolve);
+    observer.observe(root, { childList: true });
+    timer = window.setTimeout(resolve, 3000);
+  });
+  history.replaceState(originalState, "", templateRoute + location.search + location.hash);
+  try {
+    await import(applicationUrl);
+    await mounted;
+  } finally {
+    observer.disconnect();
+    window.clearTimeout(timer);
+    if (location.pathname === templateRoute) history.replaceState(originalState, "", originalUrl);
+  }
+}
+
 async function start() {
   if (!applicationSource) throw new Error("The ReactCMS application module is missing.");
   const pageKey = routePageKey();
@@ -750,7 +781,7 @@ async function start() {
       console.warn("[ReactCMS] Deleted-route check failed; loading the website.", error);
     }
   }
-  await import(new URL(applicationSource, location.origin).href);
+  await loadCourseTemplateApplication(new URL(applicationSource, location.origin).href, page?.courseTemplateRoute);
   if (window.self === window.top && document.querySelector("script[data-reactcms-route-bootstrap]")
     && /^(www\\.)?monkeytribe\\.in$/.test(location.hostname)) {
     const loadCourses = () => { if (routePageKey() === "home") void refreshCourseTracks(); };

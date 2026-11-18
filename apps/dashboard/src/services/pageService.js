@@ -7,6 +7,7 @@ import searchService from "./searchService";
 import activityLogService from "./activityLogService";
 import { pageConversionService } from "./pageConversionService";
 import { createCoursePageTree } from "./coursePageTemplate";
+import { MONKEY_TRIBE_COURSE_TEMPLATES } from "./monkeyTribeRoutes";
 import {
   decodeFirebaseObject,
   encodeFirebaseKey,
@@ -202,6 +203,10 @@ export const pageService = {
 
   async create(websiteId, data) {
     try {
+      const courseTemplateRoute = data.courseTemplateRoute;
+      if (courseTemplateRoute && !Object.hasOwn(MONKEY_TRIBE_COURSE_TEMPLATES, courseTemplateRoute)) {
+        throw new Error("Select an existing course to copy.");
+      }
       if (pageRouteExists(await this.getAll(websiteId), data.slug || data.routeId)) {
         throw new Error("This URL slug is already used by another page. Choose a different slug.");
       }
@@ -302,6 +307,7 @@ export const pageService = {
         locales,
         contentTypeRefs: data.contentTypeRefs || copiedPage?.contentTypeRefs || [],
         copiedFromPageId: copiedPage?.id || null,
+        ...(courseTemplateRoute ? { courseTemplateRoute } : {}),
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       };
@@ -318,6 +324,7 @@ export const pageService = {
           slug: data.slug || "",
           layout,
           source: pageData.source,
+          ...(courseTemplateRoute ? { course: true } : {}),
           published: data.status === "published",
           createdAt: Date.now()
         });
@@ -327,6 +334,11 @@ export const pageService = {
       const pageSlug = data.slug || routeId || "home";
       if (pageSlug) {
         let initialRegions = {};
+        if (courseTemplateRoute) {
+          const template = await get(ref(database, paths.contentPublished(websiteId, courseTemplateRoute.slice(1))));
+          initialRegions = Object.fromEntries(Object.entries(decodeFirebaseObject(template.val()?.regions || {}))
+            .filter(([regionId]) => regionId.startsWith("__rcms_auto__")));
+        }
         if (data.prompt && !data.isImported && !copiedDraft) {
           const generatedHeroSubtext = data.prompt
             ? data.prompt
@@ -357,6 +369,7 @@ export const pageService = {
             title: data.title,
             slug: data.slug || "",
             ...(courseTree ? { tree: courseTree } : {}),
+            ...(courseTemplateRoute ? { courseTemplateRoute } : {}),
             regions: initialRegions,
             updatedAt: Date.now()
           }

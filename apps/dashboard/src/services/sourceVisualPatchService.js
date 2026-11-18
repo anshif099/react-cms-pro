@@ -632,7 +632,7 @@ export function buildConnectedPageUrl(website, page, mode = "preview") {
   try {
     const url = new URL(domain);
     if (url.protocol !== "https:") return "";
-    const pageRoute = page?.route
+    const pageRoute = page?.courseTemplateRoute || page?.route
       || (page?.slug === "home" ? "/" : `/${String(page?.slug || "").replace(/^\/+/, "")}`);
     const normalizedRoute = pageRoute === "/"
       ? "/"
@@ -654,7 +654,7 @@ export function buildConnectedPageFallbackUrl(website, page, mode = "preview") {
   try {
     const url = new URL(domain);
     if (url.protocol !== "https:") return "";
-    const pageRoute = page?.route
+    const pageRoute = page?.courseTemplateRoute || page?.route
       || (page?.slug === "home" ? "/" : `/${String(page?.slug || "").replace(/^\/+/, "")}`);
     const routeKey = String(pageRoute || "/").replace(/^\/+|\/+$/g, "");
     url.pathname = "/";

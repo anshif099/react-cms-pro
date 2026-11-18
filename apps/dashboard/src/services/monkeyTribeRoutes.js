@@ -1,3 +1,10 @@
+export const MONKEY_TRIBE_COURSE_TEMPLATES = {
+  "/promptx": "PromptX",
+  "/growthx": "GrowthX",
+  "/brandx": "BrandX",
+  "/copycraft": "CopyCraft"
+};
+
 export function isMonkeyTribeWebsite(website) {
   try {
     return ["monkeytribe.in", "www.monkeytribe.in"].includes(new URL(website?.domain).hostname);

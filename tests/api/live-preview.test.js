@@ -215,6 +215,13 @@ describe("live preview HTML rewriting", () => {
     expect(javascript).toContain(previewAssetUrl("./shared.js", "https://triosis.in/assets/app.js"));
   });
 
+  it("keeps Vite backtick imports and preloads on the sandbox-compatible proxy", () => {
+    const source = 'const __vite__mapDeps=()=>["assets/promptx.js"];const preload=function(dep){return`/`+dep};new Event(`vite:preloadError`);import(`./promptx.js`);';
+    const rewritten = rewritePreviewJavaScript(source, "https://monkeytribe.in/assets/index.js", "https://www.rocketkit.in");
+    expect(rewritten).toContain("import(`" + previewAssetUrl("./promptx.js", "https://monkeytribe.in/assets/index.js") + "`)");
+    expect(rewritten).toContain(JSON.stringify(previewAssetUrl("/", "https://monkeytribe.in/assets/index.js", "https://www.rocketkit.in")) + "+encodeURIComponent(dep)");
+  });
+
   it("serves preview assets with CORS permission for the opaque sandbox origin", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(
       'console.log("preview asset")',
