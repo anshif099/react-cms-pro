@@ -1,0 +1,1 @@
+import{j as e}from"./index-Dc70Iirh.js";function t(){return e()}export{t};

@@ -1,1 +1,0 @@
-import{j as e}from"./index-l_GS0UiY.js";function t(){return e()}export{t};
