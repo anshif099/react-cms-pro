@@ -8,6 +8,34 @@ export function installAutomaticEditing(options = {}) {
   let started = false;
   let observer;
   let timer;
+  let previewCourses = null;
+  function syncPreviewCourses() {
+    if (!previewCourses) return;
+    const tracks = document.querySelector(".hero-section__tracks");
+    if (!tracks) return;
+    const existing = new Map(Array.from(tracks.querySelectorAll("[data-rocket-course]"))
+      .map((item) => [item.getAttribute("data-rocket-course"), item]));
+    for (const course of previewCourses) {
+      if (!course || !/^\/[a-z0-9-]+$/.test(course.path) || typeof course.pageId !== "string") continue;
+      let wrapper = existing.get(course.path);
+      existing.delete(course.path);
+      if (!wrapper) {
+        wrapper = document.createElement("div");
+        wrapper.className = "hero-track-wrapper";
+        wrapper.setAttribute("data-rocket-course", course.path);
+        const link = document.createElement("a");
+        link.className = "hero-track hero-track--prompt";
+        wrapper.appendChild(link);
+        tracks.appendChild(wrapper);
+      }
+      const link = wrapper.firstElementChild;
+      link.setAttribute("href", course.path);
+      link.setAttribute("data-rocket-preview-course", course.pageId);
+      const label = String(course.title || course.path.slice(1)) + (course.draft ? " (Draft)" : " →");
+      if (link.textContent !== label) link.textContent = label;
+    }
+    existing.forEach((item) => item.remove());
+  }
   const carouselRegion = "__rcms_auto__carousel_slides";
   let carouselOrder = [];
   let activeSlideId = "";
@@ -156,6 +184,7 @@ export function installAutomaticEditing(options = {}) {
   function discover() {
     scheduled = false;
     syncCarousel();
+    syncPreviewCourses();
     // Mixed footer copy contains direct text beside links. Expose each plain
     // text run separately so editing it never clears the adjacent link/icon.
     document.querySelectorAll("p,li,div").forEach((element) => {
@@ -196,6 +225,11 @@ export function installAutomaticEditing(options = {}) {
     const message = event.data;
     if (event.source !== window.parent || !message?.rcms || message.version !== "v1") return;
     websiteId = message.websiteId || websiteId;
+    if (options.preview && message.type === "rcms/v1/preview-course-links" && Array.isArray(message.payload?.courses)) {
+      previewCourses = message.payload.courses;
+      schedule();
+      return;
+    }
     if (message.type === "rcms/v1/enter-edit-mode") { editing = true; document.documentElement.setAttribute("data-rcms-auto-editing", "true"); schedule(); }
     if (message.type === "rcms/v1/exit-edit-mode") { editing = false; document.documentElement.setAttribute("data-rcms-auto-editing", "false"); schedule(); }
     if (message.type === "rcms/v1/field-update" && message.payload?.regionId?.startsWith(prefix)) {
@@ -205,6 +239,13 @@ export function installAutomaticEditing(options = {}) {
     }
   });
   document.addEventListener("click", (event) => {
+    const course = event.target.closest?.("[data-rocket-preview-course]");
+    if (options.preview && course) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      send("rcms/v1/open-course-editor", { pageId: course.getAttribute("data-rocket-preview-course") });
+      return;
+    }
     const dot = event.target.closest?.("[data-rocket-dot]");
     if (dot) {
       event.preventDefault(); event.stopImmediatePropagation();

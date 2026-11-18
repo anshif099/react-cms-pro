@@ -14,6 +14,25 @@ function setup(html, options = {}) {
   return { bridge, window: dom.window, document: dom.window.document };
 }
 describe("automatic connected website editing", () => {
+  it("renders draft course links only in the dashboard preview", async () => {
+    const html = '<div class="hero-section__tracks"><a href="/promptx">PromptX</a></div>';
+    const message = {
+      rcms: true, version: "v1", type: "rcms/v1/preview-course-links",
+      payload: { courses: [{ pageId: "draft-id", path: "/testx", title: "testx", draft: true }] }
+    };
+    const live = setup(html);
+    live.window.dispatchEvent(new live.window.MessageEvent("message", { source: live.window.parent, data: message }));
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(live.document.querySelector('a[href="/testx"]')).toBeNull();
+    live.bridge.destroy();
+    live.window.close();
+
+    const preview = setup(html, { preview: true });
+    preview.window.dispatchEvent(new preview.window.MessageEvent("message", { source: preview.window.parent, data: message }));
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const links = [...preview.document.querySelectorAll(".hero-section__tracks a")];
+    expect(links.map((link) => link.textContent)).toEqual(["PromptX", "testx (Draft)"]);
+  });
   it("inserts carousel images before and after an existing slide without changing its region ID", () => {
     const { bridge, document, window } = setup('<section class="home-carousel"><div class="home-carousel__slides"><div class="home-carousel__slide is-active"><img src="/one.webp"></div><div class="home-carousel__slide"><img src="/two.webp"></div></div><div class="home-carousel__dots"><button></button><button></button></div></section>', { editing: true });
     const original = document.querySelector("img");

@@ -93,6 +93,7 @@ import ImagePicker from "../../components/ui/ImagePicker";
 import HostingRouteRepairModal from "../../components/websites/HostingRouteRepairModal";
 import { calculateConnectedCanvasSizing } from "../../utils/connectedCanvasSizing";
 import { applyPageBackground, connectedPageBackgroundPlan } from "../../utils/pageBackground";
+import { isMonkeyTribeWebsite } from "../../services/monkeyTribeRoutes";
 
 const NativeInspector = lazy(() => import("../../components/content/NativeInspector"));
 const AIWorkspace = lazy(() => import("../../components/content/AIWorkspace"));
@@ -345,6 +346,18 @@ function ConnectedSourceWorkspace({
   onRepairLiveRoute,
   visualOnly = false
 }) {
+  const navigate = useNavigate();
+  const homeCourseLinks = useMemo(() => {
+    if (pageKey !== "home" || !isMonkeyTribeWebsite(website)) return null;
+    return (pages || []).filter((course) => course.courseTemplateRoute && course.status !== "archived"
+      && /^\/[a-z0-9-]+$/.test(course.route))
+      .map((course) => ({
+        pageId: course.id,
+        path: course.route,
+        title: course.title,
+        draft: course.status !== "published"
+      }));
+  }, [pageKey, pages, website]);
   const isPreview = mode === "preview";
   const isGitHub = website?.connection?.provider === "github";
   const isSftp = website?.connection?.provider === "sftp";
@@ -589,6 +602,10 @@ function ConnectedSourceWorkspace({
       "*"
     );
   }, []);
+  const sendHomeCourseLinks = useCallback(() => {
+    if (homeCourseLinks) sendRuntimeMessage("rcms/v1/preview-course-links", { courses: homeCourseLinks });
+  }, [homeCourseLinks, sendRuntimeMessage]);
+  useEffect(() => { sendHomeCourseLinks(); }, [sendHomeCourseLinks]);
   const requestCanvasSEOScan = useCallback(() => {
     sendRuntimeMessage("rcms/v1/request-seo-scan");
   }, [sendRuntimeMessage]);
@@ -912,6 +929,7 @@ function ConnectedSourceWorkspace({
       }
 
       if (message.type === "rcms/v1/runtime-ready") {
+        sendHomeCourseLinks();
         setFrameLoading(false);
         setLiveRouteError("");
         setRuntimeConnected(true);
@@ -927,6 +945,12 @@ function ConnectedSourceWorkspace({
           }, 500);
         }
         hydrateConnectedDraft(readyRuntimeWebsiteId);
+        return;
+      }
+
+      if (message.type === "rcms/v1/open-course-editor") {
+        const course = homeCourseLinks?.find((item) => item.pageId === message.payload?.pageId);
+        if (course) navigate(`/content/${websiteId}/pages/${course.pageId}/editor?mode=${isPreview ? "preview" : "edit"}`);
         return;
       }
 
@@ -1036,6 +1060,8 @@ function ConnectedSourceWorkspace({
     liveOrigin,
     livePageUrl,
     canvasRuntimePageId,
+    homeCourseLinks,
+    navigate,
     onVisualChange,
     page?.route,
     page?.routeId,
@@ -1044,6 +1070,7 @@ function ConnectedSourceWorkspace({
     pageKey,
     runtimeWebsiteIdFallback,
     requestCanvasSEOScan,
+    sendHomeCourseLinks,
     sendRuntimeMessage,
     updateConnectedSelection,
     visualOnly,
@@ -1051,6 +1078,7 @@ function ConnectedSourceWorkspace({
   ]);
 
   const handleFrameLoad = () => {
+    sendHomeCourseLinks();
     setFrameLoading(false);
     setLiveRouteError("");
     setRuntimeConnected(false);
