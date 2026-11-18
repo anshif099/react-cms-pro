@@ -229,21 +229,26 @@ export function VisualBuilderToolbar({
             size="sm"
             onClick={onSave}
             loading={saving}
+            disabled={publishing}
             className="gap-1.5 bg-slate-900 border-slate-700 text-white"
           >
             <Save className="w-3.5 h-3.5" />
             <span className="hidden md:inline">Save Draft</span>
           </Button>
 
+          <span role="status" className="sr-only">
+            {publishing ? "Publishing changes. Please wait." : ""}
+          </span>
           <Button
             variant="primary"
             size="sm"
             onClick={onPublish}
             loading={publishing}
-            className="gap-1.5 bg-blue-600 hover:bg-blue-500"
+            aria-busy={publishing}
+            className="gap-1.5 whitespace-nowrap bg-blue-600 hover:bg-blue-500"
           >
-            <Cloud className="w-3.5 h-3.5" />
-            {publishLabel}
+            {!publishing && <Cloud className="w-3.5 h-3.5" aria-hidden="true" />}
+            {publishing ? "Publishing…" : publishLabel}
           </Button>
         </>
       )}
