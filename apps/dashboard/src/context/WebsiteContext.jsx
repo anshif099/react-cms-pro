@@ -184,11 +184,11 @@ export function WebsiteProvider({ children }) {
     }
   }, [canAccessWebsite, selectWebsite, refreshWebsites]);
 
-  const importRoutes = useCallback(async (id, routes, userId) => {
+  const importRoutes = useCallback(async (id, routes, userId, options) => {
     if (!canAccessWebsite(id)) throw new Error("You do not have access to this website.");
     setSyncLoading(true);
     try {
-      const result = await websiteService.importRoutes(id, routes, userId);
+      const result = await websiteService.importRoutes(id, routes, userId, options);
       await selectWebsite(id);
       await refreshWebsites();
       return result;

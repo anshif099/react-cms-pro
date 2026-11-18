@@ -14,12 +14,13 @@ import Modal from "../../components/ui/Modal";
 import Input from "../../components/ui/Input";
 import { useAuth } from "../../hooks/useAuth";
 import { normalizePageSlug, pageRouteExists } from "../../services/pageCreationUtils";
+import { isMonkeyTribeWebsite, monkeyTribePublicRoutes } from "../../services/monkeyTribeRoutes";
 
 export function PagesListPage() {
   const { websiteId } = useParams();
   const navigate = useNavigate();
   const { pages, pageLoading, fetchPages, deletePage, createPage } = usePages();
-  const { user } = useAuth();
+  const { user, isSuperAdmin } = useAuth();
   const { selectWebsite, selectedWebsite } = useWebsites();
   const { activeLocales, activeLocale, setLocale } = useLocale(websiteId);
 
@@ -88,6 +89,23 @@ export function PagesListPage() {
     syncProgress
   } = useWebsiteSync(websiteId);
   const [showManualSync, setShowManualSync] = useState(false);
+  const [importingMissingPages, setImportingMissingPages] = useState(false);
+  const monkeyTribe = selectedWebsite?.id === websiteId && isMonkeyTribeWebsite(selectedWebsite);
+  const missingMonkeyTribeRoutes = monkeyTribe && selectedWebsite.sourceConnected
+    ? monkeyTribePublicRoutes(selectedWebsite.connection?.provider).filter(({ slug }) => !pageRouteExists(pages, slug))
+    : [];
+
+  const handleImportMissingPages = async () => {
+    setImportingMissingPages(true);
+    try {
+      await importManual(missingMonkeyTribeRoutes, { addOnly: true });
+      await fetchPages(websiteId);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setImportingMissingPages(false);
+    }
+  };
 
   const handleSync = async () => {
     const result = await sync();
@@ -194,7 +212,7 @@ export function PagesListPage() {
           </p>
         </div>
         <div className="flex gap-3">
-          {/^https?:\/\/(?:www\.)?monkeytribe\.in(?:\/|$)/i.test(selectedWebsite.domain || "") && (
+          {monkeyTribe && (
             <Button onClick={openCourse} variant="outline" className="gap-2">
               <Plus className="w-3.5 h-3.5" /> New Course
             </Button>
@@ -207,7 +225,12 @@ export function PagesListPage() {
             <Plus className="w-3.5 h-3.5" />
             New Page
           </Button>
-          {selectedWebsite.sourceConnected ? (
+          {!pageLoading && missingMonkeyTribeRoutes.length > 0 && (
+            <Button variant="outline" onClick={handleImportMissingPages} loading={importingMissingPages}>
+              Import Missing Pages
+            </Button>
+          )}
+          {selectedWebsite.sourceConnected ? isSuperAdmin && (
             <Button
               onClick={handleSourceRescan}
               variant="outline"

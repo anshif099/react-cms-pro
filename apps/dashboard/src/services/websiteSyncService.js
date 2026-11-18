@@ -139,7 +139,7 @@ export const websiteSyncService = {
     }
   },
 
-  async importRouteList(websiteId, routes, userId) {
+  async importRouteList(websiteId, routes, userId, options = {}) {
     const websiteRef = ref(database, `websites/${websiteId}`);
     
     await update(websiteRef, {
@@ -170,7 +170,7 @@ export const websiteSyncService = {
         };
       });
 
-      await this.processRoutes(websiteId, formattedRoutes, "manual", userId);
+      await this.processRoutes(websiteId, formattedRoutes, "manual", userId, options);
 
       await update(websiteRef, {
         syncStatus: "idle",
@@ -198,7 +198,7 @@ export const websiteSyncService = {
     }
   },
 
-  async processRoutes(websiteId, routes, syncMode, userId) {
+  async processRoutes(websiteId, routes, syncMode, userId, { addOnly = false, archiveMissing = !addOnly } = {}) {
     // 1. Fetch existing pages
     const pagesRef = ref(database, `pages/${websiteId}`);
     const snapshot = await get(pagesRef);
@@ -235,6 +235,7 @@ export const websiteSyncService = {
 
       // Match existing page by routeId, slug, or route path
       const matchedPage = existingPagesMap[routeId] || existingSlugsMap[slug] || existingSlugsMap[routePath];
+      if (matchedPage && addOnly) continue;
 
       if (matchedPage) {
         // Update existing page metadata without overwriting custom blocks or editing state
@@ -305,7 +306,7 @@ export const websiteSyncService = {
     }
 
     // 3. Mark omitted imported pages as archived
-    if (snapshot.exists()) {
+    if (archiveMissing && snapshot.exists()) {
       const val = snapshot.val();
       for (const key of Object.keys(val)) {
         const page = val[key];

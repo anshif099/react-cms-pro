@@ -3,6 +3,7 @@ import { useWebsites } from "./useWebsites";
 import { useToast } from "./useToast";
 import { useAuth } from "./useAuth";
 import sourceImportService from "../services/sourceImportService";
+import { isMonkeyTribeWebsite } from "../services/monkeyTribeRoutes";
 
 export function useWebsiteSync(websiteId) {
   const { 
@@ -35,10 +36,10 @@ export function useWebsiteSync(websiteId) {
     }
   }, [websiteId, syncWebsite, toast]);
 
-  const importManual = useCallback(async (routes) => {
+  const importManual = useCallback(async (routes, options) => {
     if (!websiteId) return null;
     try {
-      const result = await importRoutes(websiteId, routes, user?.uid || "system");
+      const result = await importRoutes(websiteId, routes, user?.uid || "system", options);
       toast.success(`Successfully imported ${result.count} manual routes!`);
       return result;
     } catch (err) {
@@ -60,7 +61,8 @@ export function useWebsiteSync(websiteId) {
       await importRoutes(
         websiteId,
         imported.routes,
-        user?.email || user?.uid || "system"
+        user?.email || user?.uid || "system",
+        { archiveMissing: !isMonkeyTribeWebsite(website) }
       );
       await updateWebsite(websiteId, {
         framework: imported.manifest.framework,

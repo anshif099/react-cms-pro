@@ -247,8 +247,8 @@ export const websiteService = {
     return await websiteSyncService.runSync(website);
   },
 
-  async importRoutes(id, routes, userId) {
-    return await websiteSyncService.importRouteList(id, routes, userId);
+  async importRoutes(id, routes, userId, options) {
+    return await websiteSyncService.importRouteList(id, routes, userId, options);
   }
 };
 
