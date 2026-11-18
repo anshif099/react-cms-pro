@@ -1,0 +1,1 @@
+import{k as e}from"./index-CxnxBdpn.js";function t(){return e()}export{t};
