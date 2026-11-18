@@ -684,6 +684,40 @@ function watchPublishedPage() {
   window.setInterval(refreshPublishedPage, 4000);
 }
 
+async function refreshCourseTracks() {
+  const tracks = document.querySelector(".hero-section__tracks");
+  if (!tracks || !websiteId || !databaseUrl) return;
+  try {
+    const url = databaseUrl + "/registry/" + encodeURIComponent(websiteId) + "/routes.json";
+    const response = await fetch(url, { cache: "no-store" });
+    if (!response.ok || !tracks.isConnected) return;
+    const routes = Object.values(await response.json() || {});
+    const courses = routes.filter((route) => route?.published === true && route.course === true
+      && /^\\/[a-z0-9-]+$/.test(route.path));
+    const existing = new Map(Array.from(tracks.querySelectorAll("[data-rocket-course]"))
+      .map((element) => [element.getAttribute("data-rocket-course"), element]));
+    courses.forEach((course) => {
+      let wrapper = existing.get(course.path);
+      existing.delete(course.path);
+      if (!wrapper) {
+        wrapper = document.createElement("div");
+        wrapper.className = "hero-track-wrapper";
+        wrapper.setAttribute("data-rocket-course", course.path);
+        const link = document.createElement("a");
+        link.className = "hero-track hero-track--prompt";
+        link.setAttribute("href", course.path);
+        wrapper.appendChild(link);
+        tracks.appendChild(wrapper);
+      }
+      const label = String(course.title || course.slug || "Course") + " →";
+      if (wrapper.firstElementChild.textContent !== label) wrapper.firstElementChild.textContent = label;
+    });
+    existing.forEach((element) => element.remove());
+  } catch (error) {
+    console.warn("[ReactCMS] Course links could not be refreshed.", error);
+  }
+}
+
 function showDeletedPage() {
   document.title = "404 - Page not found";
   const root = document.getElementById("root") || document.body;
@@ -717,6 +751,12 @@ async function start() {
     }
   }
   await import(new URL(applicationSource, location.origin).href);
+  if (window.self === window.top && document.querySelector("script[data-reactcms-route-bootstrap]")
+    && /^(www\\.)?monkeytribe\\.in$/.test(location.hostname)) {
+    const loadCourses = () => { if (routePageKey() === "home") void refreshCourseTracks(); };
+    loadCourses();
+    window.setInterval(loadCourses, 4000);
+  }
   if (window.self !== window.top) {
     const observer = new MutationObserver(() => window.requestAnimationFrame(applyRuntimeTypography));
     if (document.body) observer.observe(document.body, { childList: true, subtree: true });

@@ -584,6 +584,9 @@ export const visualBuilderService = {
       operations.push(
         update(ref(database, `registry/${websiteId}/routes/${routeId}`), {
           published: true,
+          ...(decodedDraft[NATIVE_PAGE_TREE_FIELD].children?.some((node) => node.id === "course-overview")
+            ? { course: true, title: decodedDraft.title || routeId }
+            : {}),
           updatedAt: Date.now()
         })
       );

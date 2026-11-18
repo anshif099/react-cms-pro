@@ -4,15 +4,24 @@ export function createCoursePageTree({ title, slug }) {
   });
   const heading = (id, text, level = "h2") => node(id, "heading", {
     level, locales: { en: { text } }
-  }, { color: "#ffffff", marginBottom: "16px" });
+  }, {
+    color: "#ffffff",
+    fontFamily: "Inter, system-ui, sans-serif",
+    fontWeight: 800,
+    fontSize: level === "h1" ? "clamp(48px, 8vw, 100px)" : "clamp(24px, 4vw, 48px)",
+    lineHeight: 1.1,
+    marginBottom: "12px"
+  });
   const paragraph = (id, text) => node(id, "paragraph", {
     locales: { en: { text } }
-  }, { color: "#ddd8f2", marginBottom: "20px" });
+  }, { color: "#ddd8f2", fontFamily: "Inter, system-ui, sans-serif", maxWidth: "62ch", marginBottom: "16px" });
   const button = (id, label, url, linkType = "url") => node(id, "button", {
-    url, linkType, locales: { en: { label } }
-  }, { backgroundColor: "#ffce16", color: "#171023" });
-  const section = (id, background, children) => node(id, "section", { anchorId: id }, {
-    backgroundColor: background,
+    url, linkType, color: "#ffce16", textColor: "#171023", locales: { en: { label } }
+  }, { backgroundColor: "#ffce16", color: "#171023", fontFamily: "Inter, system-ui, sans-serif" });
+  const section = (id, background, children) => node(id, "section", {
+    anchorId: id,
+    design: { layout: "full", paddingY: 0, background }
+  }, {
     padding: "clamp(32px, 7vw, 96px) clamp(20px, 8vw, 112px)"
   }, children);
 
@@ -22,8 +31,9 @@ export function createCoursePageTree({ title, slug }) {
     version: 2,
     title,
     locale: "en",
+    styles: { base: { background: "#0e0c21", fontFamily: "Inter, system-ui, sans-serif" } },
     children: [
-      section("course-overview", "#211748", [
+      section("course-overview", "transparent", [
         paragraph("course-eyebrow", "MONKEY TRIBE · COURSE"),
         heading("course-title", title, "h1"),
         paragraph("course-intro", "Describe what learners will achieve and who this course is for."),
