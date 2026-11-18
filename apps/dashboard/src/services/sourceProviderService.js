@@ -266,7 +266,7 @@ function normalizedLiveOrigin(domain) {
   return url.origin;
 }
 
-export async function verifyExistingLiveRouting(website, { requireAutomaticEditing = false, requireCourseCopy = false } = {}) {
+export async function verifyExistingLiveRouting(website, { requireAutomaticEditing = false, requireCourseCopy = false, requireCarouselSlides = false } = {}) {
   const origin = normalizedLiveOrigin(website?.domain);
   const verificationId = Date.now().toString(36);
   const nestedRoute = new URL(`/reactcms-route-check-${verificationId}`, origin);
@@ -315,6 +315,9 @@ export async function verifyExistingLiveRouting(website, { requireAutomaticEditi
   }
   if (requireCourseCopy && !bootstrapSource.includes("loadCourseTemplateApplication")) {
     throw new Error("Run Set Up Live Publishing in Rocket to enable copied course pages on this website.");
+  }
+  if (requireCarouselSlides && !bootstrapSource.includes("__rcms_auto__carousel_slides")) {
+    throw new Error("Run Set Up Live Publishing in Rocket to enable added carousel slides on this website.");
   }
 
   return {

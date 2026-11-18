@@ -14,6 +14,24 @@ function setup(html, options = {}) {
   return { bridge, window: dom.window, document: dom.window.document };
 }
 describe("automatic connected website editing", () => {
+  it("inserts carousel images before and after an existing slide without changing its region ID", () => {
+    const { bridge, document, window } = setup('<section class="home-carousel"><div class="home-carousel__slides"><div class="home-carousel__slide is-active"><img src="/one.webp"></div><div class="home-carousel__slide"><img src="/two.webp"></div></div><div class="home-carousel__dots"><button></button><button></button></div></section>', { editing: true });
+    const original = document.querySelector("img");
+    const regionId = original.getAttribute("data-rcms-region");
+    bridge.applyRegions({ __rcms_auto__carousel_slides: [
+      { id: "slide-before", anchor: "original-0", position: "before", src: "/before.webp" },
+      { id: "slide-after", anchor: "original-0", position: "after", src: "/after.webp", alt: "New banner" }
+    ] });
+    const dots = [...document.querySelector(".home-carousel__dots").children]
+      .sort((left, right) => Number(left.style.order) - Number(right.style.order));
+    expect(dots.map((dot) => dot.getAttribute("data-rocket-dot"))).toEqual(["slide-before", "original-0", "slide-after", "original-1"]);
+    expect(original.getAttribute("data-rcms-region")).toBe(regionId);
+    dots[2].dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+    const addedSlide = document.querySelector('.home-carousel__slide[data-rocket-slide="slide-after"]');
+    expect(addedSlide.getAttribute("aria-hidden")).toBe("false");
+    expect(addedSlide.querySelector("img").alt).toBe("New banner");
+    expect(document.querySelector(".home-carousel__slide").getAttribute("aria-hidden")).toBe("true");
+  });
   it("edits mixed footer text independently while preserving linked company names", () => {
     const { bridge, document } = setup('<footer><p>The education division of <a href="https://company.example">Creative Monkeys</a> — empowering professionals.</p><ul><li>A division of <a href="https://company.example"><strong>Creative Monkeys Ltd.</strong></a></li></ul></footer>');
     const text = document.querySelector("li > span");

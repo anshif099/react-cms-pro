@@ -98,6 +98,7 @@ const NativeInspector = lazy(() => import("../../components/content/NativeInspec
 const AIWorkspace = lazy(() => import("../../components/content/AIWorkspace"));
 const VisualPageSettingsModal = lazy(() => import("../../components/content/VisualPageSettingsModal"));
 const LIVE_FRAME_LOAD_TIMEOUT_MS = 15000;
+const CAROUSEL_SLIDES_REGION = "__rcms_auto__carousel_slides";
 
 function sourceDraftKey(websiteId, pageId) {
   return `reactcms_source_draft:${websiteId}:${pageId}`;
@@ -379,6 +380,8 @@ function ConnectedSourceWorkspace({
   const [inspectorOpenRequest, setInspectorOpenRequest] = useState(0);
   const [canvasSEOScan, setCanvasSEOScan] = useState(null);
   const [pendingRuntimeInsert, setPendingRuntimeInsert] = useState(null);
+  const carouselSlidesRef = useRef([]);
+  const [newCarouselSlide, setNewCarouselSlide] = useState(null);
   const runtimeAdditionsRef = useRef(createRuntimeAdditionsTree(pageKey || pageId, locale));
   const clipboardKey = `reactcms_component_clipboard:${websiteId}`;
   const [connectedClipboard, setConnectedClipboard] = useState(() => {
@@ -648,6 +651,7 @@ function ConnectedSourceWorkspace({
             || Object.prototype.hasOwnProperty.call(sourceOverrides, regionId))
         ));
         const draftValues = new Map(entries);
+        carouselSlidesRef.current = draftValues.get(CAROUSEL_SLIDES_REGION) || [];
         const hydratedSelection = selectedRegionsRef.current.map((region) => (
           draftValues.has(region.regionId)
             ? { ...region, value: draftValues.get(region.regionId) }
@@ -1097,6 +1101,32 @@ function ConnectedSourceWorkspace({
     applyVisualValue(selectedRegion, nextValue);
   };
 
+  const addCarouselSlide = () => {
+    if (!newCarouselSlide?.src || selectedRegion?.carouselSlideId !== newCarouselSlide.anchor) return;
+    const nextSlides = [...carouselSlidesRef.current, {
+      ...newCarouselSlide,
+      id: "slide-" + crypto.randomUUID()
+    }];
+    const result = onVisualChange({
+      regionId: CAROUSEL_SLIDES_REGION,
+      type: "repeater",
+      pageId: canvasRuntimePageId,
+      value: nextSlides
+    });
+    if (!result?.changed) {
+      setVisualError(result?.error || "The carousel slide could not be added.");
+      return;
+    }
+    carouselSlidesRef.current = nextSlides;
+    sendRuntimeMessage("rcms/v1/field-update", {
+      pageId: canvasRuntimePageId,
+      regionId: CAROUSEL_SLIDES_REGION,
+      value: nextSlides
+    });
+    setNewCarouselSlide(null);
+    setVisualError("");
+  };
+
   const updateRepeaterJson = (rawValue) => {
     try {
       const nextValue = JSON.parse(rawValue);
@@ -1543,6 +1573,33 @@ function ConnectedSourceWorkspace({
 
           {selectedRegion.type === "image" && (
             <>
+              {selectedRegion.carouselSlideId && (
+                <div className="space-y-3 rounded-lg border border-slate-800 p-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    {["before", "after"].map((position) => (
+                      <Button key={position} variant="secondary" size="xs" onClick={() => setNewCarouselSlide({
+                        position, anchor: selectedRegion.carouselSlideId, src: "", alt: ""
+                      })}>Add slide {position}</Button>
+                    ))}
+                  </div>
+                  {newCarouselSlide?.anchor === selectedRegion.carouselSlideId && (
+                    <>
+                      <ImagePicker label="New slide image" value={newCarouselSlide.src}
+                        onChange={(src) => setNewCarouselSlide((current) => current && { ...current, src })} />
+                      <label className="block text-xs text-slate-300">
+                        Alt text
+                        <input value={newCarouselSlide.alt}
+                          onChange={(event) => setNewCarouselSlide({ ...newCarouselSlide, alt: event.target.value })}
+                          className="mt-1 h-9 w-full rounded-lg border border-slate-800 bg-[#070b14] px-3 text-xs" />
+                      </label>
+                      <div className="flex gap-2">
+                        <Button size="xs" onClick={addCarouselSlide} disabled={!newCarouselSlide.src}>Insert slide</Button>
+                        <Button size="xs" variant="secondary" onClick={() => setNewCarouselSlide(null)}>Cancel</Button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
               <ImagePicker
                 label="Image URL"
                 value={typeof value === "string" ? value : value?.src || ""}
@@ -3862,7 +3919,8 @@ export function VisualBuilderPage() {
         try {
           spaRouting = await sourceProviderService.verifyExistingLiveRouting(sourceWebsite, {
             requireAutomaticEditing: Object.keys(regionsRef.current).some((id) => id.startsWith("__rcms_auto__")),
-            requireCourseCopy: Boolean(selectedPage?.courseTemplateRoute)
+            requireCourseCopy: Boolean(selectedPage?.courseTemplateRoute),
+            requireCarouselSlides: Boolean(regionsRef.current[CAROUSEL_SLIDES_REGION]?.length)
           });
         } catch (error) {
           throw new Error(`${error.message} Ask your administrator to reconnect hosting and use Update cPanel or Update StackCP. Your draft is saved.`);
