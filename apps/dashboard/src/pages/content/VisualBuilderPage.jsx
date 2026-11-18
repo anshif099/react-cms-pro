@@ -90,6 +90,7 @@ import {
 import VisualBuilderToolbar from "../../components/content/VisualBuilderToolbar";
 import NativeLayersPanel from "../../components/content/NativeLayersPanel";
 import ImagePicker from "../../components/ui/ImagePicker";
+import Button from "../../components/ui/Button";
 import HostingRouteRepairModal from "../../components/websites/HostingRouteRepairModal";
 import { calculateConnectedCanvasSizing } from "../../utils/connectedCanvasSizing";
 import { applyPageBackground, connectedPageBackgroundPlan } from "../../utils/pageBackground";
