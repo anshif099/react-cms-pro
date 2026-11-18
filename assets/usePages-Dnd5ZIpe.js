@@ -1,0 +1,1 @@
+import{k as e}from"./index-BFmMumhb.js";function t(){return e()}export{t};
