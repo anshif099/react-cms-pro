@@ -6,6 +6,7 @@ import revisionService from "./revisionService";
 import searchService from "./searchService";
 import activityLogService from "./activityLogService";
 import { pageConversionService } from "./pageConversionService";
+import { createCoursePageTree } from "./coursePageTemplate";
 import {
   decodeFirebaseObject,
   encodeFirebaseKey,
@@ -345,6 +346,9 @@ export const pageService = {
           };
         }
 
+        const courseTree = data.template === "monkey-tribe-course" && !copiedPage
+          ? createCoursePageTree({ title: data.title, slug: pageSlug })
+          : null;
         await contentSyncService.syncDraft(
           websiteId,
           pageSlug,
@@ -352,6 +356,7 @@ export const pageService = {
             id: pageSlug,
             title: data.title,
             slug: data.slug || "",
+            ...(courseTree ? { tree: courseTree } : {}),
             regions: initialRegions,
             updatedAt: Date.now()
           }

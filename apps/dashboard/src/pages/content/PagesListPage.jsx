@@ -26,6 +26,7 @@ export function PagesListPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
   const [copyPage, setCopyPage] = useState(null);
+  const [creatingCourse, setCreatingCourse] = useState(false);
   const [copyTitle, setCopyTitle] = useState("");
   const [copySlug, setCopySlug] = useState("");
   const [copyError, setCopyError] = useState("");
@@ -43,25 +44,39 @@ export function PagesListPage() {
     setCopyError("");
   };
 
+  const openCourse = () => {
+    setCreatingCourse(true);
+    setCopyTitle("");
+    setCopySlug("");
+    setCopyError("");
+  };
+
+  const closeCreation = () => {
+    setCopyPage(null);
+    setCreatingCourse(false);
+  };
+
   const handleDuplicate = async (event) => {
     event.preventDefault();
     if (copying) return;
     const title = copyTitle.trim();
     const slug = normalizePageSlug(copySlug);
-    if (!title || !slug) { setCopyError("Enter a page name and URL slug."); return; }
+    if (!title || !slug || (creatingCourse && slug === "home")) { setCopyError("Enter a name and a unique URL slug."); return; }
+    if (creatingCourse && slug.includes("/")) { setCopyError("Use a single URL slug, such as ai-design."); return; }
     if (pageRouteExists(pages, slug)) { setCopyError("This URL slug is already used. Choose a different slug."); return; }
     setCopying(true);
     setCopyError("");
     try {
       const page = await createPage(websiteId, {
         title, slug, route: slug === "home" ? "/" : `/${slug}`, routeId: slug,
-        copyFromPageId: copyPage.id, status: "draft", source: "cms",
+        ...(creatingCourse ? { template: "monkey-tribe-course" } : { copyFromPageId: copyPage.id }),
+        status: "draft", source: "cms",
         userId: user?.email || user?.uid || ""
       });
-      setCopyPage(null);
+      closeCreation();
       navigate(`/content/${websiteId}/pages/${page.id}/editor?mode=edit`);
     } catch (error) {
-      setCopyError(error.message || "The page could not be duplicated.");
+      setCopyError(error.message || (creatingCourse ? "The course could not be created." : "The page could not be duplicated."));
     } finally { setCopying(false); }
   };
 
@@ -179,6 +194,11 @@ export function PagesListPage() {
           </p>
         </div>
         <div className="flex gap-3">
+          {/^https?:\/\/(?:www\.)?monkeytribe\.in(?:\/|$)/i.test(selectedWebsite.domain || "") && (
+            <Button onClick={openCourse} variant="outline" className="gap-2">
+              <Plus className="w-3.5 h-3.5" /> New Course
+            </Button>
+          )}
           <Button
             onClick={() => navigate(`/content/${websiteId}/pages/new`)}
             variant="primary"
@@ -365,16 +385,22 @@ export function PagesListPage() {
         </Table>
       )}
 
-      <Modal isOpen={Boolean(copyPage)} onClose={() => { if (!copying) setCopyPage(null); }} title="Duplicate Page" role="dialog" aria-modal="true" aria-label="Duplicate Page">
+      <Modal isOpen={creatingCourse || Boolean(copyPage)} onClose={() => { if (!copying) closeCreation(); }} title={creatingCourse ? "New Course" : "Duplicate Page"} role="dialog" aria-modal="true" aria-label={creatingCourse ? "New Course" : "Duplicate Page"}>
         <form onSubmit={handleDuplicate} className="space-y-4">
-          <p className="text-sm text-admin-secondary">Copy “{copyPage?.title}” to a new editable draft.</p>
-          <Input label="Page name" aria-label="Page name" value={copyTitle} onChange={event => setCopyTitle(event.target.value)} required autoFocus disabled={copying} />
+          <p className="text-sm text-admin-secondary">
+            {creatingCourse ? "Start with Monkey Tribe’s course layout and customize it in the visual editor." : `Copy “${copyPage?.title}” to a new editable draft.`}
+          </p>
+          <Input label={creatingCourse ? "Course name" : "Page name"} value={copyTitle} onChange={event => {
+            const title = event.target.value;
+            if (creatingCourse && copySlug === normalizePageSlug(copyTitle)) setCopySlug(normalizePageSlug(title));
+            setCopyTitle(title);
+          }} required autoFocus disabled={copying} />
           <Input label="URL slug" aria-label="URL slug" value={copySlug} onChange={event => setCopySlug(event.target.value)} placeholder="new-page" required disabled={copying} />
           <p className="text-xs text-admin-secondary break-all">URL: {String(selectedWebsite.domain || '').replace(/\/$/, '')}/{normalizePageSlug(copySlug) === 'home' ? '' : normalizePageSlug(copySlug)}</p>
           {copyError && <p role="alert" className="text-sm text-admin-danger">{copyError}</p>}
           <div className="flex justify-end gap-3">
-            <Button variant="secondary" disabled={copying} onClick={() => setCopyPage(null)}>Cancel</Button>
-            <Button type="submit" loading={copying}>Create Copy</Button>
+            <Button variant="secondary" disabled={copying} onClick={closeCreation}>Cancel</Button>
+            <Button type="submit" loading={copying}>{creatingCourse ? "Create Course Draft" : "Create Copy"}</Button>
           </div>
         </form>
       </Modal>
